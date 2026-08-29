@@ -10,7 +10,6 @@ const createMachinesTable = async () => {
             capacity VARCHAR(100) DEFAULT NULL,
             location_id INT DEFAULT NULL,
             company_name VARCHAR(150) DEFAULT NULL,
-            max_power_consumption VARCHAR(100) DEFAULT NULL,
             outgoing_job_work BOOLEAN DEFAULT FALSE,
             machine_shift VARCHAR(50) DEFAULT NULL,
             maintenance BOOLEAN DEFAULT FALSE,
@@ -63,7 +62,6 @@ const createMachine = async (
     capacity = null,
     locationId = null,
     companyName = null,
-    maxPowerConsumption = null,
     outgoingJobWork = false,
     machineShift = null,
     maintenance = false,
@@ -73,8 +71,8 @@ const createMachine = async (
 ) => {
     const query = `
         INSERT INTO machines
-        (machine_number, name, machine_type_id, capacity, location_id, company_name, max_power_consumption, outgoing_job_work, machine_shift, maintenance, added_by, device_id, active)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (machine_number, name, machine_type_id, capacity, location_id, company_name, outgoing_job_work, machine_shift, maintenance, added_by, device_id, active)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const [result] = await db.execute(query, [
@@ -84,7 +82,6 @@ const createMachine = async (
         capacity,
         locationId,
         companyName,
-        maxPowerConsumption,
         outgoingJobWork ? 1 : 0,
         machineShift,
         maintenance ? 1 : 0,
@@ -127,7 +124,6 @@ const updateMachine = async (
     capacity = null,
     locationId = null,
     companyName = null,
-    maxPowerConsumption = null,
     outgoingJobWork = false,
     machineShift = null,
     maintenance = false,
@@ -141,7 +137,6 @@ const updateMachine = async (
             capacity = ?,
             location_id = ?,
             company_name = ?,
-            max_power_consumption = ?,
             outgoing_job_work = ?,
             machine_shift = ?,
             maintenance = ?,
@@ -156,7 +151,6 @@ const updateMachine = async (
         capacity,
         locationId,
         companyName,
-        maxPowerConsumption,
         outgoingJobWork ? 1 : 0,
         machineShift,
         maintenance ? 1 : 0,

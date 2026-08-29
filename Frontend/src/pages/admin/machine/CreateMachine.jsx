@@ -16,7 +16,6 @@ export default function CreateMachine() {
     capacity: "",
     locationId: "",
     companyName: "",
-    maxPowerConsumption: "",
     outgoingJobWork: false,
     machineShift: "day shift",
     maintenance: false
@@ -63,7 +62,6 @@ export default function CreateMachine() {
         capacity: "",
         locationId: "",
         companyName: "",
-        maxPowerConsumption: "",
         outgoingJobWork: false,
         machineShift: "day shift",
         maintenance: false
@@ -187,22 +185,6 @@ export default function CreateMachine() {
                   onChange={(e) => setNewMachine({ ...newMachine, companyName: e.target.value })}
                   className="w-full border border-slate-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#369ACF] focus:border-[#369ACF] transition-colors"
                 />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Max Power Consumption</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="e.g. 15"
-                    value={newMachine.maxPowerConsumption}
-                    onChange={(e) => setNewMachine({ ...newMachine, maxPowerConsumption: e.target.value })}
-                    className="w-full border border-slate-300 rounded-lg pl-4 pr-20 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#369ACF] focus:border-[#369ACF] transition-colors"
-                  />
-                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400 text-sm font-medium">
-                    Unit/Hr.
-                  </div>
-                </div>
               </div>
 
               <div>
