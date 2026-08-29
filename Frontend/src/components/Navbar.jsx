@@ -2,7 +2,7 @@ import { useNavigate, Link, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { logoutUser } from "../api/authApi";
 import { getOrganizationDetails } from "../api/organizationApi";
-import logoImage from "../assets/logo.png";
+import logoImage from "../assets/SHR.png";
 import { usePermission } from "../context/PermissionContext";
 
 export default function Navbar({ title }) {
@@ -447,7 +447,7 @@ export default function Navbar({ title }) {
     ].filter(m => isAdmin || hasPermission(m.masterKey, "read"));
 
     const availableReportsLinks = [
-        { name: "Activity Report", path: "/reports", icon: "fa-solid fa-list-check" },
+        { name: "Activity Report", path: "/reports", icon: "fa-solid fa-list-check", masterKey: "activity_report" },
         { name: "Raw Material Stock Status", path: "/store/rm-stock", icon: "fa-solid fa-boxes-stacked", masterKey: "rm_stock_status" },
         { name: "General Stock Status", path: "/store/general-stock", icon: "fa-solid fa-box-open", masterKey: "batchwise_stock_status" },
         { name: "Raw Material Stock Book", path: "/purchase/rm-stock-book", icon: "fa-solid fa-book-open", masterKey: "rm_stock_book" },
