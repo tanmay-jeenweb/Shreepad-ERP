@@ -1,542 +1,314 @@
-import { useEffect, useMemo, useState } from "react";
-import toast from "react-hot-toast";
+import { useEffect, useState, useMemo } from "react";
 import Navbar from "../components/Navbar";
 import DataTable from "../components/DataTable";
 import { fetchActivityLogs } from "../api/authApi";
+import toast from "react-hot-toast";
 
-export default function Reports() {
-  const formatDateTime = (d) => {
-    if (!d) return "—";
-    const date = new Date(d);
-    if (isNaN(date.getTime())) return "—";
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const seconds = String(date.getSeconds()).padStart(2, '0');
-    return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+// ─── Modal to view detailed change data ───────────────────────────────────────────
+function DetailModal({ isOpen, row, onClose }) {
+  if (!isOpen || !row) return null;
+
+  const beforeObj = row.before_data || {};
+  const afterObj = row.after_data || {};
+
+  // Get all unique keys and sort them alphabetically, excluding device_id
+  const allKeys = Array.from(new Set([...Object.keys(beforeObj), ...Object.keys(afterObj)]))
+    .filter(key => key !== 'device_id')
+    .sort();
+
+  const isFieldChanged = (key) => {
+    const vBefore = beforeObj[key];
+    const vAfter = afterObj[key];
+    if (typeof vBefore === "object" || typeof vAfter === "object") {
+      return JSON.stringify(vBefore) !== JSON.stringify(vAfter);
+    }
+    return vBefore !== vAfter;
   };
 
-  const [logs, setLogs] = useState([]);
-  const [selectedMaster, setSelectedMaster] = useState("all");
-  const [isLoading, setIsLoading] = useState(false);
-  const [selectedChange, setSelectedChange] = useState(null);
-  // const [tooltipPos, setTooltipPos] = useState({
-  //     x: 0,
-  //     y: 0
-  // });
+  const formatValue = (val, key) => {
+    if (val === null || val === undefined) return <span className="text-slate-400">—</span>;
+    if (typeof val === "boolean") return val ? "True" : "False";
+    
+    if (key === "permissions" && Array.isArray(val)) {
+      const MASTERS_MAP = {
+        user_type: "User Group Master",
+        location_type: "Location Type Master",
+        location: "Location Master",
+        material_group: "Material Group Master",
+        unit: "Unit Master",
+        material: "Material Master",
+        vendor: "Vendor Master",
+        customer: "Customer Master",
+        document: "Document Master",
+        worker_employee: "Worker/Employee Master",
+        worker_employee_type: "Worker/Employee Type Master",
+        process_master: "Process Master",
+        bill_of_material: "Bill of Material Master",
+        organization_details: "Organization Details",
+        user_master: "User Master",
+        device_approval: "Device Approval"
+      };
 
-  const masters = useMemo(
-    () => [
-      { value: "all", label: "All masters" },
-      { value: "Customer Master", label: "Customer Master" },
-      { value: "Device Management", label: "Device Management" },
-      { value: "Document Master", label: "Document Master" },
-      { value: "Location Master", label: "Location Master" },
-      { value: "Location Type Master", label: "Location Type Master" },
-      { value: "Machine Master", label: "Machine Master" },
-      { value: "Machine Type Master", label: "Machine Type Master" },
-      { value: "Material Group Master", label: "Material Group Master" },
-      { value: "Material Type Master",  label: "Material Type Master" },
-      { value: "Material Master", label: "Material Master" },
-      { value: "Mould Master", label: "Mould Master" },
-      { value: "Operator Master", label: "Operator Master" },
-      { value: "Reason Master", label: "Reason Master" },
-      { value: "Sub SD Reason Master", label: "Sub SD Reason Master" },
-      { value: "Unit Master", label: "Unit Master" },
-      { value: "User Master", label: "User Master" },
-      { value: "User Type Master", label: "User Type Master" },
-      { value: "Vendor Master", label: "Vendor Master" },
-      { value: "Job Party Master", label: "Job Party Master" },
-      { value: "Job Party Type Master", label: "Job Party Type Master" },
-      { value: "Organization Master", label: "Organization Master" },
-      { value: "GRN Master", label: "GRN Master" },
-      { value: "QC Master", label: "QC Master" },
-      { value: "RM Stock Status", label: "RM Stock Status" },
-      { value: "Batchwise Stock Status", label: "Batchwise Stock Status" },
-      { value: "Party Stock Status", label: "Party Stock Status" },
-      { value: "Stock Book", label: "Stock Book" },
-    ],
-    [],
+      const PERM_LABELS = { canRead: "Read", canWrite: "Write / Approval", canUpdate: "Update", canDelete: "Delete" };
+      const PERM_CLASSES = {
+        canRead: "bg-purple-50 text-purple-700 border-purple-200",
+        canWrite: "bg-green-50 text-green-700 border-green-200",
+        canUpdate: "bg-amber-50 text-amber-800 border-amber-200",
+        canDelete: "bg-rose-50 text-rose-700 border-rose-200"
+      };
+
+      const normalized = val.map(p => ({
+        masterName: p.masterName || p.master_name,
+        canRead: !!(p.canRead || p.can_read),
+        canWrite: !!(p.canWrite || p.can_write),
+        canUpdate: !!(p.canUpdate || p.can_update),
+        canDelete: !!(p.canDelete || p.can_delete)
+      }));
+
+      const rows = normalized.map((p) => {
+        const masterName = p.masterName;
+        if (!masterName) return null;
+        const label = MASTERS_MAP[masterName] || masterName;
+        const isApprovalRow = masterName.endsWith("_approval");
+        const applicablePerms = isApprovalRow
+          ? ["canRead", "canWrite"]
+          : ["canRead", "canWrite", "canUpdate", "canDelete"];
+        const granted = applicablePerms.filter((perm) => p[perm]);
+        if (granted.length === 0) return null;
+        return { label, granted, isApprovalRow };
+      }).filter(Boolean);
+
+      if (rows.length === 0) {
+        return <span className="text-slate-400 text-xs">No access</span>;
+      }
+
+      return (
+        <div className="flex flex-col gap-1.5 py-1">
+          {rows.map(({ label, granted, isApprovalRow }, idx) => (
+            <div key={idx} className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[11px] font-bold text-slate-600 bg-slate-100 border border-slate-200 rounded-[5px] px-1.75 py-0.5 whitespace-nowrap">
+                {label}
+              </span>
+              <span className="text-slate-300 text-[11px]">→</span>
+              {granted.map((perm) => {
+                const labelText = isApprovalRow && perm === "canWrite" ? "Approval" : PERM_LABELS[perm];
+                return (
+                  <span key={perm} className={`text-[10px] font-bold px-1.75 py-0.5 rounded-[5px] border ${PERM_CLASSES[perm]}`}>
+                    {labelText}
+                  </span>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    if (typeof val === "object") return JSON.stringify(val);
+    return String(val);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[1000] bg-slate-900/55 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white rounded-[18px] w-full max-w-[700px] mx-auto shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        {/* Modal Header */}
+        <div className="px-7 py-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-br from-indigo-600 to-indigo-700">
+          <div className="flex-1">
+            <h2 className="m-0 text-lg font-bold text-white">Activity Log Detail</h2>
+            <p className="mt-1 text-[13px] text-indigo-100">
+              {row.master_name} — {row.change_type.toUpperCase()} by {row.username}
+            </p>
+          </div>
+          <button onClick={onClose} className="bg-white/15 border-none rounded-lg w-[34px] h-[34px] cursor-pointer flex items-center justify-center text-white hover:bg-white/20 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-[18px] h-[18px]">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Modal Body */}
+        <div className="px-7 py-5 overflow-y-auto flex-1 bg-slate-50">
+          {/* Metadata Grid */}
+          <div className="grid grid-cols-3 gap-4 mb-5 bg-white p-4 rounded-xl border border-slate-200">
+            <div>
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">User</span>
+              <p className="mt-0.5 text-sm font-semibold text-slate-800">{row.username || "System"}</p>
+            </div>
+            <div>
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Action Type</span>
+              <p className="mt-0.5">
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
+                  row.change_type === 'created' || row.change_type === 'approved' ? 'bg-green-100 text-green-800' :
+                  row.change_type === 'updated' ? 'bg-amber-100 text-amber-800' :
+                  row.change_type === 'deleted' || row.change_type === 'rejected' ? 'bg-rose-100 text-rose-800' :
+                  'bg-slate-100 text-slate-800'
+                }`}>
+                  {row.change_type.toUpperCase()}
+                </span>
+              </p>
+            </div>
+            <div>
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Timestamp</span>
+              <p className="mt-0.5 text-sm text-slate-800">{new Date(row.created_at).toLocaleString()}</p>
+            </div>
+          </div>
+
+          {/* Table View */}
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <table className="w-full border-collapse text-left text-sm">
+              <thead>
+                <tr className="bg-slate-100 border-b border-slate-200">
+                  <th className="px-3.5 py-2.5 font-semibold text-slate-600">Field</th>
+                  <th className="px-3.5 py-2.5 font-semibold text-slate-600">Before</th>
+                  <th className="px-3.5 py-2.5 font-semibold text-slate-600">After</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allKeys.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="p-3.5 text-center text-slate-500">No details available</td>
+                  </tr>
+                ) : (
+                  allKeys.map((key) => {
+                    const changed = isFieldChanged(key);
+                    return (
+                      <tr key={key} className={`border-b border-slate-100 last:border-b-0 ${changed ? "bg-amber-50/40" : "bg-transparent"}`}>
+                        <td className="px-3.5 py-2.5 font-medium text-slate-800 w-[30%]">{key}</td>
+                        <td className="px-3.5 py-2.5 text-slate-600 w-[35%] break-all">{formatValue(beforeObj[key], key)}</td>
+                        <td className={`px-3.5 py-2.5 w-[35%] break-all ${changed ? "text-amber-800 font-semibold" : "text-slate-600 font-normal"}`}>
+                          {formatValue(afterObj[key], key)}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Modal Footer */}
+        <div className="px-7 py-4 border-t border-slate-100 flex justify-end bg-slate-50">
+          <button type="button" onClick={onClose}
+            className="px-6 py-2.25 rounded-lg border-[1.5px] border-slate-300 text-slate-600 bg-white font-bold text-[13px] cursor-pointer hover:bg-slate-50 transition-colors">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
   );
+}
 
-  const loadLogs = async () => {
-    setIsLoading(true);
+// ─── Main Reports Component ───────────────────────────────────────────────────────
+export default function Reports() {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedRow, setSelectedRow] = useState(null);
+  const [modalOpen, setModalOpen] = useState(false);
+
+  const fetchLogs = async () => {
+    setLoading(true);
     try {
-      const response = await fetchActivityLogs();
-      setLogs(response.data.logs || []);
-    } catch (error) {
-      console.error("Error loading activity logs:", error);
-      toast.error("Failed to fetch activity logs");
+      const res = await fetchActivityLogs();
+      if (res.data?.success) {
+        setLogs(res.data.logs || []);
+      } else {
+        toast.error(res.data?.message || "Failed to fetch activity logs");
+      }
+    } catch (err) {
+      console.error("Error fetching activity logs:", err);
+      toast.error("Failed to load activity logs");
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadLogs();
+    fetchLogs();
   }, []);
 
-  const filteredLogs = useMemo(() => {
-    if (selectedMaster === "all") return logs;
-    return logs.filter((log) => log.master_name === selectedMaster);
-  }, [logs, selectedMaster]);
-
-  const formatValue = (value) => {
-    if (value === null || value === undefined) {
-      return "—";
-    }
-
-    // Boolean conversion
-    if (value === true || value === 1 || value === "1") {
-      return "Yes";
-    }
-
-    if (value === false || value === 0 || value === "0") {
-      return "No";
-    }
-
-    if (typeof value === "object") {
-      return JSON.stringify(value);
-    }
-
-    return String(value);
-  };
-
-  const extractRecordName = (record) => {
-    if (!record || typeof record !== "object") return "Unknown";
-    return (
-      record.location_name ||
-      record.name ||
-      record.type_name ||
-      record.location_type_name ||
-      record.machine_type_name ||
-      record.machine_number ||
-      record.username ||
-      record.document_name ||
-      record.category_name ||
-      record.unit_name ||
-      record.device_id ||
-      record.mould_name ||
-      record.vendor_name ||
-      record.customer_name ||
-      record.reason_name ||
-      record.reason_type ||
-      record.sub_sd_name ||
-      record.material_group_name ||
-      record.material_type_name ||
-      record.materialName ||
-      record.material_name ||
-      record.product_insert ||
-      record.operatorName ||
-      record.operator_name ||
-      record.operator_type_name ||
-      record.job_party_type_name ||
-      record.job_party_name ||
-      record.partyName ||
-      record.reason_type ||
-      "Unknown"
-    );
-  };
-
-  const renderChangedFields = (row) => {
-    const before = row.before_data || {};
-    const after = row.after_data || {};
-
-    const recordName =
-      after.user ||
-      before.user ||
-      after.location_name ||
-      before.location_name ||
-      after.location_type_name ||
-      before.location_type_name ||
-      after.type_name ||
-      before.type_name ||
-      after.machine_type_name ||
-      before.machine_type_name ||
-      after.name ||
-      before.name ||
-      after.outgoing_job_work ||
-      before.outgoing_job_work ||
-      after.username ||
-      before.username ||
-      before.mould_name ||
-      after.mould_name ||
-      before.document_name ||
-      after.document_name ||
-      before.unit_name ||
-      after.unit_name ||
-      after.vendor_name ||
-      before.vendor_name ||
-      after.customer_name ||
-      before.customer_name ||
-      after.reason_type ||
-      before.reason_type ||
-      after.reason_name ||
-      before.reason_name ||
-      after.sub_sd_name ||
-      before.sub_sd_name ||
-      after.materialName ||
-      before.materialName ||
-      after.material_name ||
-      before.material_name ||
-      (after.materialId ? `Material ID: ${after.materialId}` : null) ||
-      (before.materialId ? `Material ID: ${before.materialId}` : null) ||
-      after.product_insert ||
-      before.product_insert ||
-      after.material_group_name ||
-      before.material_group_name ||
-      after.material_type_name ||
-      before.material_type_name ||
-      after.operatorName ||
-      before.operatorName ||
-      after.operator_name ||
-      before.operator_name ||
-      after.reason_type ||
-      before.reason_type ||
-      after.operator_type_name ||
-      before.operator_type_name ||
-      before.job_party_type_name ||
-      after.job_party_type_name ||
-      before.partyName ||
-      after.partyName ||
-      after.device_id ||
-      before.device_id ||
-      "Unknown";
-
-    const changedKeys = Object.keys({
-      ...before,
-      ...after,
-    }).filter((key) => {
-      if (key === "updated_at" || key === "created_at") {
-        return false;
-      }
-
-      // Special handling for permissions
-      if (key === "permissions") {
-        const beforePermissions = before.permissions || [];
-
-        const afterPermissions = after.permissions || [];
-
-        const hasPermissionChange = beforePermissions.some((beforePerm) => {
-          const afterPerm = afterPermissions.find(
-            (p) => p.masterName === beforePerm.masterName,
-          );
-
-          return JSON.stringify(beforePerm) !== JSON.stringify(afterPerm);
-        });
-
-        return hasPermissionChange;
-      }
-
-      return JSON.stringify(before[key]) !== JSON.stringify(after[key]);
-    });
-
-    if (row.change_type === "created") {
-      return (
-        <span
-          className="
-                px-2 py-1
-                bg-green-100
-                text-green-700
-                rounded
-                "
-        >
-          {recordName}
+  const columns = useMemo(() => [
+    {
+      key: "username",
+      label: "Username",
+      render: (row) => <span className="font-semibold text-slate-800">{row.username || "System"}</span>
+    },
+    {
+      key: "master_name",
+      label: "Module / Master",
+      render: (row) => <span className="text-slate-700">{row.master_name}</span>
+    },
+    {
+      key: "change_type",
+      label: "Action",
+      render: (row) => (
+        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold tracking-wide ${
+          row.change_type === 'created' || row.change_type === 'approved' ? 'bg-green-50 text-green-700 border border-green-200' :
+          row.change_type === 'updated' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+          row.change_type === 'deleted' || row.change_type === 'rejected' ? 'bg-rose-50 text-rose-700 border border-rose-200' :
+          'bg-slate-50 text-slate-700 border border-slate-200'
+        }`}>
+          {row.change_type.toUpperCase()}
         </span>
-      );
-    }
-
-    if (row.change_type === "deleted") {
-      return (
-        <span
-          className="
-                px-2 py-1
-                bg-red-100
-                text-red-700
-                rounded
-                "
+      )
+    },
+    {
+      key: "details",
+      label: "Details",
+      sortable: false,
+      render: (row) => (row.before_data || row.after_data) ? (
+        <button
+          onClick={() => {
+            setSelectedRow(row);
+            setModalOpen(true);
+          }}
+          className="text-xs text-indigo-600 hover:text-indigo-900 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 font-semibold px-2.5 py-1.5 rounded transition-colors cursor-pointer"
         >
-          {recordName}
-        </span>
-      );
+          View Details
+        </button>
+      ) : <span className="text-slate-400">—</span>
+    },
+    {
+      key: "created_at",
+      label: "Date & Time",
+      render: (row) => <span className="text-xs text-slate-500">{new Date(row.created_at).toLocaleString()}</span>
     }
-
-    return (
-      <button
-        onClick={() =>
-          setSelectedChange({
-            recordName,
-            before,
-            after,
-            changedKeys,
-          })
-        }
-        className="
-        cursor-pointer
-        px-2
-        py-1
-        rounded
-        bg-blue-100
-        text-blue-700
-        hover:bg-blue-200
-        "
-      >
-        {recordName}
-      </button>
-    );
-  };
-
-  const columns = useMemo(
-    () => [
-      {
-        key: "username",
-        label: "Username",
-        render: (row) => row.username || "Unknown",
-      },
-      {
-        key: "master_name",
-        label: "Master",
-        render: (row) => row.master_name,
-      },
-      {
-        key: "change_type",
-        label: "Action",
-        render: (row) => row.change_type?.toUpperCase(),
-      },
-
-      {
-        key: "created_at",
-        label: "Timestamp",
-        render: (row) => formatDateTime(row.created_at),
-      },
-      {
-        key: "change_details",
-        label: "Change (Before / After)",
-        render: (row) => renderChangedFields(row),
-        minWidth: "200px",
-        sortable: false,
-      },
-    ],
-    [],
-  );
+  ], []);
 
   return (
-    <div className="flex-1 bg-slate-50 font-sans text-slate-900">
-      <Navbar title="Reports" />
+    <div className="flex-1 flex flex-col bg-slate-50 font-sans text-slate-900 min-h-screen">
+      <Navbar title="User Activity Report" />
 
-      <main className=" mx-auto py-8 px-4 sm:px-6 lg:px-8">
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm">
+      <main className="flex-1 flex flex-col w-full mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        <div className="flex-1 flex flex-col mb-8">
           <DataTable
-            tableId="reports_table"
-            title="Activity Reports"
-            data={filteredLogs}
+            tableId="user_activity_report"
+            title="User Activity Report"
+            data={logs}
             columns={columns}
-            loading={isLoading}
-            searchPlaceholder="Search by user, master, action..."
+            loading={loading}
+            searchPlaceholder="Search by username, module or action..."
             actionButton={
-              <div className="flex items-center gap-2">
-                <select
-                  value={selectedMaster}
-                  onChange={(e) => setSelectedMaster(e.target.value)}
-                  className="h-10 rounded-lg border border-slate-300 bg-slate-50 px-3 text-sm text-slate-700 outline-none focus:border-blue-600"
-                >
-                  {masters.map((master) => (
-                    <option key={master.value} value={master.value}>
-                      {master.label}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={loadLogs}
-                  className="h-10 inline-flex items-center justify-center rounded-lg bg-[#369ACF] px-4 text-sm font-semibold text-white hover:bg-[#2583b4] transition"
-                >
-                  Refresh
-                </button>
-              </div>
+              <button
+                onClick={fetchLogs}
+                className="h-10 inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700 transition cursor-pointer"
+              >
+                Refresh
+              </button>
             }
           />
         </div>
-        {selectedChange && (
-          <div
-            className="
-                fixed
-                inset-0
-                bg-black/40
-                flex
-                items-center
-                justify-center
-                z-[9999]
-                "
-          >
-            <div
-              className="
-                bg-white
-                rounded-xl
-                shadow-2xl
-                p-6
-                w-auto
-                min-w-[400px]
-                max-w-[80vw]
-                max-h-[80vh]
-                overflow-auto
-                "
-            >
-              <div
-                className="
-                    flex
-                    justify-between
-                    items-center
-                    mb-4
-                    "
-              >
-                <h2
-                  className="
-                    text-lg
-                    font-semibold
-                    "
-                >
-                  Changes — {selectedChange.recordName}
-                </h2>
-
-                <button
-                  onClick={() => setSelectedChange(null)}
-                  className="
-                    text-slate-500
-                    text-xl
-                    cursor-pointer
-                    "
-                >
-                  ×
-                </button>
-              </div>
-
-              <div
-                className="
-                    space-y-4
-                "
-              >
-                {selectedChange.changedKeys.map((key) => {
-                  if (key === "approved_by") {
-                    return (
-                      <div
-                        key={key}
-                        className="
-        border
-        rounded-lg
-        p-3
-        "
-                      >
-                        <div
-                          className="
-          font-semibold
-          mb-2
-          "
-                        >
-                          Approved By
-                        </div>
-
-                        <div className="text-green-700">
-                          {selectedChange.after.approved_by}
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div
-                      key={key}
-                      className="
-      border
-      rounded-lg
-      p-3
-      "
-                    >
-                      <div
-                        className="
-        font-semibold
-        mb-2
-        "
-                      >
-                        {key}
-                      </div>
-
-                      <div>
-                        {key === "permissions" ? (
-                          <div className="space-y-4">
-                            {(selectedChange.before.permissions || []).map(
-                              (perm, index) => {
-                                const afterPerm = (
-                                  selectedChange.after.permissions || []
-                                ).find((p) => p.masterName === perm.masterName);
-
-                                const changed =
-                                  JSON.stringify(perm) !==
-                                  JSON.stringify(afterPerm);
-
-                                if (!changed) return null;
-
-                                return (
-                                  <div
-                                    key={index}
-                                    className="
-                border
-                rounded
-                p-2
-                bg-slate-50
-                "
-                                  >
-                                    <div className="font-semibold">
-                                      {perm.masterName}
-                                    </div>
-
-                                    {Object.keys(perm).map((field) => {
-                                      if (field === "masterName") return null;
-
-                                      if (perm[field] === afterPerm?.[field])
-                                        return null;
-
-                                      return (
-                                        <div key={field}>
-                                          {field} :{" "}
-                                          <span className="text-red-600">
-                                            {String(perm[field])}
-                                          </span>
-                                          {" → "}
-                                          <span className="text-green-600">
-                                            {String(afterPerm?.[field])}
-                                          </span>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                );
-                              },
-                            )}
-                          </div>
-                        ) : (
-                          <>
-                            <div>
-                              <span className="font-semibold">Before:</span>{" "}
-                              {formatValue(selectedChange.before[key])}
-                            </div>
-
-                            <div>
-                              <span className="font-semibold">After:</span>{" "}
-                              {formatValue(selectedChange.after[key])}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
       </main>
+
+      {/* Detail Modal */}
+      <DetailModal
+        isOpen={modalOpen}
+        row={selectedRow}
+        onClose={() => {
+          setModalOpen(false);
+          setSelectedRow(null);
+        }}
+      />
     </div>
   );
 }

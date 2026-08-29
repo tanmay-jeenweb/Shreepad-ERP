@@ -114,7 +114,7 @@ export default function AppRoutes() {
                 />
             </Route>
 
-            <Route element={<ProtectedRoute />}>
+            <Route element={<ProtectedRoute requiredMaster="activity_report" requiredAction="read" />}>
                 <Route
                     path="/reports"
                     element={<Reports />}
