@@ -10,7 +10,7 @@ const {
 } = require('../models/grnModel.js');
 const { createAuditLog } = require('../models/auditLogModel.js');
 const { getAllVendors } = require('../models/vendorModel.js');
-const { getAllJobParties } = require('../models/jobPartyModel.js');
+// Removed jobPartyModel import
 
 // ─── Add GRN ──────────────────────────────────────────────────────────────────
 
@@ -213,7 +213,7 @@ const partiallyCloseGrnController = async (req, res) => {
 
 const getJobPartiesForGrnController = async (req, res) => {
     try {
-        const data = await getAllJobParties();
+        const data = [];
         return res.json({ success: true, data });
     } catch (err) {
         console.error('getJobPartiesForGrnController error:', err);

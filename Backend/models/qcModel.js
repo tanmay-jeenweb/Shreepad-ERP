@@ -218,8 +218,6 @@ const getPendingQcMas = async () => {
             m.id AS ma_id,
             m.ma_number,
             m.ma_date,
-            m.job_party_id,
-            m.job_party_name,
             m.status AS ma_status,
             GROUP_CONCAT(DISTINCT mai.internal_batch_number SEPARATOR ', ') AS internal_batch_numbers,
             SUM(mai.quantity) AS total_received,

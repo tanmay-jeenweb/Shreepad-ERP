@@ -11,8 +11,6 @@ const createMaterialAddTables = async () => {
             id                  INT AUTO_INCREMENT PRIMARY KEY,
             ma_number           VARCHAR(50) NOT NULL UNIQUE,
             ma_date             DATE NOT NULL,
-            job_party_id        INT DEFAULT NULL,
-            job_party_name      VARCHAR(150),
             location_id         INT DEFAULT NULL,
             location_name       VARCHAR(255),
             remark              TEXT DEFAULT NULL,
@@ -21,7 +19,6 @@ const createMaterialAddTables = async () => {
             added_by            INT NOT NULL,
             created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (job_party_id)  REFERENCES job_parties(id)  ON DELETE SET NULL,
             FOREIGN KEY (location_id)   REFERENCES locations(id)    ON DELETE SET NULL,
             FOREIGN KEY (added_by)      REFERENCES users(id)        ON DELETE CASCADE
         )
@@ -121,15 +118,13 @@ const createMaterialAdd = async (headerData, itemsData, addedBy) => {
 
         const insertMasterQuery = `
             INSERT INTO material_add_master
-                (ma_number, ma_date, job_party_id, job_party_name, location_id, location_name, remark, particular, status, added_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (ma_number, ma_date, location_id, location_name, remark, particular, status, added_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
         const [maResult] = await connection.execute(insertMasterQuery, [
             maNumber,
             headerData.ma_date,
-            toIntOrNull(headerData.job_party_id),
-            headerData.job_party_name || null,
             toIntOrNull(headerData.location_id),
             headerData.location_name || null,
             headerData.remark || null,
@@ -203,8 +198,6 @@ const getAllMaterialAdds = async () => {
             m.id,
             m.ma_number,
             m.ma_date,
-            m.job_party_id,
-            m.job_party_name,
             m.location_id,
             m.location_name,
             m.remark,
@@ -252,8 +245,6 @@ const updateMaterialAdd = async (id, headerData, itemsData) => {
         const updateMasterQuery = `
             UPDATE material_add_master SET
                 ma_date             = ?,
-                job_party_id        = ?,
-                job_party_name      = ?,
                 location_id         = ?,
                 location_name       = ?,
                 remark              = ?,
@@ -264,8 +255,6 @@ const updateMaterialAdd = async (id, headerData, itemsData) => {
 
         await connection.execute(updateMasterQuery, [
             headerData.ma_date,
-            toIntOrNull(headerData.job_party_id),
-            headerData.job_party_name || null,
             toIntOrNull(headerData.location_id),
             headerData.location_name || null,
             headerData.remark || null,

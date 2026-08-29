@@ -10,8 +10,6 @@ const createRmReturnsTable = async () => {
             return_date DATE NOT NULL,
             material_id INT NOT NULL,
             material_name VARCHAR(255) NOT NULL,
-            job_party_id INT NOT NULL,
-            job_party_name VARCHAR(255) NOT NULL,
             grade VARCHAR(100) DEFAULT NULL,
             location_id INT NOT NULL,
             location_name VARCHAR(255) NOT NULL,
@@ -21,7 +19,6 @@ const createRmReturnsTable = async () => {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE RESTRICT,
-            FOREIGN KEY (job_party_id) REFERENCES job_parties(id) ON DELETE RESTRICT,
             FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE RESTRICT,
             FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE CASCADE
         )
@@ -100,45 +97,36 @@ const createRmReturn = async (data, addedBy) => {
         const returnNo = await generateReturnNo();
 
         // 2. Fetch material details
-        const [matRows] = await connection.execute('SELECT material_name, material_type FROM materials WHERE id = ?', [data.material_id]);
+        const [matRows] = await connection.execute('SELECT material_name FROM materials WHERE id = ?', [data.material_id]);
         if (matRows.length === 0) {
             throw new Error("Invalid Material ID");
         }
         const materialName = matRows[0].material_name;
 
-        // 3. Fetch job party name
-        const [jpRows] = await connection.execute('SELECT party_name FROM job_parties WHERE id = ?', [data.job_party_id]);
-        if (jpRows.length === 0) {
-            throw new Error("Invalid Job Party ID");
-        }
-        const jobPartyName = jpRows[0].party_name;
-
-        // 4. Fetch location name
+        // 3. Fetch location name
         const [locRows] = await connection.execute('SELECT location_name FROM locations WHERE id = ?', [data.location_id]);
         if (locRows.length === 0) {
             throw new Error("Invalid Location ID");
         }
         const locationName = locRows[0].location_name;
 
-        // 5. Generate internal batch number
+        // 4. Generate internal batch number
         const settings = await getSettings();
         const internalBatchNumber = await generateInternalBatchNumber(connection, data.material_id, settings);
 
-        // 6. Insert RM Return record
+        // 5. Insert RM Return record
         const insertQuery = `
             INSERT INTO rm_returns (
                 return_no, return_date, material_id, material_name, 
-                job_party_id, job_party_name, grade, location_id, location_name, 
+                grade, location_id, location_name, 
                 quantity, internal_batch_number, added_by, pmemo_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
         const [result] = await connection.execute(insertQuery, [
             returnNo,
             data.return_date,
             data.material_id,
             materialName,
-            data.job_party_id,
-            jobPartyName,
             data.grade || null,
             data.location_id,
             locationName,
@@ -149,13 +137,12 @@ const createRmReturn = async (data, addedBy) => {
         ]);
         const returnId = result.insertId;
 
-        // 7. Upsert stock status
+        // 6. Upsert stock status
         const { upsertStockStatusForReturn } = require('./stockStatusModel.js');
         await upsertStockStatusForReturn(connection, returnId, {
             internal_batch_number: internalBatchNumber,
             material_id: data.material_id,
             material_name: materialName,
-            job_party_name: jobPartyName,
             grade: data.grade || null,
             location_name: locationName,
             quantity: data.quantity

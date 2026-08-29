@@ -21,28 +21,21 @@ const MODULE_GROUPS = [
   {
     groupName: "Production & Machines",
     icon: "fa-solid fa-industry",
-    description: "Manage machines, moulds, and delay reasons.",
+    description: "Manage machines and their specifications.",
     masters: [
       { key: "machine_type",        label: "Machine Type Master" },
       { key: "machine",             label: "Machine Master" },
-      { key: "mould",               label: "Mould Master" },
-      { key: "reason_for_delay_type", label: "Reason For Delay Type Master" },
-      { key: "reason_for_delay",    label: "Reason For Delay Master" },
-      { key: "reason",              label: "Reason Master" },
-      { key: "sub_sd_reason",       label: "Sub S/D Reason Master" },
     ]
   },
   {
     groupName: "Materials & Inventory",
     icon: "fa-solid fa-boxes-stacked",
-    description: "Material groups, units, and raw materials.",
+    description: "Material groups and specifications.",
     masters: [
       { key: "material_group",      label: "Material Group Master" },
       { key: "material_type",        label: "Material Type Master" },
       { key: "unit",                label: "Unit Master" },
       { key: "material",            label: "Material Master" },
-      { key: "raw_material_type",   label: "Raw Material Type Master" },
-      { key: "raw_material",        label: "Raw Material Master" },
     ]
   },
   {

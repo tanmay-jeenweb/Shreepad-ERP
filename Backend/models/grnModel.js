@@ -20,8 +20,6 @@ const createGrnTables = async () => {
             purchase_type       VARCHAR(100),
             state               VARCHAR(100),
             state_code          VARCHAR(20),
-            job_party_id        INT DEFAULT NULL,
-            job_party_name      VARCHAR(150),
             transportation_mode VARCHAR(100),
             vehicle_number      VARCHAR(100),
             invoice_number      VARCHAR(100),
@@ -44,7 +42,6 @@ const createGrnTables = async () => {
             updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (po_id)       REFERENCES purchase_orders(id)         ON DELETE SET NULL,
             FOREIGN KEY (vendor_id)   REFERENCES vendor_master(id)           ON DELETE SET NULL,
-            FOREIGN KEY (job_party_id) REFERENCES job_parties(id)            ON DELETE SET NULL,
             FOREIGN KEY (tc_id)       REFERENCES terms_and_conditions(id)    ON DELETE SET NULL,
             FOREIGN KEY (added_by)    REFERENCES users(id)                   ON DELETE CASCADE,
             FOREIGN KEY (location_id) REFERENCES locations(id)              ON DELETE SET NULL
@@ -255,12 +252,12 @@ const createGrn = async (headerData, itemsData, addedBy, deviceId) => {
         const insertGrnQuery = `
             INSERT INTO grn_master
                 (grn_number, grn_date, po_id, po_number, vendor_id, name, address, gstin,
-                 purchase_type, state, state_code, job_party_id, job_party_name,
+                 purchase_type, state, state_code,
                  transportation_mode, vehicle_number, invoice_number, invoice_date,
                  challan_number, challan_date, total_amount, tc_id, tc_description,
                  status, added_by, device_id, location_id, location_name, total_quantity,
                  bag_size, number_of_bags, remarks)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
         const [grnResult] = await connection.execute(insertGrnQuery, [
@@ -275,8 +272,6 @@ const createGrn = async (headerData, itemsData, addedBy, deviceId) => {
             headerData.purchase_type || null,
             headerData.state || null,
             headerData.state_code || null,
-            toIntOrNull(headerData.job_party_id),
-            headerData.job_party_name || null,
             headerData.transportation_mode || null,
             headerData.vehicle_number || null,
             headerData.invoice_number || null,
@@ -523,8 +518,6 @@ const updateGrn = async (id, headerData, itemsData) => {
                 purchase_type       = ?,
                 state               = ?,
                 state_code          = ?,
-                job_party_id        = ?,
-                job_party_name      = ?,
                 transportation_mode = ?,
                 vehicle_number      = ?,
                 invoice_number      = ?,
@@ -550,8 +543,6 @@ const updateGrn = async (id, headerData, itemsData) => {
             headerData.purchase_type || null,
             headerData.state || null,
             headerData.state_code || null,
-            toIntOrNull(headerData.job_party_id),
-            headerData.job_party_name || null,
             headerData.transportation_mode || null,
             headerData.vehicle_number || null,
             headerData.invoice_number || null,

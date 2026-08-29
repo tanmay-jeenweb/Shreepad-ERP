@@ -237,22 +237,7 @@ export default function CreateBOM() {
                                 />
                             </div>
 
-                            <div>
-                                <label className={labelCls}>Raw Material</label>
-                                <select
-                                    name="rawMaterialId"
-                                    value={form.rawMaterialId}
-                                    onChange={handleChange}
-                                    className={inputCls}
-                                >
-                                    <option value="">-- Select Raw Material --</option>
-                                    {rawMaterials.map(rm => (
-                                        <option key={rm.id} value={rm.id}>
-                                            {rm.material_name} - {rm.grade}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
+                            {/* Raw Material removed */}
 
                             <div>
                                 <label className={labelCls}>Product Counting Type</label>
@@ -273,55 +258,7 @@ export default function CreateBOM() {
                                 </h2>
                             </div>
 
-                            <div ref={mouldDropdownRef}>
-                                <label className={labelCls}>Compatible Mould</label>
-                                <div className="relative">
-                                    <button
-                                        type="button"
-                                        onClick={() => setMouldDropdownOpen(o => !o)}
-                                        className="w-full border border-slate-300 rounded-lg px-4 py-2.5 bg-white text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-[#369ACF] focus:border-[#369ACF] transition-colors"
-                                    >
-                                        <span className={(!form.mouldIds || form.mouldIds.length === 0) ? "text-slate-400 text-sm" : "text-slate-800 font-medium text-sm truncate"}>
-                                            {(!form.mouldIds || form.mouldIds.length === 0)
-                                                ? "-- Select Moulds --"
-                                                : `${moulds.filter(m => form.mouldIds.includes(m.id)).map(m => m.mould_name).join(", ")}`}
-                                        </span>
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-4 h-4 text-slate-400 transition-transform duration-150 shrink-0 ${mouldDropdownOpen ? "rotate-180" : ""}`}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-                                        </svg>
-                                    </button>
-
-                                    {mouldDropdownOpen && (
-                                        <div className="absolute left-0 top-full mt-1 z-50 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
-                                            {moulds.length === 0 ? (
-                                                <p className="px-4 py-3 text-sm text-slate-400">No moulds available</p>
-                                            ) : (
-                                                moulds.map(m => (
-                                                    <label
-                                                        key={m.id}
-                                                        className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b border-slate-50 last:border-0"
-                                                    >
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={(form.mouldIds || []).includes(m.id)}
-                                                            onChange={() => toggleMould(m.id)}
-                                                            className="h-4 w-4 rounded text-[#369ACF] border-slate-300 focus:ring-[#369ACF]"
-                                                        />
-                                                        <div className="flex flex-col leading-tight">
-                                                            <span className="font-medium text-slate-800">{m.mould_name}</span>
-                                                        </div>
-                                                    </label>
-                                                ))
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                                {form.mouldIds && form.mouldIds.length > 0 && (
-                                    <p className="mt-1.5 text-xs text-slate-500">
-                                        {`${form.mouldIds.length} mould${form.mouldIds.length > 1 ? "s" : ""} selected`}
-                                    </p>
-                                )}
-                            </div>
+                            {/* Mould removed */}
 
                             <div>
                                 <label className={labelCls}>Process</label>

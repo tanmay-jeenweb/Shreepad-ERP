@@ -214,15 +214,7 @@ export default function Navbar({ title }) {
             activeColor: "bg-fuchsia-100 text-fuchsia-700",
             desc: "Register & monitor machine operations"
         },
-        {
-            name: "Mould Master",
-            path: "/admin/moulds",
-            masterKey: "mould",
-            icon: "fa-solid fa-shapes",
-            color: "bg-orange-50 text-orange-600 border border-orange-100/50",
-            activeColor: "bg-orange-100 text-orange-700",
-            desc: "Define mould specs, cycle times & machine compatibility"
-        },
+
         {
             name: "Material Group Master",
             path: "/admin/material-groups",
@@ -259,33 +251,7 @@ export default function Navbar({ title }) {
             activeColor: "bg-indigo-100 text-indigo-700",
             desc: "Manage material codes, groups, units, types & valuation"
         },
-        {
-            name: "Raw Material Master",
-            path: "/admin/raw-materials",
-            masterKey: "raw_material",
-            icon: "fa-solid fa-cubes",
-            color: "bg-violet-50 text-violet-600 border border-violet-100/50",
-            activeColor: "bg-violet-100 text-violet-700",
-            desc: "Manage raw material grades, types & balances"
-        },
-        {
-            name: "Job Of Party Type Master",
-            path: "/admin/job-party-types",
-            masterKey: "job_party_type",
-            icon: "fa-solid fa-tags",
-            color: "bg-amber-50 text-amber-600 border border-amber-100/50",
-            activeColor: "bg-amber-100 text-amber-700",
-            desc: "Manage job party type classifications"
-        },
-        {
-            name: "Job Of Party Master",
-            path: "/admin/job-parties",
-            masterKey: "job_party",
-            icon: "fa-solid fa-cubes",
-            color: "bg-sky-50 text-sky-600 border border-sky-100/50",
-            activeColor: "bg-sky-100 text-sky-700",
-            desc: "Manage job party names, remarks & types"
-        },
+
         {
             name: "Operator Type Master",
             path: "/admin/operator-types",
@@ -304,24 +270,7 @@ export default function Navbar({ title }) {
             activeColor: "bg-sky-100 text-sky-700",
             desc: "Manage operator profiles, types, and joining logs"
         },
-        {
-            name: "Reason For Delay Type Master",
-            path: "/admin/reason-for-delay-types",
-            masterKey: "reason_for_delay_type",
-            icon: "fa-solid fa-clock",
-            color: "bg-amber-50 text-amber-600 border border-amber-100/50",
-            activeColor: "bg-amber-100 text-amber-700",
-            desc: "Manage reason for delay type classifications"
-        },
-        {
-            name: "Reason For Delay Master",
-            path: "/admin/reasons-for-delay",
-            masterKey: "reason_for_delay",
-            icon: "fa-solid fa-circle-exclamation",
-            color: "bg-rose-50 text-rose-600 border border-rose-100/50",
-            activeColor: "bg-rose-100 text-rose-700",
-            desc: "Manage reasons for delay, types and remarks"
-        },
+
         {
             name: "Document Master",
             path: "/admin/documents",
@@ -349,24 +298,7 @@ export default function Navbar({ title }) {
             activeColor: "bg-fuchsia-100 text-fuchsia-700",
             desc: "Manage customer details and related documents"
         },
-        {
-            name: "Reason Master",
-            path: "/admin/reasons",
-            masterKey: "reason",
-            icon: "fa-solid fa-clipboard-question",
-            color: "bg-orange-50 text-orange-600 border border-orange-100/50",
-            activeColor: "bg-orange-100 text-orange-700",
-            desc: "Manage reasons and their effects on production"
-        },
-        {
-            name: "Sub SD Reason Master",
-            path: "/admin/sub-sd-reasons",
-            masterKey: "sub_sd_reason",
-            icon: "fa-solid fa-code-branch",
-            color: "bg-cyan-50 text-cyan-600 border border-cyan-100/50",
-            activeColor: "bg-cyan-100 text-cyan-700",
-            desc: "Manage Sub SD reason codes mapped to reasons and moulds"
-        },
+
         {
             name: "Process Master",
             path: "/admin/process-masters",

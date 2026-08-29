@@ -119,28 +119,20 @@ const getPMemoByWorkOrderItemId = async (workOrderItemId) => {
             mac.name AS machine_name,
             m.material_name,
             m.material_code AS item_code,
-            CONCAT(rm_mat.material_name, ' - ', rm.grade) AS raw_material_name,
             bom.product_weight AS unit_weight,
             bom.color,
             bom.rm_formulation,
             woi.batch_no AS batch,
-            mld.cavity AS mould_cavity,
             woi.quantity AS production_quantity,
             wo.id AS work_order_id,
-            wo.work_order_no,
-            woi.job_party_id,
-            jp.party_name AS job_party_name
+            wo.work_order_no
         FROM work_order_items woi
         LEFT JOIN work_orders wo ON woi.work_order_id = wo.id
-        LEFT JOIN job_parties jp ON woi.job_party_id = jp.id
         LEFT JOIN production_memos pm ON woi.id = pm.work_order_item_id
         LEFT JOIN machines mac ON woi.machine_id = mac.id
-        LEFT JOIN moulds mld ON woi.mould_id = mld.id
         LEFT JOIN sales_order_items soi ON woi.sales_order_item_id = soi.id
         LEFT JOIN materials m ON soi.material_id = m.id
         LEFT JOIN bill_of_materials bom ON m.id = bom.material_id
-        LEFT JOIN raw_materials rm ON bom.raw_material_id = rm.id
-        LEFT JOIN materials rm_mat ON rm.material_id = rm_mat.id
         WHERE woi.id = ?
     `;
     const [rows] = await db.execute(query, [workOrderItemId]);

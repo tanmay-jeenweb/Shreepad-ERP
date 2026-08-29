@@ -46,14 +46,14 @@ const getStockBookRecords = async (filters = {}) => {
                 gi.supplier_batch_number AS supplier_batch_number,
                 gi.grade AS grade,
                 g.name AS vendor_name,
-                g.job_party_name AS job_party_name,
+                NULL AS job_party_name,
                 g.invoice_number AS invoice_number,
                 g.grn_number AS grn_number,
                 '' AS p_memo_number,
                 COALESCE(qc_agg.approved_qty, 0) AS approved_quantity,
                 0 AS issued_quantity,
                 g.vendor_id,
-                g.job_party_id,
+                NULL AS job_party_id,
                 g.location_id,
                 g.created_at AS created_at
             FROM grn_items gi
@@ -79,19 +79,18 @@ const getStockBookRecords = async (filters = {}) => {
                 '' AS supplier_batch_number,
                 mai.grade AS grade,
                 '' AS vendor_name,
-                ma.job_party_name AS job_party_name,
+                NULL AS job_party_name,
                 '' AS invoice_number,
                 ma.ma_number AS grn_number,
                 '' AS p_memo_number,
                 COALESCE(qc_agg.approved_qty, 0) AS approved_quantity,
                 0 AS issued_quantity,
                 NULL AS vendor_id,
-                ma.job_party_id,
+                NULL AS job_party_id,
                 ma.location_id,
                 ma.created_at AS created_at
             FROM material_add_items mai
             JOIN material_add_master ma ON mai.ma_id = ma.id
-            LEFT JOIN job_parties jp ON ma.job_party_id = jp.id
             JOIN (
                 SELECT ma_item_id, SUM(approved_quantity) AS approved_qty
                 FROM qc_items WHERE ma_item_id IS NOT NULL
@@ -113,14 +112,14 @@ const getStockBookRecords = async (filters = {}) => {
                 '' AS supplier_batch_number,
                 r.grade AS grade,
                 '' AS vendor_name,
-                r.job_party_name AS job_party_name,
+                NULL AS job_party_name,
                 '' AS invoice_number,
                 r.return_no AS grn_number,
                 '' AS p_memo_number,
                 r.quantity AS approved_quantity,
                 0 AS issued_quantity,
                 NULL AS vendor_id,
-                r.job_party_id,
+                NULL AS job_party_id,
                 r.location_id,
                 r.created_at AS created_at
             FROM rm_returns r
@@ -142,14 +141,14 @@ const getStockBookRecords = async (filters = {}) => {
                 gi.supplier_batch_number AS supplier_batch_number,
                 gi.grade AS grade,
                 g.name AS vendor_name,
-                g.job_party_name AS job_party_name,
+                NULL AS job_party_name,
                 g.invoice_number AS invoice_number,
                 g.grn_number AS grn_number,
                 COALESCE(si.p_memo_number, '') AS p_memo_number,
                 0 AS approved_quantity,
                 si.issue_quantity AS issued_quantity,
                 g.vendor_id,
-                g.job_party_id,
+                NULL AS job_party_id,
                 g.location_id,
                 si.created_at AS created_at
             FROM stock_issues si
@@ -174,20 +173,19 @@ const getStockBookRecords = async (filters = {}) => {
                 '' AS supplier_batch_number,
                 mai.grade AS grade,
                 '' AS vendor_name,
-                ma.job_party_name AS job_party_name,
+                NULL AS job_party_name,
                 '' AS invoice_number,
                 ma.ma_number AS grn_number,
                 COALESCE(si.p_memo_number, '') AS p_memo_number,
                 0 AS approved_quantity,
                 si.issue_quantity AS issued_quantity,
                 NULL AS vendor_id,
-                ma.job_party_id,
+                NULL AS job_party_id,
                 ma.location_id,
                 si.created_at AS created_at
             FROM stock_issues si
             JOIN material_add_items mai ON si.ma_item_id = mai.id
             JOIN material_add_master ma ON mai.ma_id = ma.id
-            LEFT JOIN job_parties jp ON ma.job_party_id = jp.id
             WHERE si.ma_item_id IS NOT NULL
 
             UNION ALL
@@ -207,14 +205,14 @@ const getStockBookRecords = async (filters = {}) => {
                 '' AS supplier_batch_number,
                 r.grade AS grade,
                 '' AS vendor_name,
-                r.job_party_name AS job_party_name,
+                NULL AS job_party_name,
                 '' AS invoice_number,
                 r.return_no AS grn_number,
                 COALESCE(si.p_memo_number, '') AS p_memo_number,
                 0 AS approved_quantity,
                 si.issue_quantity AS issued_quantity,
                 NULL AS vendor_id,
-                r.job_party_id,
+                NULL AS job_party_id,
                 r.location_id,
                 si.created_at AS created_at
             FROM stock_issues si
@@ -231,10 +229,7 @@ const getStockBookRecords = async (filters = {}) => {
         query += ` AND t.vendor_id = ?`;
         queryParams.push(filters.vendor_id);
     }
-    if (filters.job_party_id && filters.job_party_id !== 'all' && filters.job_party_id !== '') {
-        query += ` AND t.job_party_id = ?`;
-        queryParams.push(filters.job_party_id);
-    }
+    // job_party_id filter removed
     if (filters.material_id && filters.material_id !== 'all' && filters.material_id !== '') {
         query += ` AND t.material_id = ?`;
         queryParams.push(filters.material_id);
@@ -484,7 +479,7 @@ const getActiveBatches = async () => {
             r.id AS rm_return_id,
             COALESCE(gi.internal_batch_number, mai.internal_batch_number, r.internal_batch_number) AS internal_batch_number,
             COALESCE(gi.material_name, mai.material_name, r.material_name) AS product,
-            COALESCE(g.job_party_name, ma.job_party_name, r.job_party_name) AS job_party_name,
+            NULL AS job_party_name,
             ss.material_type,
             COALESCE(gi.grade, mai.grade, r.grade) AS grade,
             (COALESCE(qc_agg.approved_qty, r.quantity, 0) - COALESCE(issue_agg.issued_qty, 0)) AS balance_quantity

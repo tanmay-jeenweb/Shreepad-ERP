@@ -1,21 +1,5 @@
-import apiClient from "./authApi.js";
-
-export const getRawMaterials = async () => {
-    return apiClient.get("/raw-materials/all");
-};
-
-export const getRawMaterialById = async (id) => {
-    return apiClient.get(`/raw-materials/${id}`);
-};
-
-export const createRawMaterial = async (data) => {
-    return apiClient.post("/raw-materials/add", data);
-};
-
-export const updateRawMaterial = async (id, data) => {
-    return apiClient.put(`/raw-materials/update/${id}`, data);
-};
-
-export const deleteRawMaterial = async (id) => {
-    return apiClient.delete(`/raw-materials/delete/${id}`);
-};
+export const getRawMaterials = () => Promise.resolve({ data: { data: [] } });
+export const getRawMaterialById = () => Promise.resolve({ data: {} });
+export const createRawMaterial = () => Promise.resolve({ data: {} });
+export const updateRawMaterial = () => Promise.resolve({ data: {} });
+export const deleteRawMaterial = () => Promise.resolve({ data: {} });
