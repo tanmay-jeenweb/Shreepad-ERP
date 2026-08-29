@@ -15,6 +15,7 @@ const MODULE_GROUPS = [
       { key: "location",            label: "Location Master" },
       { key: "document",            label: "Document Master" },
       { key: "organization",        label: "Organization Master" },
+      { key: "activity_report",     label: "User Activity Records", allowedPerms: ["canRead"] },
     ]
   },
   {

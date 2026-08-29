@@ -18,6 +18,7 @@
         { key: 'po_approval', label: 'PO Approval' },
         { key: 'sales_order', label: 'Sales Order' },
         { key: 'work_order', label: 'Work Order' },
+        { key: 'activity_report', label: 'User Activity Records' },
     ];
 
     // ─── Table creation ──────────────────────────────────────────────────────────

@@ -11,7 +11,7 @@ const {
     fetchPendingDevices,
     toggleUserActiveController
 } = require("../controllers/adminController.js");
-const { verifyToken, verifyAdmin } = require("../middleware/authMiddleware.js");
+const { verifyToken, verifyAdmin, verifyPermission } = require("../middleware/authMiddleware.js");
 
 const router = express.Router();
 
@@ -25,6 +25,6 @@ router.put("/revoke-device/:userId", verifyToken, verifyAdmin, revokeDeviceContr
 
 router.get("/audit-logs", verifyToken, verifyAdmin, fetchAuditLogs);
 router.get("/audit-logs/:userId", verifyToken, verifyAdmin, fetchUserAuditLogs);
-router.get('/activity-logs', verifyToken, fetchActivityLogs);
+router.get('/activity-logs', verifyToken, verifyPermission("activity_report", "read"), fetchActivityLogs);
 
 module.exports = router;    
