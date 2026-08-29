@@ -28,16 +28,12 @@ const createWorkOrdersTable = async () => {
             batch_no             VARCHAR(100) DEFAULT NULL,
             actual_delivery_date DATE DEFAULT NULL,
             remarks              TEXT DEFAULT NULL,
-            mould_id             INT DEFAULT NULL,
             machine_id           INT DEFAULT NULL,
-            job_party_id         INT DEFAULT NULL,
             created_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (work_order_id) REFERENCES work_orders(id) ON DELETE CASCADE,
             FOREIGN KEY (sales_order_item_id) REFERENCES sales_order_items(id) ON DELETE CASCADE,
-            FOREIGN KEY (mould_id) REFERENCES moulds(id) ON DELETE SET NULL,
-            FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE SET NULL,
-            FOREIGN KEY (job_party_id) REFERENCES job_parties(id) ON DELETE SET NULL
+            FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE SET NULL
         )
     `;
 
@@ -53,11 +49,7 @@ const ensureWorkOrderColumns = async () => {
             await db.execute("ALTER TABLE work_order_items ADD COLUMN production_time_hours DECIMAL(10,3) DEFAULT NULL");
             console.log('Added column production_time_hours to work_order_items');
         }
-        const [rowsJobParty] = await db.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'work_order_items' AND COLUMN_NAME = 'job_party_id'");
-        if (rowsJobParty.length === 0) {
-            await db.execute("ALTER TABLE work_order_items ADD COLUMN job_party_id INT DEFAULT NULL, ADD CONSTRAINT fk_work_order_items_job_party FOREIGN KEY (job_party_id) REFERENCES job_parties(id) ON DELETE SET NULL");
-            console.log('Added column job_party_id to work_order_items');
-        }
+        // job_party_id column check removed
     } catch (err) {
         console.error('Error ensuring work order columns:', err.message || err);
     }
@@ -137,16 +129,6 @@ const createWorkOrder = async (salesOrderId, workOrderDate, addedBy, deviceId, i
 
         for (const item of itemsArray) {
             let productionTimeHours = null;
-            if (item.mould_id) {
-                const [mouldRows] = await connection.execute('SELECT cavity, std_cycle_time FROM moulds WHERE id = ?', [item.mould_id]);
-                if (mouldRows.length > 0) {
-                    const mould = mouldRows[0];
-                    if (mould.cavity && mould.std_cycle_time) {
-                        const totalSecs = item.quantity * (mould.std_cycle_time / mould.cavity);
-                        productionTimeHours = totalSecs / 3600;
-                    }
-                }
-            }
 
             let sortOrder = null;
             if (item.machine_id) {
@@ -160,8 +142,8 @@ const createWorkOrder = async (salesOrderId, workOrderDate, addedBy, deviceId, i
             const itemQuery = `
                 INSERT INTO work_order_items (
                     work_order_id, sales_order_item_id, quantity, production_quantity,
-                    exp_delivery_date, batch_no, actual_delivery_date, remarks, mould_id, machine_id, job_party_id, production_time_hours, sort_order
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    exp_delivery_date, batch_no, actual_delivery_date, remarks, machine_id, production_time_hours, sort_order
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `;
 
             const [itemResult] = await connection.execute(itemQuery, [
@@ -173,9 +155,7 @@ const createWorkOrder = async (salesOrderId, workOrderDate, addedBy, deviceId, i
                 item.batch_no || null,
                 item.actual_delivery_date || null,
                 item.remarks || null,
-                item.mould_id || null,
                 item.machine_id || null,
-                item.job_party_id ? Number(item.job_party_id) : null,
                 productionTimeHours,
                 sortOrder
             ]);
@@ -351,7 +331,6 @@ const getAllWorkOrders = async (includeHeld = false) => {
             woi.batch_no,
             woi.actual_delivery_date,
             woi.remarks,
-            woi.mould_id,
             woi.machine_id,
             woi.production_time_hours,
             woi.planned_start_date,
@@ -362,31 +341,23 @@ const getAllWorkOrders = async (includeHeld = false) => {
             wo.id AS work_order_id,
             wo.work_order_no,
             wo.work_order_date,
-            mld.mould_name,
             mac.name AS machine_name,
             mac.machine_number,
             COALESCE(u.name, 'Unknown') AS added_by_name,
             bom.product_weight,
-            CONCAT(rm_mat.material_name, ' - ', rm.grade) AS raw_material_name,
             sched.running_start_date,
             sched.running_end_date,
             pm.p_memo_no AS p_memo_no,
-            pm.date AS p_memo_date,
-            woi.job_party_id,
-            jp.party_name AS job_party_name
+            pm.date AS p_memo_date
         FROM sales_order_items soi
         JOIN sales_orders so ON soi.sales_order_id = so.id
         LEFT JOIN customer_master c ON so.customer_id = c.id
         LEFT JOIN materials m ON soi.material_id = m.id
         LEFT JOIN work_order_items woi ON woi.sales_order_item_id = soi.id
         LEFT JOIN work_orders wo ON woi.work_order_id = wo.id
-        LEFT JOIN moulds mld ON woi.mould_id = mld.id
         LEFT JOIN machines mac ON woi.machine_id = mac.id
-        LEFT JOIN job_parties jp ON woi.job_party_id = jp.id
         LEFT JOIN users u ON wo.added_by = u.id
         LEFT JOIN bill_of_materials bom ON m.id = bom.material_id
-        LEFT JOIN raw_materials rm ON bom.raw_material_id = rm.id
-        LEFT JOIN materials rm_mat ON rm.material_id = rm_mat.id
         LEFT JOIN production_memos pm ON woi.id = pm.work_order_item_id
         LEFT JOIN (
             SELECT 
@@ -426,16 +397,12 @@ const getWorkOrderById = async (id) => {
             woi.*,
             m.material_name,
             m.material_code,
-            mld.mould_name,
             mac.name AS machine_name,
-            soi.quantity AS original_so_quantity,
-            jp.party_name AS job_party_name
+            soi.quantity AS original_so_quantity
         FROM work_order_items woi
         LEFT JOIN sales_order_items soi ON woi.sales_order_item_id = soi.id
         LEFT JOIN materials m ON soi.material_id = m.id
-        LEFT JOIN moulds mld ON woi.mould_id = mld.id
         LEFT JOIN machines mac ON woi.machine_id = mac.id
-        LEFT JOIN job_parties jp ON woi.job_party_id = jp.id
         WHERE woi.work_order_id = ?
     `;
     const [items] = await db.execute(itemsQuery, [id]);
@@ -581,7 +548,7 @@ const updateWorkOrder = async (workOrderId, workOrderDate, itemsArray) => {
 
         // 2. Fetch existing items for tracking before any updates
         const [existingItems] = await connection.execute(
-            `SELECT id, machine_id, quantity, mould_id, production_time_hours, sort_order FROM work_order_items WHERE work_order_id = ?`,
+            `SELECT id, machine_id, quantity, production_time_hours, sort_order FROM work_order_items WHERE work_order_id = ?`,
             [workOrderId]
         );
 
@@ -598,23 +565,10 @@ const updateWorkOrder = async (workOrderId, workOrderDate, itemsArray) => {
             const newMachineId = item.machine_id ? Number(item.machine_id) : null;
             const oldQty = Number(existingItem.quantity);
             const newQty = Number(item.quantity);
-            const oldMouldId = existingItem.mould_id;
-            const newMouldId = item.mould_id ? Number(item.mould_id) : null;
-
             // Compute production time hours
             let productionTimeHours = existingItem.production_time_hours;
-            if (newQty !== oldQty || newMouldId !== oldMouldId) {
+            if (newQty !== oldQty) {
                 productionTimeHours = null;
-                if (newMouldId) {
-                    const [mouldRows] = await connection.execute('SELECT cavity, std_cycle_time FROM moulds WHERE id = ?', [newMouldId]);
-                    if (mouldRows.length > 0) {
-                        const mould = mouldRows[0];
-                        if (mould.cavity && mould.std_cycle_time) {
-                            const totalSecs = newQty * (mould.std_cycle_time / mould.cavity);
-                            productionTimeHours = totalSecs / 3600;
-                        }
-                    }
-                }
             }
 
             let sortOrder = existingItem.sort_order;
@@ -657,9 +611,7 @@ const updateWorkOrder = async (workOrderId, workOrderDate, itemsArray) => {
                 UPDATE work_order_items
                 SET quantity = ?,
                     production_quantity = ?,
-                    mould_id = ?,
                     machine_id = ?,
-                    job_party_id = ?,
                     production_time_hours = ?,
                     sort_order = ?,
                     exp_delivery_date = ?,
@@ -672,9 +624,7 @@ const updateWorkOrder = async (workOrderId, workOrderDate, itemsArray) => {
             await connection.execute(updateItemQuery, [
                 newQty,
                 item.production_quantity ? Number(item.production_quantity) : 0,
-                newMouldId,
                 newMachineId,
-                item.job_party_id ? Number(item.job_party_id) : null,
                 productionTimeHours,
                 sortOrder,
                 item.exp_delivery_date || null,

@@ -29,19 +29,8 @@ const createMaterialsTable = async () => {
         )
     `;
 
-    const materialMouldsQuery = `
-        CREATE TABLE IF NOT EXISTS material_moulds (
-            material_id INT NOT NULL,
-            mould_id INT NOT NULL,
-            PRIMARY KEY (material_id, mould_id),
-            FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE CASCADE,
-            FOREIGN KEY (mould_id) REFERENCES moulds(id) ON DELETE CASCADE
-        )
-    `;
-
     await db.execute(query);
-    await db.execute(materialMouldsQuery);
-    console.log('Materials and material_moulds tables ready');
+    console.log('Materials table ready');
 };
 
 const ensureMaterialColumns = async () => {
@@ -60,17 +49,9 @@ const ensureMaterialColumns = async () => {
             console.log(`Added column ${col.name} to materials`);
         }
     }
-
-    // Ensure material_type is VARCHAR(100) instead of ENUM to support custom inputs
-    try {
-        await db.execute('ALTER TABLE materials MODIFY COLUMN material_type VARCHAR(100)');
-        console.log('Modified material_type column to VARCHAR(100)');
-    } catch (err) {
-        console.error('Error modifying material_type column:', err);
-    }
 };
 
-const createMaterial = async (data, mouldIds = [], addedBy, deviceId) => {
+const createMaterial = async (data, addedBy, deviceId) => {
     const {
         materialCode,
         code,
@@ -88,16 +69,27 @@ const createMaterial = async (data, mouldIds = [], addedBy, deviceId) => {
     } = data;
 
     const query = `
-        INSERT INTO materials
-            (material_code, code, material_name, unit_id, hsn_code, material_group_id, material_type, gst_percent, self_val, purchase_val, unit_weight, details, remarks, added_by, device_id)
+        INSERT INTO materials (
+            material_code,
+            code,
+            material_name,
+            unit_id,
+            hsn_code,
+            material_group_id,
+            material_type,
+            gst_percent,
+            self_val,
+            purchase_val,
+            unit_weight,
+            details,
+            remarks,
+            added_by,
+            device_id
+        )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
-    const connection = await db.getConnection();
-    try {
-        await connection.beginTransaction();
-
-        const [results] = await connection.execute(query, [
+    const [results] = await db.execute(query, [
         materialCode,
         code || null,
         materialName,
@@ -115,25 +107,7 @@ const createMaterial = async (data, mouldIds = [], addedBy, deviceId) => {
         deviceId
     ]);
 
-    const materialId = results.insertId;
-
-    if (mouldIds && mouldIds.length > 0) {
-        for (const mouldId of mouldIds) {
-            await connection.execute(
-                `INSERT INTO material_moulds (material_id, mould_id) VALUES (?, ?)`,
-                [materialId, mouldId]
-            );
-        }
-    }
-
-    await connection.commit();
     return results;
-    } catch (err) {
-        await connection.rollback();
-        throw err;
-    } finally {
-        connection.release();
-    }
 };
 
 const getAllMaterials = async (includeInactive = false) => {
@@ -159,15 +133,12 @@ const getAllMaterials = async (includeInactive = false) => {
             m.active,
             COALESCE(usr.name, 'Unknown') AS added_by_name,
             m.device_id,
-            m.created_at,
-            GROUP_CONCAT(mm.mould_id) AS mould_ids
+            m.created_at
         FROM materials m
         LEFT JOIN units u ON m.unit_id = u.id
         LEFT JOIN material_groups mg ON m.material_group_id = mg.id
         LEFT JOIN users usr ON m.added_by = usr.id
-        LEFT JOIN material_moulds mm ON m.id = mm.material_id
         ${whereClause}
-        GROUP BY m.id
         ORDER BY m.created_at DESC
     `;
 
@@ -177,23 +148,15 @@ const getAllMaterials = async (includeInactive = false) => {
 
 const getMaterialById = async (id) => {
     const query = `
-        SELECT m.*, GROUP_CONCAT(mm.mould_id) AS mould_ids
+        SELECT m.*
         FROM materials m
-        LEFT JOIN material_moulds mm ON m.id = mm.material_id
         WHERE m.id = ?
-        GROUP BY m.id
     `;
     const [rows] = await db.execute(query, [id]);
-    const material = rows[0];
-    if (material && material.mould_ids) {
-        material.mould_ids = material.mould_ids.split(',').map(Number);
-    } else if (material) {
-        material.mould_ids = [];
-    }
-    return material;
+    return rows[0];
 };
 
-const updateMaterial = async (id, data, mouldIds = []) => {
+const updateMaterial = async (id, data) => {
     const {
         materialCode,
         code,
@@ -229,11 +192,7 @@ const updateMaterial = async (id, data, mouldIds = []) => {
         WHERE id = ?
     `;
 
-    const connection = await db.getConnection();
-    try {
-        await connection.beginTransaction();
-
-        const [results] = await connection.execute(query, [
+    const [results] = await db.execute(query, [
         materialCode,
         code || null,
         materialName,
@@ -250,25 +209,7 @@ const updateMaterial = async (id, data, mouldIds = []) => {
         id
     ]);
 
-    await connection.execute(`DELETE FROM material_moulds WHERE material_id = ?`, [id]);
-    
-    if (mouldIds && mouldIds.length > 0) {
-        for (const mouldId of mouldIds) {
-            await connection.execute(
-                `INSERT INTO material_moulds (material_id, mould_id) VALUES (?, ?)`,
-                [id, mouldId]
-            );
-        }
-    }
-
-    await connection.commit();
     return results;
-    } catch (err) {
-        await connection.rollback();
-        throw err;
-    } finally {
-        connection.release();
-    }
 };
 
 const toggleMaterialActive = async (id, active) => {

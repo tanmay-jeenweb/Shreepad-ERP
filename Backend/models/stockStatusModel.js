@@ -355,10 +355,7 @@ const getAllStockStatus = async (typeFilter, filters = {}) => {
         whereClause += ` AND g.vendor_id = ?`;
         params.push(filters.vendor_id);
     }
-    if (filters.job_party_id && filters.job_party_id !== 'all' && filters.job_party_id !== '') {
-        whereClause += ` AND (g.job_party_id = ? OR ma.job_party_id = ? OR r.job_party_id = ?)`;
-        params.push(filters.job_party_id, filters.job_party_id, filters.job_party_id);
-    }
+    // job_party_id filter removed
     if (filters.material_id && filters.material_id !== 'all' && filters.material_id !== '') {
         whereClause += ` AND ss.material_id = ?`;
         params.push(filters.material_id);
@@ -399,7 +396,7 @@ const getAllStockStatus = async (typeFilter, filters = {}) => {
             ss.ma_id,
             ss.rm_return_id,
             COALESCE(g.grn_number, ma.ma_number, r.return_no) AS grn_number,
-            COALESCE(g.job_party_name, ma.job_party_name, r.job_party_name) AS job_party_name,
+            NULL AS job_party_name,
             COALESCE(g.grn_date, ma.ma_date, r.return_date, ss.created_at) AS date,
             ss.created_at,
             ss.updated_at,
