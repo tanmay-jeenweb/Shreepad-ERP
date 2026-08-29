@@ -1,0 +1,9 @@
+# Ignore all zip archives
+*.zip
+Backend.zip
+
+# Ignore standard node dependency and build folders
+node_modules/
+dist/
+.env*
+.DS_Store

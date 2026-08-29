@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+@theme {
+  /* Primary brand color and its variations */
+  --color-indigo-50: #f0f4f8;
+  --color-indigo-100: #d9e2ec;
+  --color-indigo-200: #bcccdc;
+  --color-indigo-300: #9fb3c8;
+  --color-indigo-400: #829ab1;
+  --color-indigo-50: #e6ebf0; /* Map light shade if needed */
+  --color-indigo-500: #4faad7;
+  --color-indigo-600: #369ACF; /* Target primary brand color */
+  --color-indigo-700: #2583b4;
+  --color-indigo-800: #1c6287;
+  --color-indigo-900: #13445e;
+
+  --color-blue-50: #f0f4f8;
+  --color-blue-100: #d9e2ec;
+  --color-blue-200: #bcccdc;
+  --color-blue-300: #9fb3c8;
+  --color-blue-400: #829ab1;
+  --color-blue-500: #4faad7;
+  --color-blue-600: #369ACF;
+  --color-blue-700: #2583b4;
+  --color-blue-800: #1c6287;
+  --color-blue-900: #369ACF; /* Target header/pagination color */
+}
+
