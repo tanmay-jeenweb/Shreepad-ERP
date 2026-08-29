@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
 @theme {
+  --font-sans: "Plus Jakarta Sans", "Inter", sans-serif;
+  --font-inter: "Inter", sans-serif;
+
   /* Primary brand color and its variations */
   --color-indigo-50: #f0f4f8;
   --color-indigo-100: #d9e2ec;
