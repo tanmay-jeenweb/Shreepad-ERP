@@ -86,14 +86,18 @@ export default function BillOfMaterial() {
                 }
             },
             {
-                label: "Mould",
-                key: "mould_name",
-                render: (row) => row.mould_name || "-"
-            },
-            {
-                label: "Process",
-                key: "process_name",
-                render: (row) => row.process_name || "-"
+                label: "Processes",
+                key: "process_label",
+                render: (row) => {
+                    const label = row.process_label;
+                    return label ? (
+                        <span className="px-2.5 py-1 bg-teal-50 text-teal-700 rounded-lg text-xs font-medium border border-teal-100">
+                            {label}
+                        </span>
+                    ) : (
+                        <span className="text-slate-400">-</span>
+                    );
+                }
             }
         ];
 
@@ -212,15 +216,11 @@ export default function BillOfMaterial() {
                             </div>
 
                             <div>
-                                <h3 className="text-sm font-bold text-teal-600 mb-4 border-b border-teal-100 pb-2 uppercase tracking-wider">Production Settings</h3>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                                <h3 className="text-sm font-bold text-teal-600 mb-4 border-b border-teal-100 pb-2 uppercase tracking-wider">Processes</h3>
+                                <div className="grid grid-cols-1 gap-6">
                                     <div className="space-y-1">
-                                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Compatible Mould</p>
-                                        <p className="text-sm font-medium text-slate-800">{viewData.mould_name || "-"}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Process</p>
-                                        <p className="text-sm font-medium text-slate-800">{viewData.process_name || "-"}</p>
+                                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Process List</p>
+                                        <p className="text-sm font-medium text-slate-800">{viewData.process_label || "-"}</p>
                                     </div>
                                 </div>
                             </div>
