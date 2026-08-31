@@ -344,14 +344,8 @@ export default function Navbar({ title }) {
         return true;
     });
 
-    const availablePurchaseLinks = [
-        { name: "Purchase Order", path: "/purchase/purchase-orders", icon: "fa-solid fa-file-invoice", masterKey: "purchase_order" }
-    ].filter(m => isAdmin || hasPermission(m.masterKey, "read"));
-
     const availableStoreLinks = [
-        { name: "GRN", path: "/purchase/grn", icon: "fa-solid fa-boxes-packing", masterKey: "grn_master" },
         { name: "Material Add", path: "/store/material-add", icon: "fa-solid fa-box-open", masterKey: "material_add" },
-        { name: "QC", path: "/purchase/qc", icon: "fa-solid fa fa-check-circle", masterKey: "qc_master" },
         { name: "Material Remove", path: "/store/material-remove", icon: "fa-solid fa-trash-can", masterKey: "rm_stock_book" }
     ].filter(m => {
         if (isAdmin) return true;
@@ -374,7 +368,6 @@ export default function Navbar({ title }) {
     ].filter(m => isAdmin || hasPermission(m.masterKey, "read"));
 
     const availableApprovalLinks = [
-        { name: "PO Approval", path: "/purchase/po-approval", icon: "fa-solid fa-clipboard-check", masterKey: "po_approval" },
         { name: "Sales Approval", path: "/sales/so-approval", icon: "fa-solid fa-file-signature", masterKey: "so_approval" }
     ].filter(m => isAdmin || hasPermission(m.masterKey, "read"));
 
@@ -390,14 +383,13 @@ export default function Navbar({ title }) {
         return hasPermission(m.masterKey, "read");
     });
 
-    const hasAnyNavbarAccess = availableMasters.length > 0 || availablePurchaseLinks.length > 0 || availableStoreLinks.length > 0 || availableProductionLinks.length > 0 || availableSalesLinks.length > 0 || availableApprovalLinks.length > 0 || availableReportsLinks.length > 0 || isAdmin;
+    const hasAnyNavbarAccess = availableMasters.length > 0 || availableStoreLinks.length > 0 || availableProductionLinks.length > 0 || availableSalesLinks.length > 0 || availableApprovalLinks.length > 0 || availableReportsLinks.length > 0 || isAdmin;
 
     const currentMaster = availableMasters.find(m => m.path === location.pathname) || availableMasters[0];
 
     const activeCount = [
         true,
         availableMasters.length > 0,
-        availablePurchaseLinks.length > 0,
         availableStoreLinks.length > 0,
         availableProductionLinks.length > 0,
         availableSalesLinks.length > 0,
@@ -581,73 +573,12 @@ export default function Navbar({ title }) {
                             </div>
                         )}
 
-                        {/* Purchase Dropdown (contains Purchase Order) */}
-                        {availablePurchaseLinks.length > 0 && (
-                            <div className="relative w-full" id="purchase-dropdown">
-                                <button
-                                    onClick={togglePurchase}
-                                    className={`flex items-center justify-between w-full px-3.5 py-2.5 text-xs sm:text-sm border border-white/10 rounded-none hover:bg-white/5 focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer whitespace-nowrap ${location.pathname.startsWith("/purchase/purchase-orders") ? "bg-white/10" : "bg-[#369ACF]"}`}
-                                >
-                                    <span className="font-semibold text-white truncate">Purchase</span>
-                                    <svg
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                        strokeWidth={2.5}
-                                        stroke="currentColor"
-                                        className={`w-3.5 h-3.5 text-slate-300 transition-transform duration-200 ${isPurchaseOpen ? "rotate-180 text-white" : ""}`}
-                                    >
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-                                    </svg>
-                                </button>
-
-                                {isPurchaseOpen && (
-                                    <div className="absolute left-0 top-full mt-1.5 w-72 bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200">
-                                        <div className="flex flex-col gap-1.5">
-                                            {availablePurchaseLinks.map((m, idx) => {
-                                                const isActive = location.pathname.startsWith(m.path);
-                                                return (
-                                                    <button
-                                                        key={idx}
-                                                        onClick={() => {
-                                                            navigate(m.path);
-                                                            setIsPurchaseOpen(false);
-                                                        }}
-                                                        className={`relative group flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all cursor-pointer text-left border border-transparent ${isActive
-                                                            ? "bg-indigo-50/70 text-indigo-700 font-semibold border-indigo-100/50"
-                                                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-100"
-                                                            }`}
-                                                    >
-                                                        {/* Side Highlight Bar */}
-                                                        <span className={`absolute left-0 top-2 bottom-2 w-1 rounded-r-md transition-all duration-200 ${isActive ? "bg-indigo-600 scale-y-100" : "bg-transparent scale-y-0 group-hover:scale-y-50 group-hover:bg-slate-300"
-                                                            }`} />
-
-                                                        <div className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all shadow-sm shrink-0 ${isActive ? "bg-indigo-100/80 text-indigo-700" : "bg-slate-100/80 text-slate-500 group-hover:scale-105"
-                                                            }`}>
-                                                            <i className={`${m.icon} text-xs`}></i>
-                                                        </div>
-
-                                                        <div className="flex-1">
-                                                            <p className={`text-sm font-semibold leading-snug py-0.5 transition-colors whitespace-normal break-words ${isActive ? "text-indigo-900 font-bold" : "text-slate-800 group-hover:text-slate-950"
-                                                                }`}>
-                                                                {m.name}
-                                                            </p>
-                                                        </div>
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Store Dropdown (contains GRM) */}
+                        {/* Store Dropdown */}
                         {availableStoreLinks.length > 0 && (
                             <div className="relative w-full" id="store-dropdown">
                                 <button
                                     onClick={toggleStore}
-                                    className={`flex items-center justify-between w-full px-3.5 py-2.5 text-xs sm:text-sm border border-white/10 rounded-none hover:bg-white/5 focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer whitespace-nowrap ${location.pathname.startsWith("/purchase/grn") || location.pathname.startsWith("/store/") ? "bg-white/10" : "bg-[#369ACF]"}`}
+                                    className={`flex items-center justify-between w-full px-3.5 py-2.5 text-xs sm:text-sm border border-white/10 rounded-none hover:bg-white/5 focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer whitespace-nowrap ${location.pathname.startsWith("/store/") ? "bg-white/10" : "bg-[#369ACF]"}`}
                                 >
                                     <span className="font-semibold text-white truncate">Store</span>
                                     <svg

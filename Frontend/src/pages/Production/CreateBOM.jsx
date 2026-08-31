@@ -439,40 +439,42 @@ export default function CreateBOM() {
                                 </h2>
                             </div>
 
-                            <div>
-                                <label className={labelCls}>Product Weight</label>
-                                <input
-                                    type="number"
-                                    step="0.0001"
-                                    name="productWeight"
-                                    value={form.productWeight}
-                                    onChange={handleChange}
-                                    className={inputCls}
-                                />
-                            </div>
+                            <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div>
+                                    <label className={labelCls}>Product Weight</label>
+                                    <input
+                                        type="number"
+                                        step="0.0001"
+                                        name="productWeight"
+                                        value={form.productWeight}
+                                        onChange={handleChange}
+                                        className={inputCls}
+                                    />
+                                </div>
 
-                            <div>
-                                <label className={labelCls}>Unit Weight Tolerance [+/-]</label>
-                                <input
-                                    type="number"
-                                    step="0.0001"
-                                    name="unitWeightTolerance"
-                                    value={form.unitWeightTolerance}
-                                    onChange={handleChange}
-                                    className={inputCls}
-                                />
-                            </div>
+                                <div>
+                                    <label className={labelCls}>Unit Weight Tolerance [+/-]</label>
+                                    <input
+                                        type="number"
+                                        step="0.0001"
+                                        name="unitWeightTolerance"
+                                        value={form.unitWeightTolerance}
+                                        onChange={handleChange}
+                                        className={inputCls}
+                                    />
+                                </div>
 
-                            <div>
-                                <label className={labelCls}>Product Weight For Sale</label>
-                                <input
-                                    type="number"
-                                    step="0.0001"
-                                    name="productWeightForSale"
-                                    value={form.productWeightForSale}
-                                    onChange={handleChange}
-                                    className={inputCls}
-                                />
+                                <div>
+                                    <label className={labelCls}>Product Weight For Sale</label>
+                                    <input
+                                        type="number"
+                                        step="0.0001"
+                                        name="productWeightForSale"
+                                        value={form.productWeightForSale}
+                                        onChange={handleChange}
+                                        className={inputCls}
+                                    />
+                                </div>
                             </div>
 
                         </div>

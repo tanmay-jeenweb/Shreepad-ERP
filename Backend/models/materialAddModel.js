@@ -15,7 +15,7 @@ const createMaterialAddTables = async () => {
             location_name       VARCHAR(255),
             remark              TEXT DEFAULT NULL,
             particular          TEXT DEFAULT NULL,
-            status              VARCHAR(20) DEFAULT 'received',
+            status              VARCHAR(20) DEFAULT 'completed',
             added_by            INT NOT NULL,
             created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -31,12 +31,8 @@ const createMaterialAddTables = async () => {
             material_id           INT DEFAULT NULL,
             material_name         VARCHAR(255),
             material_type         VARCHAR(100),
-            grade                 VARCHAR(100),
             unit                  VARCHAR(50),
             quantity              DECIMAL(15,4) DEFAULT 0,
-            number_of_bags        INT DEFAULT 0,
-            kgs_per_bag           DECIMAL(15,4) DEFAULT 0,
-            remaining_kg          DECIMAL(15,4) DEFAULT 0,
             internal_batch_number VARCHAR(100) DEFAULT NULL,
             created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (ma_id)        REFERENCES material_add_master(id) ON DELETE CASCADE,
@@ -50,7 +46,35 @@ const createMaterialAddTables = async () => {
 };
 
 const ensureMaterialAddColumns = async () => {
-    // Add future columns here if needed
+    try {
+        const [columns] = await db.execute(`SHOW COLUMNS FROM material_add_master LIKE 'job_party_id'`);
+        if (columns.length > 0) {
+            await db.execute(`ALTER TABLE material_add_master DROP FOREIGN KEY fk_ma_job_party`).catch(() => {});
+            await db.execute(`ALTER TABLE material_add_master DROP COLUMN job_party_id`).catch(() => {});
+        }
+        const [nameCols] = await db.execute(`SHOW COLUMNS FROM material_add_master LIKE 'job_party_name'`);
+        if (nameCols.length > 0) {
+            await db.execute(`ALTER TABLE material_add_master DROP COLUMN job_party_name`).catch(() => {});
+        }
+        const [gradeCols] = await db.execute(`SHOW COLUMNS FROM material_add_items LIKE 'grade'`);
+        if (gradeCols.length > 0) {
+            await db.execute(`ALTER TABLE material_add_items DROP COLUMN grade`).catch(() => {});
+        }
+        const [bagCols] = await db.execute(`SHOW COLUMNS FROM material_add_items LIKE 'number_of_bags'`);
+        if (bagCols.length > 0) {
+            await db.execute(`ALTER TABLE material_add_items DROP COLUMN number_of_bags`).catch(() => {});
+        }
+        const [kpbCols] = await db.execute(`SHOW COLUMNS FROM material_add_items LIKE 'kgs_per_bag'`);
+        if (kpbCols.length > 0) {
+            await db.execute(`ALTER TABLE material_add_items DROP COLUMN kgs_per_bag`).catch(() => {});
+        }
+        const [remCols] = await db.execute(`SHOW COLUMNS FROM material_add_items LIKE 'remaining_kg'`);
+        if (remCols.length > 0) {
+            await db.execute(`ALTER TABLE material_add_items DROP COLUMN remaining_kg`).catch(() => {});
+        }
+    } catch (err) {
+        console.log('ensureMaterialAddColumns cleanup notice:', err.message);
+    }
 };
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -107,6 +131,49 @@ const generateInternalBatchNumber = async (connection, materialId, settings) => 
     return `${prefix}${mat.code}${year}${String(seq).padStart(4, '0')}`;
 };
 
+const previewNextBatchNumber = async (materialId) => {
+    if (!materialId) return null;
+    const [matRows] = await db.execute('SELECT code, material_type FROM materials WHERE id = ?', [materialId]);
+    if (matRows.length === 0) return null;
+    const mat = matRows[0];
+    if (!mat.code) return null;
+
+    const settings = await getSettings();
+    const prefixKey = mapMaterialTypeToPrefixKey(mat.material_type);
+    const prefix = settings ? (settings[prefixKey] || 'OTH') : 'OTH';
+    const year = (settings && settings.batch_year) ? settings.batch_year : new Date().getFullYear().toString().slice(-2);
+
+    const [seqRows] = await db.execute(
+        `SELECT last_sequence FROM batch_number_sequences WHERE material_code = ? AND batch_year = ?`,
+        [mat.code, year]
+    );
+    const lastSeq = seqRows.length > 0 ? seqRows[0].last_sequence : 0;
+    const nextSeq = lastSeq + 1;
+
+    return `${prefix}${mat.code}${year}${String(nextSeq).padStart(4, '0')}`;
+};
+
+// ─── Material Lookups ─────────────────────────────────────────────────────────
+
+const getDistinctMaterialTypes = async () => {
+    const [rows] = await db.execute(
+        `SELECT DISTINCT material_type FROM materials WHERE material_type IS NOT NULL AND material_type != '' ORDER BY material_type ASC`
+    );
+    return rows.map(r => r.material_type);
+};
+
+const getMaterialsByType = async (materialType) => {
+    const [rows] = await db.execute(
+        `SELECT m.id, m.material_name, m.material_code, m.hsn_code, u.unit_name, m.gst_percent
+         FROM materials m
+         LEFT JOIN units u ON m.unit_id = u.id
+         WHERE m.material_type = ? AND (m.active = 1 OR m.active IS NULL)
+         ORDER BY m.material_name ASC`,
+        [materialType]
+    );
+    return rows;
+};
+
 // ─── Create ───────────────────────────────────────────────────────────────────
 
 const createMaterialAdd = async (headerData, itemsData, addedBy) => {
@@ -129,7 +196,7 @@ const createMaterialAdd = async (headerData, itemsData, addedBy) => {
             headerData.location_name || null,
             headerData.remark || null,
             headerData.particular || null,
-            headerData.status || 'received',
+            headerData.status || 'completed',
             addedBy
         ]);
 
@@ -140,9 +207,9 @@ const createMaterialAdd = async (headerData, itemsData, addedBy) => {
         if (itemsData && itemsData.length > 0) {
             const insertItemQuery = `
                 INSERT INTO material_add_items
-                    (ma_id, material_id, material_name, material_type, grade, unit,
-                     quantity, number_of_bags, kgs_per_bag, remaining_kg, internal_batch_number)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (ma_id, material_id, material_name, material_type, unit,
+                     quantity, internal_batch_number)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             `;
 
             for (const item of itemsData) {
@@ -162,16 +229,12 @@ const createMaterialAdd = async (headerData, itemsData, addedBy) => {
                     validMatId,
                     item.material_name || null,
                     item.material_type || null,
-                    item.grade || null,
                     item.unit || null,
                     parseFloat(item.quantity) || 0,
-                    toIntOrNull(item.number_of_bags) || 0,
-                    parseFloat(item.kgs_per_bag) || 0,
-                    parseFloat(item.remaining_kg) || 0,
                     internalBatchNumber
                 ]);
 
-                // Upsert stock status
+                // Upsert stock status immediately into inventory
                 await upsertStockStatusForMa(connection, maId, {
                     ...item,
                     internal_batch_number: internalBatchNumber,
@@ -259,7 +322,7 @@ const updateMaterialAdd = async (id, headerData, itemsData) => {
             headerData.location_name || null,
             headerData.remark || null,
             headerData.particular || null,
-            headerData.status || 'received',
+            headerData.status || 'completed',
             id,
         ]);
 
@@ -287,14 +350,14 @@ const updateMaterialAdd = async (id, headerData, itemsData) => {
         if (itemsData && itemsData.length > 0) {
             const insertItemQuery = `
                 INSERT INTO material_add_items
-                    (ma_id, material_id, material_name, material_type, grade, unit,
-                     quantity, number_of_bags, kgs_per_bag, remaining_kg, internal_batch_number)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (ma_id, material_id, material_name, material_type, unit,
+                     quantity, internal_batch_number)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             `;
             const updateItemQuery = `
                 UPDATE material_add_items SET
-                    material_id = ?, material_name = ?, material_type = ?, grade = ?, unit = ?,
-                    quantity = ?, number_of_bags = ?, kgs_per_bag = ?, remaining_kg = ?, internal_batch_number = ?
+                    material_id = ?, material_name = ?, material_type = ?, unit = ?,
+                    quantity = ?, internal_batch_number = ?
                 WHERE id = ?
             `;
 
@@ -316,12 +379,8 @@ const updateMaterialAdd = async (id, headerData, itemsData) => {
                         validMatId,
                         item.material_name || null,
                         item.material_type || null,
-                        item.grade || null,
                         item.unit || null,
                         parseFloat(item.quantity) || 0,
-                        toIntOrNull(item.number_of_bags) || 0,
-                        parseFloat(item.kgs_per_bag) || 0,
-                        parseFloat(item.remaining_kg) || 0,
                         internalBatchNumber,
                         item.id
                     ]);
@@ -339,12 +398,8 @@ const updateMaterialAdd = async (id, headerData, itemsData) => {
                         validMatId,
                         item.material_name || null,
                         item.material_type || null,
-                        item.grade || null,
                         item.unit || null,
                         parseFloat(item.quantity) || 0,
-                        toIntOrNull(item.number_of_bags) || 0,
-                        parseFloat(item.kgs_per_bag) || 0,
-                        parseFloat(item.remaining_kg) || 0,
                         internalBatchNumber
                     ]);
 
@@ -378,11 +433,6 @@ const deleteMaterialAdd = async (id) => {
         // Delete from stock_status
         await connection.execute(`DELETE FROM stock_status WHERE ma_id = ?`, [id]);
 
-        // Delete from qc_master (which cascades to qc_items and stock_book)
-        // Wait, qc_master doesn't have ON DELETE CASCADE for ma_id? 
-        // It's safer to delete explicitly
-        await connection.execute(`DELETE FROM qc_master WHERE ma_id = ? AND source = 'material_add'`, [id]);
-
         const [result] = await connection.execute(`DELETE FROM material_add_master WHERE id = ?`, [id]);
 
         await connection.commit();
@@ -402,5 +452,8 @@ module.exports = {
     getAllMaterialAdds,
     getMaterialAddById,
     updateMaterialAdd,
-    deleteMaterialAdd
+    deleteMaterialAdd,
+    previewNextBatchNumber,
+    getDistinctMaterialTypes,
+    getMaterialsByType,
 };

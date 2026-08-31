@@ -3,7 +3,7 @@ import Navbar from "../../components/Navbar";
 import DataTable from "../../components/DataTable";
 import toast from "react-hot-toast";
 import { getStockStatus } from "../../api/stockStatusApi";
-import { getVendorsForGrn } from "../../api/grnApi";
+import { getAllVendors } from "../../api/vendorApi";
 import { getMaterials } from "../../api/materialApi";
 import { getLocations } from "../../api/locationApi";
 import { useSearchParams } from "react-router-dom";
@@ -39,7 +39,7 @@ export default function BatchStockStatus() {
     const loadFilterOptions = async () => {
         try {
             const [vendorsRes, materialsRes, locationsRes] = await Promise.all([
-                getVendorsForGrn(),
+                getAllVendors(),
                 getMaterials(),
                 getLocations()
             ]);

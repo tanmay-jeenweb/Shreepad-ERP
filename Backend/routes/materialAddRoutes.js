@@ -6,10 +6,17 @@ const {
     getAllMaterialAddsHandler,
     getMaterialAddByIdHandler,
     updateMaterialAddHandler,
-    deleteMaterialAddHandler
+    deleteMaterialAddHandler,
+    previewBatchNumberHandler,
+    getMaterialTypesHandler,
+    getMaterialsByTypeHandler,
 } = require('../controllers/materialAddController.js');
 
 router.use(verifyToken);
+
+router.get('/preview-batch-number', previewBatchNumberHandler);
+router.get('/material-types', getMaterialTypesHandler);
+router.get('/materials-by-type', getMaterialsByTypeHandler);
 
 router.post('/add', verifyPermission('material_add', 'write'), createMaterialAddHandler);
 router.get('/all', verifyPermission('material_add', 'read'), getAllMaterialAddsHandler);

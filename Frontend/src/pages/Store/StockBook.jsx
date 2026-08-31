@@ -3,7 +3,7 @@ import Navbar from "../../components/Navbar";
 import DataTable from "../../components/DataTable";
 import toast from "react-hot-toast";
 import { getStockBook, issueStock, getStockIssueLogs } from "../../api/stockBookApi";
-import { getVendorsForGrn } from "../../api/grnApi";
+import { getAllVendors } from "../../api/vendorApi";
 import { getMaterials } from "../../api/materialApi";
 import { getLocations } from "../../api/locationApi";
 import DateInput from "../../components/DateInput";
@@ -59,7 +59,7 @@ export default function StockBook({ type }) {
     const loadFilterOptions = async () => {
         try {
             const [vendorsRes, materialsRes, locationsRes] = await Promise.all([
-                getVendorsForGrn(),
+                getAllVendors(),
                 getMaterials(),
                 getLocations()
             ]);
