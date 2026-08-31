@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "module": "esnext",
+    "target": "es2022",
+    "moduleResolution": "node",
+    "jsx": "react-jsx"
+  },
+  "exclude": ["node_modules", "dist"]
+}

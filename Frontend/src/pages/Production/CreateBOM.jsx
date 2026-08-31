@@ -3,21 +3,19 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import { getBOMProducts, createBOM, updateBOM, getBOMByMaterialId } from "../../api/bomApi";
 import { getRawMaterials } from "../../api/rawMaterialApi";
-import { getAllMoulds } from "../../api/mouldApi";
 import { getProcesses } from "../../api/processMasterApi";
 import { getMaterials } from "../../api/materialApi";
+import { getUnits } from "../../api/unitApi";
 import toast from "react-hot-toast";
 
 const emptyForm = {
     materialId: "",
     rawMaterialId: "",
     unitWeightTolerance: "",
-    mouldId: "",
-    mouldIds: [],
-    processId: "",
     productWeight: "",
     productWeightForSale: "",
-    bomMaterials: [{ materialId: "", quantity: "", unitName: "" }]
+    bomMaterials: [{ materialId: "", quantity: "", unitName: "" }],
+    bomProcesses: [{ processId: "", time: "", unitId: "" }]
 };
 
 export default function CreateBOM() {
@@ -35,37 +33,23 @@ export default function CreateBOM() {
     // Dropdown data
     const [products, setProducts] = useState([]);
     const [rawAndSemiMaterials, setRawAndSemiMaterials] = useState([]);
-    const [moulds, setMoulds] = useState([]);
     const [processes, setProcesses] = useState([]);
-
-    const [mouldDropdownOpen, setMouldDropdownOpen] = useState(false);
-    const mouldDropdownRef = useRef(null);
-
-    // Close dropdown on outside click
-    useEffect(() => {
-        const handler = (e) => {
-            if (mouldDropdownRef.current && !mouldDropdownRef.current.contains(e.target)) {
-                setMouldDropdownOpen(false);
-            }
-        };
-        document.addEventListener("mousedown", handler);
-        return () => document.removeEventListener("mousedown", handler);
-    }, []);
+    const [units, setUnits] = useState([]);
 
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
                 setLoading(true);
-                const [prodRes, mouldRes, processRes, materialsRes] = await Promise.all([
+                const [prodRes, processRes, materialsRes, unitsRes] = await Promise.all([
                     getBOMProducts(),
-                    getAllMoulds(),
                     getProcesses(),
-                    getMaterials()
+                    getMaterials(),
+                    getUnits()
                 ]);
 
                 setProducts(prodRes.data?.data || []);
-                setMoulds(mouldRes.data?.data || []);
                 setProcesses(processRes.data?.data || []);
+                setUnits(unitsRes.data?.data || []);
 
                 const allMats = materialsRes.data?.data || [];
                 const filteredMats = allMats.filter(m => ['Raw Materials', 'Semi Finished Goods'].includes(m.material_type));
@@ -82,10 +66,6 @@ export default function CreateBOM() {
                                 setEditId(bomToEdit.id);
                             }
 
-                            const parsedMouldIds = bomToEdit.mould_ids
-                                ? bomToEdit.mould_ids.split(',').map(Number)
-                                : (bomToEdit.mould_id ? [Number(bomToEdit.mould_id)] : []);
-
                             const parsedMaterials = bomToEdit.bomMaterials && bomToEdit.bomMaterials.length > 0
                                 ? bomToEdit.bomMaterials.map(m => ({
                                     materialId: m.materialId || "",
@@ -94,16 +74,22 @@ export default function CreateBOM() {
                                 }))
                                 : [{ materialId: "", quantity: "", unitName: "" }];
 
+                            const parsedProcesses = bomToEdit.bomProcesses && bomToEdit.bomProcesses.length > 0
+                                ? bomToEdit.bomProcesses.map(p => ({
+                                    processId: p.processId || "",
+                                    time: p.time || "",
+                                    unitId: p.unitId || ""
+                                }))
+                                : [{ processId: "", time: "", unitId: "" }];
+
                             setForm({
                                 materialId: bomToEdit.material_id || "",
                                 rawMaterialId: bomToEdit.raw_material_id || "",
                                 unitWeightTolerance: bomToEdit.unit_weight_tolerance || "",
-                                mouldId: bomToEdit.mould_id || "",
-                                mouldIds: parsedMouldIds,
-                                processId: bomToEdit.process_id || "",
                                 productWeight: bomToEdit.product_weight || "",
                                 productWeightForSale: bomToEdit.product_weight_for_sale || "",
-                                bomMaterials: parsedMaterials
+                                bomMaterials: parsedMaterials,
+                                bomProcesses: parsedProcesses
                             });
                         } else {
                             toast.error("BOM config not found for this material");
@@ -131,20 +117,6 @@ export default function CreateBOM() {
     const handleChange = (e) => {
         const { name, value } = e.target;
         setForm(prev => ({ ...prev, [name]: value }));
-    };
-
-    const toggleMould = (id) => {
-        setForm(prev => {
-            const currentIds = prev.mouldIds || [];
-            const newIds = currentIds.includes(id)
-                ? currentIds.filter(mId => mId !== id)
-                : [...currentIds, id];
-            return {
-                ...prev,
-                mouldIds: newIds,
-                mouldId: newIds.length > 0 ? newIds[0] : ""
-            };
-        });
     };
 
     const handleBOMMaterialChange = (index, val) => {
@@ -190,6 +162,34 @@ export default function CreateBOM() {
         });
     };
 
+    const handleBOMProcessChange = (index, field, val) => {
+        setForm(prev => {
+            const newList = [...(prev.bomProcesses || [])];
+            newList[index] = {
+                ...newList[index],
+                [field]: val
+            };
+            return { ...prev, bomProcesses: newList };
+        });
+    };
+
+    const addBOMProcessRow = () => {
+        setForm(prev => ({
+            ...prev,
+            bomProcesses: [...(prev.bomProcesses || []), { processId: "", time: "", unitId: "" }]
+        }));
+    };
+
+    const removeBOMProcessRow = (index) => {
+        setForm(prev => {
+            const newList = (prev.bomProcesses || []).filter((_, idx) => idx !== index);
+            return {
+                ...prev,
+                bomProcesses: newList.length > 0 ? newList : [{ processId: "", time: "", unitId: "" }]
+            };
+        });
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
@@ -200,6 +200,11 @@ export default function CreateBOM() {
         const hasValidMaterial = form.bomMaterials && form.bomMaterials.some(m => m.materialId && m.quantity);
         if (!hasValidMaterial) {
             return toast.error("Please add at least one valid Raw/Semi-Finished material with quantity.");
+        }
+
+        const hasValidProcess = form.bomProcesses && form.bomProcesses.some(p => p.processId && p.time && p.unitId);
+        if (!hasValidProcess) {
+            return toast.error("Please add at least one valid Process with time and unit.");
         }
 
         try {
@@ -349,30 +354,82 @@ export default function CreateBOM() {
                                 </div>
                             </div>
 
-                            <div className="md:col-span-2 pt-4 pb-4 border-b border-slate-100 mt-2">
-                                <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                                    <i className="fa-solid fa-gears text-teal-500"></i>
-                                    Production Settings
-                                </h2>
-                            </div>
+                            <div className="md:col-span-2 space-y-4 mt-2">
+                                <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                                    <label className="text-sm font-semibold text-slate-700">Processes</label>
+                                    <button
+                                        type="button"
+                                        onClick={addBOMProcessRow}
+                                        className="px-3 py-1.5 bg-[#369ACF]/10 hover:bg-[#369ACF]/20 text-[#369ACF] rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                                    >
+                                        <i className="fa-solid fa-plus"></i>
+                                        Add Process
+                                    </button>
+                                </div>
 
-                            {/* Mould removed */}
+                                <div className="space-y-3">
+                                    {(form.bomProcesses || []).map((row, idx) => (
+                                        <div key={idx} className="flex flex-col sm:flex-row items-end sm:items-center gap-3 bg-slate-50/50 p-3 rounded-xl border border-slate-150">
+                                            <div className="flex-1 w-full">
+                                                <label className="block text-xs font-semibold text-slate-500 mb-1 sm:hidden">Process</label>
+                                                <select
+                                                    value={row.processId}
+                                                    onChange={(e) => handleBOMProcessChange(idx, "processId", e.target.value)}
+                                                    className={inputCls}
+                                                    required
+                                                >
+                                                    <option value="">-- Select Process --</option>
+                                                    {processes.map(p => (
+                                                        <option key={p.id} value={p.id}>
+                                                            {p.process_name}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
 
-                            <div>
-                                <label className={labelCls}>Process</label>
-                                <select
-                                    name="processId"
-                                    value={form.processId}
-                                    onChange={handleChange}
-                                    className={inputCls}
-                                >
-                                    <option value="">-- Select Process --</option>
-                                    {processes.map(p => (
-                                        <option key={p.id} value={p.id}>
-                                            {p.process_name}
-                                        </option>
+                                            <div className="w-full sm:w-44">
+                                                <label className="block text-xs font-semibold text-slate-500 mb-1 sm:hidden">Time</label>
+                                                <input
+                                                    type="number"
+                                                    step="0.0001"
+                                                    placeholder="Time"
+                                                    value={row.time}
+                                                    onChange={(e) => handleBOMProcessChange(idx, "time", e.target.value)}
+                                                    className={inputCls}
+                                                    required
+                                                />
+                                            </div>
+
+                                            <div className="w-44">
+                                                <label className="block text-xs font-semibold text-slate-500 mb-1 sm:hidden">Unit</label>
+                                                <select
+                                                    value={row.unitId}
+                                                    onChange={(e) => handleBOMProcessChange(idx, "unitId", e.target.value)}
+                                                    className={inputCls}
+                                                    required
+                                                >
+                                                    <option value="">-- Select Unit --</option>
+                                                    {units.map(u => (
+                                                        <option key={u.id} value={u.id}>
+                                                            {u.unit_name}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+
+                                            {(form.bomProcesses || []).length > 1 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeBOMProcessRow(idx)}
+                                                    className="h-10 w-10 flex items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 hover:text-rose-700 transition-colors cursor-pointer"
+                                                    title="Remove Row"
+                                                >
+                                                    <i className="fa-solid fa-trash-can"></i>
+                                                </button>
+                                            )}
+                                        </div>
                                     ))}
-                                </select>
+                                </div>
                             </div>
 
                             <div className="md:col-span-2 pt-4 pb-4 border-b border-slate-100 mt-2">

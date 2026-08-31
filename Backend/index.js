@@ -176,6 +176,7 @@ const startServer = async () => {
         await createMaterialTypesTable();
         await seedSystemMaterialTypes();
         await createUnitsTable();
+        await createProcessMastersTable();
         await createMaterialsTable();
         await ensureMaterialColumns();
         await createBOMTable();
@@ -189,7 +190,6 @@ const startServer = async () => {
         await ensureVendorColumns();
         await createCustomerTables();
         await ensureCustomerColumns();
-        await createProcessMastersTable();
         await createPurchaseOrderTables();
         await ensurePurchaseOrderColumns();
         await ensurePurchaseOrderItemsColumns();
