@@ -323,6 +323,7 @@ export default function AppRoutes() {
             <Route path="/store/rm-stock" element={<Navigate to="/store/stock-status" replace />} />
             <Route path="/store/general-stock" element={<Navigate to="/store/stock-status" replace />} />
 
+
             <Route element={<ProtectedRoute allowedRole="admin" />}>
                 <Route path="/store/material-remove" element={<MaterialRemove />} />
             </Route>
