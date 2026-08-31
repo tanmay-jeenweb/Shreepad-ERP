@@ -127,8 +127,7 @@ const getPMemoByWorkOrderItemId = async (workOrderItemId) => {
         LEFT JOIN work_orders wo ON woi.work_order_id = wo.id
         LEFT JOIN production_memos pm ON woi.id = pm.work_order_item_id
         LEFT JOIN machines mac ON woi.machine_id = mac.id
-        LEFT JOIN sales_order_items soi ON woi.sales_order_item_id = soi.id
-        LEFT JOIN materials m ON soi.material_id = m.id
+        LEFT JOIN materials m ON woi.material_id = m.id
         LEFT JOIN bill_of_materials bom ON m.id = bom.material_id
         WHERE woi.id = ?
     `;

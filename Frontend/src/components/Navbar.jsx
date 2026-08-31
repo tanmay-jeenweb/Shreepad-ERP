@@ -356,20 +356,14 @@ export default function Navbar({ title }) {
     });
 
     const availableProductionLinks = [
-        { name: "Bill of Material", path: "/production/bom", icon: "fa-solid fa-file-lines", masterKey: "bom" },
-        { name: "Production Planning", path: "/production/production-planning", icon: "fa-solid fa-calendar-check", masterKey: "bom" },
-        { name: "Machine Planning", path: "/production/machine-planning", icon: "fa-solid fa-calendar-days", masterKey: "machine" },
-        { name: "Working Hours", path: "/production/working-hours", icon: "fa-solid fa-clock", masterKey: "working_hours" }
+        { name: "Bill of Material", path: "/production/bom", icon: "fa-solid fa-file-lines", masterKey: "bom" }
     ].filter(m => isAdmin || hasPermission(m.masterKey, "read"));
 
     const availableSalesLinks = [
-        { name: "Sales Order", path: "/sales/sales-orders", icon: "fa-solid fa-file-invoice-dollar", masterKey: "sales_order" },
         { name: "Work Order", path: "/sales/work-orders", icon: "fa-solid fa-file-signature", masterKey: "work_order" }
     ].filter(m => isAdmin || hasPermission(m.masterKey, "read"));
 
-    const availableApprovalLinks = [
-        { name: "Sales Approval", path: "/sales/so-approval", icon: "fa-solid fa-file-signature", masterKey: "so_approval" }
-    ].filter(m => isAdmin || hasPermission(m.masterKey, "read"));
+    const availableApprovalLinks = [];
 
     const availableReportsLinks = [
         { name: "Activity Report", path: "/reports", icon: "fa-solid fa-list-check", masterKey: "activity_report" },

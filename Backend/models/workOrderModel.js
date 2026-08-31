@@ -1,18 +1,39 @@
 const db = require('../config/db.js');
-const { bookMachineTime, deleteScheduleByWorkOrderItemId } = require('./machineScheduleModel.js');
+
+const dropForeignKeyIfExist = async (tableName, referencedTableName) => {
+    try {
+        const [rows] = await db.execute(`
+            SELECT CONSTRAINT_NAME 
+            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+            WHERE TABLE_SCHEMA = DATABASE() 
+              AND TABLE_NAME = ? 
+              AND REFERENCED_TABLE_NAME = ?
+        `, [tableName, referencedTableName]);
+        for (const r of rows) {
+            try {
+                await db.execute(`ALTER TABLE ${tableName} DROP FOREIGN KEY ${r.CONSTRAINT_NAME}`);
+                console.log(`Dropped foreign key constraint ${r.CONSTRAINT_NAME} from ${tableName}`);
+            } catch (fkErr) {
+                console.error(`Error dropping foreign key ${r.CONSTRAINT_NAME}:`, fkErr.message || fkErr);
+            }
+        }
+    } catch (err) {
+        console.error(`Error inspecting foreign keys for ${tableName}:`, err.message || err);
+    }
+};
 
 const createWorkOrdersTable = async () => {
     const headerQuery = `
         CREATE TABLE IF NOT EXISTS work_orders (
             id                  INT AUTO_INCREMENT PRIMARY KEY,
             work_order_no       INT NOT NULL UNIQUE,
-            sales_order_id      INT NOT NULL,
+            customer_id         INT NOT NULL,
             work_order_date     DATE NOT NULL,
             added_by            INT NOT NULL,
             device_id           VARCHAR(255) DEFAULT NULL,
             created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (sales_order_id) REFERENCES sales_orders(id) ON DELETE CASCADE,
+            FOREIGN KEY (customer_id) REFERENCES customer_master(id) ON DELETE CASCADE,
             FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE CASCADE
         )
     `;
@@ -21,7 +42,7 @@ const createWorkOrdersTable = async () => {
         CREATE TABLE IF NOT EXISTS work_order_items (
             id                   INT AUTO_INCREMENT PRIMARY KEY,
             work_order_id        INT NOT NULL,
-            sales_order_item_id  INT NOT NULL,
+            material_id          INT NOT NULL,
             quantity             DECIMAL(15,3) NOT NULL,
             production_quantity  DECIMAL(15,3) NOT NULL,
             exp_delivery_date    DATE DEFAULT NULL,
@@ -32,10 +53,93 @@ const createWorkOrdersTable = async () => {
             created_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (work_order_id) REFERENCES work_orders(id) ON DELETE CASCADE,
-            FOREIGN KEY (sales_order_item_id) REFERENCES sales_order_items(id) ON DELETE CASCADE,
+            FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE CASCADE,
             FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE SET NULL
         )
     `;
+
+    // Perform database migration check for existing tables
+    try {
+        // Migration for work_orders: sales_order_id -> customer_id
+        const [woCols] = await db.execute(`
+            SELECT COLUMN_NAME 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+              AND TABLE_NAME = 'work_orders' 
+              AND COLUMN_NAME = 'customer_id'
+        `);
+        if (woCols.length === 0) {
+            console.log('Migrating work_orders schema to support direct customer link...');
+            // 1. Drop foreign key constraint referencing sales_orders
+            await dropForeignKeyIfExist('work_orders', 'sales_orders');
+            // 2. Add customer_id column
+            await db.execute('ALTER TABLE work_orders ADD COLUMN customer_id INT DEFAULT NULL');
+            // 3. Populate customer_id by joining sales_orders (if tables exist and have data)
+            try {
+                await db.execute(`
+                    UPDATE work_orders wo
+                    JOIN sales_orders so ON wo.sales_order_id = so.id
+                    SET wo.customer_id = so.customer_id
+                `);
+                console.log('Successfully copied customer_id from sales_orders');
+            } catch (e) {
+                console.warn('Could not copy customer data (maybe sales_orders table is already gone or empty):', e.message);
+            }
+            // 4. Fill defaults or clean null customer_id to make it NOT NULL
+            await db.execute('UPDATE work_orders SET customer_id = 1 WHERE customer_id IS NULL');
+            await db.execute('ALTER TABLE work_orders MODIFY COLUMN customer_id INT NOT NULL');
+            // 5. Add foreign key to customer_master
+            await db.execute('ALTER TABLE work_orders ADD CONSTRAINT fk_work_orders_customer FOREIGN KEY (customer_id) REFERENCES customer_master(id) ON DELETE CASCADE');
+            // 6. Drop sales_order_id column
+            try {
+                await db.execute('ALTER TABLE work_orders DROP COLUMN sales_order_id');
+                console.log('Dropped sales_order_id column from work_orders');
+            } catch (e) {
+                console.warn('Could not drop sales_order_id column:', e.message);
+            }
+        }
+
+        // Migration for work_order_items: sales_order_item_id -> material_id
+        const [woiCols] = await db.execute(`
+            SELECT COLUMN_NAME 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+              AND TABLE_NAME = 'work_order_items' 
+              AND COLUMN_NAME = 'material_id'
+        `);
+        if (woiCols.length === 0) {
+            console.log('Migrating work_order_items schema to support direct material link...');
+            // 1. Drop foreign key constraint referencing sales_order_items
+            await dropForeignKeyIfExist('work_order_items', 'sales_order_items');
+            // 2. Add material_id column
+            await db.execute('ALTER TABLE work_order_items ADD COLUMN material_id INT DEFAULT NULL');
+            // 3. Populate material_id by joining sales_order_items (if tables exist and have data)
+            try {
+                await db.execute(`
+                    UPDATE work_order_items woi
+                    JOIN sales_order_items soi ON woi.sales_order_item_id = soi.id
+                    SET woi.material_id = soi.material_id
+                `);
+                console.log('Successfully copied material_id from sales_order_items');
+            } catch (e) {
+                console.warn('Could not copy material data (maybe sales_order_items table is already gone or empty):', e.message);
+            }
+            // 4. Fill defaults or clean null material_id to make it NOT NULL
+            await db.execute('UPDATE work_order_items SET material_id = 1 WHERE material_id IS NULL');
+            await db.execute('ALTER TABLE work_order_items MODIFY COLUMN material_id INT NOT NULL');
+            // 5. Add foreign key to materials
+            await db.execute('ALTER TABLE work_order_items ADD CONSTRAINT fk_work_order_items_material FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE CASCADE');
+            // 6. Drop sales_order_item_id column
+            try {
+                await db.execute('ALTER TABLE work_order_items DROP COLUMN sales_order_item_id');
+                console.log('Dropped sales_order_item_id column from work_order_items');
+            } catch (e) {
+                console.warn('Could not drop sales_order_item_id column:', e.message);
+            }
+        }
+    } catch (migrationErr) {
+        console.error('Error during work_orders table schema migration:', migrationErr.message || migrationErr);
+    }
 
     await db.execute(headerQuery);
     await db.execute(itemsQuery);
@@ -106,7 +210,7 @@ const getNextWorkOrderNo = async () => {
     return maxNo ? maxNo + 1 : 1;
 };
 
-const createWorkOrder = async (salesOrderId, workOrderDate, addedBy, deviceId, itemsArray) => {
+const createWorkOrder = async (customerId, workOrderDate, addedBy, deviceId, itemsArray) => {
     const connection = await db.getConnection();
     try {
         await connection.beginTransaction();
@@ -114,12 +218,12 @@ const createWorkOrder = async (salesOrderId, workOrderDate, addedBy, deviceId, i
         const workOrderNo = await getNextWorkOrderNo();
 
         const insertQuery = `
-            INSERT INTO work_orders (work_order_no, sales_order_id, work_order_date, added_by, device_id)
+            INSERT INTO work_orders (work_order_no, customer_id, work_order_date, added_by, device_id)
             VALUES (?, ?, ?, ?, ?)
         `;
         const [results] = await connection.execute(insertQuery, [
             workOrderNo,
-            salesOrderId,
+            customerId,
             workOrderDate,
             addedBy,
             deviceId || null
@@ -141,14 +245,14 @@ const createWorkOrder = async (salesOrderId, workOrderDate, addedBy, deviceId, i
 
             const itemQuery = `
                 INSERT INTO work_order_items (
-                    work_order_id, sales_order_item_id, quantity, production_quantity,
+                    work_order_id, material_id, quantity, production_quantity,
                     exp_delivery_date, batch_no, actual_delivery_date, remarks, machine_id, production_time_hours, sort_order
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `;
 
             const [itemResult] = await connection.execute(itemQuery, [
                 workOrderId,
-                item.sales_order_item_id,
+                item.material_id,
                 item.quantity,
                 item.production_quantity || 0,
                 item.exp_delivery_date || null,
@@ -162,132 +266,89 @@ const createWorkOrder = async (salesOrderId, workOrderDate, addedBy, deviceId, i
 
             const workOrderItemId = itemResult.insertId;
 
-            if (item.machine_id && productionTimeHours && productionTimeHours > 0) {
-                 await bookMachineTime(item.machine_id, workOrderItemId, productionTimeHours, connection);
 
-                 // Fetch the computed planned_start and planned_end dates and save them
-                 const [datesResult] = await connection.execute(
-                     `SELECT MIN(schedule_date) AS planned_start, MAX(schedule_date) AS planned_end 
-                      FROM machine_schedule 
-                      WHERE work_order_item_id = ?`,
-                     [workOrderItemId]
-                 );
-                 if (datesResult.length > 0 && datesResult[0].planned_start) {
-                     await connection.execute(
-                         `UPDATE work_order_items 
-                          SET planned_start_date = ?, planned_end_date = ? 
-                          WHERE id = ?`,
-                         [datesResult[0].planned_start, datesResult[0].planned_end, workOrderItemId]
-                     );
-                 }
-            }
 
             // Deduct from stock if we are getting quantity from stock
             const stockDeductQty = Number(item.quantity) - Number(item.production_quantity || 0);
             if (stockDeductQty > 0) {
-                // Get material_id
-                const [soiRows] = await connection.execute(
-                    `SELECT material_id FROM sales_order_items WHERE id = ?`,
-                    [item.sales_order_item_id]
-                );
-                if (soiRows.length > 0) {
-                    const materialId = soiRows[0].material_id;
+                const materialId = item.material_id;
 
-                    // Query available batches (FIFO)
-                    const queryBatches = `
-                        SELECT 
-                            NULL AS grn_item_id,
-                            mai.id AS ma_item_id,
-                            mai.internal_batch_number,
-                            mai.quantity AS approved_qty,
-                            COALESCE(issue_agg.issued_qty, 0) AS issued_qty,
-                            ma.ma_date AS receipt_date,
-                            mai.id AS item_id
-                        FROM material_add_items mai
-                        JOIN material_add_master ma ON mai.ma_id = ma.id
-                        LEFT JOIN (
-                            SELECT ma_item_id, SUM(issue_quantity) AS issued_qty
-                            FROM stock_issues WHERE ma_item_id IS NOT NULL
-                            GROUP BY ma_item_id
-                        ) issue_agg ON mai.id = issue_agg.ma_item_id
-                        WHERE mai.material_id = ?
+                // Query available batches (FIFO)
+                const queryBatches = `
+                    SELECT 
+                        NULL AS grn_item_id,
+                        mai.id AS ma_item_id,
+                        mai.internal_batch_number,
+                        mai.quantity AS approved_qty,
+                        COALESCE(issue_agg.issued_qty, 0) AS issued_qty,
+                        ma.ma_date AS receipt_date,
+                        mai.id AS item_id
+                    FROM material_add_items mai
+                    JOIN material_add_master ma ON mai.ma_id = ma.id
+                    LEFT JOIN (
+                        SELECT ma_item_id, SUM(issue_quantity) AS issued_qty
+                        FROM stock_issues WHERE ma_item_id IS NOT NULL
+                        GROUP BY ma_item_id
+                    ) issue_agg ON mai.id = issue_agg.ma_item_id
+                    WHERE mai.material_id = ?
 
-                        UNION ALL
+                    UNION ALL
 
-                        SELECT 
-                            NULL AS grn_item_id,
-                            NULL AS ma_item_id,
-                            r.internal_batch_number,
-                            r.quantity AS approved_qty,
-                            COALESCE(issue_agg.issued_qty, 0) AS issued_qty,
-                            r.return_date AS receipt_date,
-                            r.id AS item_id
-                        FROM rm_returns r
-                        LEFT JOIN (
-                            SELECT rm_return_id, SUM(issue_quantity) AS issued_qty
-                            FROM stock_issues WHERE rm_return_id IS NOT NULL
-                            GROUP BY rm_return_id
-                        ) issue_agg ON r.id = issue_agg.rm_return_id
-                        WHERE r.material_id = ?
+                    SELECT 
+                        NULL AS grn_item_id,
+                        NULL AS ma_item_id,
+                        r.internal_batch_number,
+                        r.quantity AS approved_qty,
+                        COALESCE(issue_agg.issued_qty, 0) AS issued_qty,
+                        r.return_date AS receipt_date,
+                        r.id AS item_id
+                    FROM rm_returns r
+                    LEFT JOIN (
+                        SELECT rm_return_id, SUM(issue_quantity) AS issued_qty
+                        FROM stock_issues WHERE rm_return_id IS NOT NULL
+                        GROUP BY rm_return_id
+                    ) issue_agg ON r.id = issue_agg.rm_return_id
+                    WHERE r.material_id = ?
 
-                        ORDER BY receipt_date ASC, item_id ASC
-                    `;
+                    ORDER BY receipt_date ASC, item_id ASC
+                `;
 
-                    const [batches] = await connection.execute(queryBatches, [materialId, materialId]);
+                const [batches] = await connection.execute(queryBatches, [materialId, materialId]);
 
-                    let remainingToIssue = stockDeductQty;
-                    const insertIssueQuery = `
-                        INSERT INTO stock_issues (grn_item_id, ma_item_id, issue_quantity, removal_type, issue_date, remarks, added_by)
-                        VALUES (?, ?, ?, 'issue', ?, ?, ?)
-                    `;
+                let remainingToIssue = stockDeductQty;
+                const insertIssueQuery = `
+                    INSERT INTO stock_issues (grn_item_id, ma_item_id, issue_quantity, removal_type, issue_date, remarks, added_by)
+                    VALUES (?, ?, ?, 'issue', ?, ?, ?)
+                `;
 
-                    const remarksStr = `Issued for Work Order WO-${String(workOrderNo).padStart(4, '0')}`;
+                const remarksStr = `Issued for Work Order WO-${String(workOrderNo).padStart(4, '0')}`;
 
-                    for (const batch of batches) {
-                        if (remainingToIssue <= 0) break;
+                for (const batch of batches) {
+                    if (remainingToIssue <= 0) break;
 
-                        const approved = Number(batch.approved_qty);
-                        const issued = Number(batch.issued_qty);
-                        const available = approved - issued;
+                    const approved = Number(batch.approved_qty);
+                    const issued = Number(batch.issued_qty);
+                    const available = approved - issued;
 
-                        if (available > 0) {
-                            const deductQty = Math.min(remainingToIssue, available);
-                            await connection.execute(insertIssueQuery, [
-                                batch.grn_item_id || null,
-                                batch.ma_item_id || null,
-                                deductQty,
-                                workOrderDate,
-                                remarksStr,
-                                addedBy
-                            ]);
-                            remainingToIssue -= deductQty;
-                        }
+                    if (available > 0) {
+                        const deductQty = Math.min(remainingToIssue, available);
+                        await connection.execute(insertIssueQuery, [
+                            batch.grn_item_id || null,
+                            batch.ma_item_id || null,
+                            deductQty,
+                            workOrderDate,
+                            remarksStr,
+                            addedBy
+                        ]);
+                        remainingToIssue -= deductQty;
                     }
+                }
 
-                    if (remainingToIssue > 0) {
-                        throw new Error(`Insufficient stock. Need to issue ${stockDeductQty} units, but only ${stockDeductQty - remainingToIssue} units are available.`);
-                    }
+                if (remainingToIssue > 0) {
+                    throw new Error(`Insufficient stock. Need to issue ${stockDeductQty} units, but only ${stockDeductQty - remainingToIssue} units are available.`);
                 }
             }
         }
-        // --- DISABLED FOR NOW (Under Planning) ---
-        // Deduct from stock if we are getting quantity from stock
-        // const stockDeductQty = Number(item.quantity) - Number(item.production_quantity || 0);
-        // if (stockDeductQty > 0) {
-        //     // Get material_id
-        //     const [soiRows] = await connection.execute(
-        //         `SELECT material_id FROM sales_order_items WHERE id = ?`,
-        //         [item.sales_order_item_id]
-        //     );
-        //     if (soiRows.length > 0) {
-        //         const materialId = soiRows[0].material_id;
-        // 
-        //         // Query approved batches (FIFO)
-        //         const queryBatches = `... (query omitted for brevity) ...`;
-        //         // ... (stock issue logic omitted) ...
-        //     }
-        // }
-        // -----------------------------------------
 
         await connection.commit();
         return { workOrderId, workOrderNo };
@@ -302,13 +363,9 @@ const createWorkOrder = async (salesOrderId, workOrderDate, addedBy, deviceId, i
 const getAllWorkOrders = async (includeHeld = false) => {
     const query = `
         SELECT
-            soi.id AS sales_order_item_id,
-            soi.material_id,
-            soi.quantity AS so_quantity,
+            woi.material_id,
             m.material_name,
             m.material_code,
-            so.sales_order_id AS sales_order_code,
-            so.id AS sales_order_id,
             c.customer_name,
             c.customer_code,
             woi.id AS work_order_item_id,
@@ -338,12 +395,10 @@ const getAllWorkOrders = async (includeHeld = false) => {
             sched.running_end_date,
             pm.p_memo_no AS p_memo_no,
             pm.date AS p_memo_date
-        FROM sales_order_items soi
-        JOIN sales_orders so ON soi.sales_order_id = so.id
-        LEFT JOIN customer_master c ON so.customer_id = c.id
-        LEFT JOIN materials m ON soi.material_id = m.id
-        LEFT JOIN work_order_items woi ON woi.sales_order_item_id = soi.id
-        LEFT JOIN work_orders wo ON woi.work_order_id = wo.id
+        FROM work_orders wo
+        JOIN work_order_items woi ON woi.work_order_id = wo.id
+        LEFT JOIN customer_master c ON wo.customer_id = c.id
+        LEFT JOIN materials m ON woi.material_id = m.id
         LEFT JOIN machines mac ON woi.machine_id = mac.id
         LEFT JOIN users u ON wo.added_by = u.id
         LEFT JOIN bill_of_materials bom ON m.id = bom.material_id
@@ -356,8 +411,8 @@ const getAllWorkOrders = async (includeHeld = false) => {
             FROM machine_schedule
             GROUP BY work_order_item_id
         ) sched ON woi.id = sched.work_order_item_id
-        WHERE so.status = 'approved' ${includeHeld ? '' : 'AND COALESCE(woi.is_on_hold, 0) = 0'}
-        ORDER BY wo.work_order_no DESC, so.created_at DESC
+        WHERE 1 = 1 ${includeHeld ? '' : 'AND COALESCE(woi.is_on_hold, 0) = 0'}
+        ORDER BY wo.work_order_no DESC, wo.created_at DESC
     `;
     const [results] = await db.execute(query);
     return results;
@@ -367,13 +422,11 @@ const getWorkOrderById = async (id) => {
     const query = `
         SELECT
             wo.*,
-            so.sales_order_id AS sales_order_code,
             c.customer_name,
             c.customer_code,
             COALESCE(u.name, 'Unknown') AS added_by_name
         FROM work_orders wo
-        LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
-        LEFT JOIN customer_master c ON so.customer_id = c.id
+        LEFT JOIN customer_master c ON wo.customer_id = c.id
         LEFT JOIN users u ON wo.added_by = u.id
         WHERE wo.id = ?
     `;
@@ -386,11 +439,9 @@ const getWorkOrderById = async (id) => {
             woi.*,
             m.material_name,
             m.material_code,
-            mac.name AS machine_name,
-            soi.quantity AS original_so_quantity
+            mac.name AS machine_name
         FROM work_order_items woi
-        LEFT JOIN sales_order_items soi ON woi.sales_order_item_id = soi.id
-        LEFT JOIN materials m ON soi.material_id = m.id
+        LEFT JOIN materials m ON woi.material_id = m.id
         LEFT JOIN machines mac ON woi.machine_id = mac.id
         WHERE woi.work_order_id = ?
     `;
@@ -420,28 +471,8 @@ const deleteWorkOrder = async (id) => {
             // );
         }
 
-        // 3. Delete schedules (within the same transaction to avoid lock contention)
-        const [itemsRows] = await connection.execute(`SELECT id, machine_id FROM work_order_items WHERE work_order_id = ?`, [id]);
-        const machinesToReschedule = new Set();
-        for (const it of itemsRows) {
-            if (it.machine_id) {
-                machinesToReschedule.add(it.machine_id);
-            }
-            await connection.execute(`DELETE FROM machine_schedule WHERE work_order_item_id = ?`, [it.id]);
-        }
-
-        // 4. Delete work order (will cascade delete work_order_items)
+        // 3. Delete work order (will cascade delete work_order_items)
         await connection.execute(`DELETE FROM work_orders WHERE id = ?`, [id]);
-
-        // 5. Reschedule affected machines
-        const { rescheduleMachine } = require('./machineScheduleModel.js');
-        const { getSettings } = require('./settingMasterModel.js');
-        const settings = await getSettings();
-        const waitHour = settings ? parseInt(settings.wait_hour || 0, 10) : 0;
-        
-        for (const machineId of machinesToReschedule) {
-            await rescheduleMachine(machineId, connection, waitHour);
-        }
 
         await connection.commit();
         return true;
@@ -526,16 +557,55 @@ const updateWorkOrder = async (workOrderId, workOrderDate, itemsArray) => {
         `;
         await connection.execute(updateHeaderQuery, [workOrderDate, workOrderId]);
 
-        // 2. Fetch existing items for tracking before any updates
+        // 2. Process Deleted Items
+        const incomingIds = itemsArray.filter(it => it.id).map(it => Number(it.id));
         const [existingItems] = await connection.execute(
             `SELECT id, machine_id, quantity, production_time_hours, sort_order FROM work_order_items WHERE work_order_id = ?`,
             [workOrderId]
         );
+        const itemsToDelete = existingItems.filter(it => !incomingIds.includes(it.id));
+        for (const it of itemsToDelete) {
+            await connection.execute(`DELETE FROM work_order_items WHERE id = ?`, [it.id]);
+        }
 
-        const machinesToReschedule = new Set();
+        // 3. Process Inserted Items (New items with no id)
+        const itemsToInsert = itemsArray.filter(it => !it.id);
+        for (const item of itemsToInsert) {
+            let productionTimeHours = null;
+            let sortOrder = null;
+            if (item.machine_id) {
+                const [maxRows] = await connection.execute(
+                    `SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_order FROM work_order_items WHERE machine_id = ?`,
+                    [item.machine_id]
+                );
+                sortOrder = maxRows[0].next_order;
+            }
 
-        // 3. Process each item update
-        for (const item of itemsArray) {
+            const itemQuery = `
+                INSERT INTO work_order_items (
+                    work_order_id, material_id, quantity, production_quantity,
+                    exp_delivery_date, batch_no, actual_delivery_date, remarks, machine_id, production_time_hours, sort_order
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `;
+            const [itemResult] = await connection.execute(itemQuery, [
+                workOrderId,
+                item.material_id,
+                item.quantity,
+                item.production_quantity || 0,
+                item.exp_delivery_date || null,
+                item.batch_no || null,
+                item.actual_delivery_date || null,
+                item.remarks || null,
+                item.machine_id || null,
+                productionTimeHours,
+                sortOrder
+            ]);
+            item.id = itemResult.insertId;
+        }
+
+        // 4. Process Updated Items
+        const itemsToUpdate = itemsArray.filter(it => it.id);
+        for (const item of itemsToUpdate) {
             const existingItem = existingItems.find(it => it.id === Number(item.id));
             if (!existingItem) {
                 continue;
@@ -543,47 +613,19 @@ const updateWorkOrder = async (workOrderId, workOrderDate, itemsArray) => {
 
             const oldMachineId = existingItem.machine_id;
             const newMachineId = item.machine_id ? Number(item.machine_id) : null;
-            const oldQty = Number(existingItem.quantity);
-            const newQty = Number(item.quantity);
-            // Compute production time hours
-            let productionTimeHours = existingItem.production_time_hours;
-            if (newQty !== oldQty) {
-                productionTimeHours = null;
-            }
-
+            
             let sortOrder = existingItem.sort_order;
 
             // Handle machine changes
             if (newMachineId !== oldMachineId) {
-                // Machine changed! Delete old schedule entries
-                await connection.execute(
-                    `DELETE FROM machine_schedule WHERE work_order_item_id = ?`,
-                    [item.id]
-                );
-
-                if (oldMachineId) {
-                    machinesToReschedule.add(oldMachineId);
-                }
-
                 if (newMachineId) {
                     const [maxRows] = await connection.execute(
                         `SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_order FROM work_order_items WHERE machine_id = ?`,
                         [newMachineId]
                     );
                     sortOrder = maxRows[0].next_order;
-                    machinesToReschedule.add(newMachineId);
                 } else {
                     sortOrder = null;
-                }
-            } else if (newMachineId) {
-                // Machine is same, but if production_time_hours changed, delete schedule for re-booking
-                const hoursDiff = Math.abs((productionTimeHours || 0) - (existingItem.production_time_hours || 0));
-                if (hoursDiff > 0.001) {
-                    await connection.execute(
-                        `DELETE FROM machine_schedule WHERE work_order_item_id = ?`,
-                        [item.id]
-                    );
-                    machinesToReschedule.add(newMachineId);
                 }
             }
 
@@ -602,10 +644,10 @@ const updateWorkOrder = async (workOrderId, workOrderDate, itemsArray) => {
             `;
 
             await connection.execute(updateItemQuery, [
-                newQty,
+                Number(item.quantity),
                 item.production_quantity ? Number(item.production_quantity) : 0,
                 newMachineId,
-                productionTimeHours,
+                existingItem.production_time_hours,
                 sortOrder,
                 item.exp_delivery_date || null,
                 item.batch_no || null,
@@ -615,49 +657,14 @@ const updateWorkOrder = async (workOrderId, workOrderDate, itemsArray) => {
             ]);
         }
 
-        // 4. Reschedule all affected machines
-        const { rescheduleMachine } = require('./machineScheduleModel.js');
-        const { getSettings } = require('./settingMasterModel.js');
-        const settings = await getSettings();
-        const waitHour = settings ? parseInt(settings.wait_hour || 0, 10) : 0;
-
-        for (const mId of machinesToReschedule) {
-            await rescheduleMachine(mId, connection, waitHour);
-        }
-
-        // 5. Update planned start/end dates for items that were updated
+        // 5. Clean planned dates for items
         for (const item of itemsArray) {
-            const newMachineId = item.machine_id ? Number(item.machine_id) : null;
-            if (newMachineId) {
-                const [datesResult] = await connection.execute(
-                    `SELECT MIN(schedule_date) AS planned_start, MAX(schedule_date) AS planned_end 
-                     FROM machine_schedule 
-                     WHERE work_order_item_id = ?`,
-                    [item.id]
-                );
-                if (datesResult.length > 0 && datesResult[0].planned_start) {
-                    await connection.execute(
-                        `UPDATE work_order_items 
-                         SET planned_start_date = ?, planned_end_date = ? 
-                         WHERE id = ?`,
-                        [datesResult[0].planned_start, datesResult[0].planned_end, item.id]
-                    );
-                } else {
-                    await connection.execute(
-                        `UPDATE work_order_items 
-                         SET planned_start_date = NULL, planned_end_date = NULL 
-                         WHERE id = ?`,
-                        [item.id]
-                    );
-                }
-            } else {
-                await connection.execute(
-                    `UPDATE work_order_items 
-                     SET planned_start_date = NULL, planned_end_date = NULL 
-                     WHERE id = ?`,
-                    [item.id]
-                );
-            }
+            await connection.execute(
+                `UPDATE work_order_items 
+                 SET planned_start_date = NULL, planned_end_date = NULL 
+                 WHERE id = ?`,
+                [item.id]
+            );
         }
 
         await connection.commit();

@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { getWorkOrderById } from "../../../api/workOrderApi";
 import toast from "react-hot-toast";
+import { useNavigate } from "react-router-dom";
+import { usePermission } from "../../../context/PermissionContext";
 
 export default function WorkOrderViewModal({ workOrderId, onClose }) {
+    const navigate = useNavigate();
+    const { hasPermission } = usePermission();
+    const canReadBOM = hasPermission("bom", "read");
     const [workOrder, setWorkOrder] = useState(null);
     const [loading, setLoading] = useState(true);
 
@@ -99,12 +104,6 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                         </p>
                                     </div>
                                     <div>
-                                        <p className="text-xs text-slate-400 font-medium mb-1">Sales Order Code</p>
-                                        <p className="text-sm font-semibold text-[#369ACF] font-mono">
-                                            {workOrder.sales_order_code || "N/A"}
-                                        </p>
-                                    </div>
-                                    <div>
                                         <p className="text-xs text-slate-400 font-medium mb-1">Added By</p>
                                         <p className="text-sm text-slate-800">{workOrder.added_by_name || "N/A"}</p>
                                     </div>
@@ -132,14 +131,14 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                             <tr>
                                                 <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase whitespace-nowrap">Material</th>
                                                 <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase whitespace-nowrap">Job of Party</th>
-                                                <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 uppercase whitespace-nowrap">Order Qty</th>
+                                                <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 uppercase whitespace-nowrap">Quantity</th>
                                                 <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 uppercase whitespace-nowrap">Prod Qty</th>
-                                                <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase whitespace-nowrap">Mould</th>
                                                 <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase whitespace-nowrap">Machine</th>
                                                 <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase whitespace-nowrap">Exp. Delivery</th>
                                                 <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase whitespace-nowrap">Actual Delivery</th>
                                                 <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase whitespace-nowrap">Batch No.</th>
                                                 <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase whitespace-nowrap">Remarks</th>
+                                                <th className="px-3 py-2 text-center text-xs font-semibold text-slate-500 uppercase whitespace-nowrap">Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody className="bg-white divide-y divide-slate-200">
@@ -154,7 +153,6 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                                     </td>
                                                     <td className="px-3 py-2 text-sm text-slate-800 text-right font-medium">{item.quantity}</td>
                                                     <td className="px-3 py-2 text-sm font-semibold text-[#369ACF] text-right">{item.production_quantity}</td>
-                                                    <td className="px-3 py-2 text-sm text-slate-800">{item.mould_name || "N/A"}</td>
                                                     <td className="px-3 py-2 text-sm text-slate-800">{item.machine_name || "N/A"}</td>
                                                     <td className="px-3 py-2 text-sm text-slate-800 whitespace-nowrap">
                                                         {formatDate(item.exp_delivery_date)}
@@ -165,6 +163,23 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                                     <td className="px-3 py-2 text-sm text-slate-800 font-mono text-xs">{item.batch_no || "N/A"}</td>
                                                     <td className="px-3 py-2 text-sm text-slate-500 max-w-[150px] truncate" title={item.remarks}>
                                                         {item.remarks || "N/A"}
+                                                    </td>
+                                                    <td className="px-3 py-2 text-sm whitespace-nowrap text-center">
+                                                        {canReadBOM ? (
+                                                            <button
+                                                                onClick={() => {
+                                                                    onClose();
+                                                                    navigate(`/production/p-memo/${item.id}`);
+                                                                }}
+                                                                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-[#369ACF] hover:bg-[#2583b4] rounded-lg shadow-sm transition-all cursor-pointer"
+                                                                title="Create/View Production Memo (P Memo)"
+                                                            >
+                                                                <i className="fa-solid fa-file-invoice text-[10px]"></i>
+                                                                P Memo
+                                                            </button>
+                                                        ) : (
+                                                            <span className="text-slate-400 italic text-xs">No Permission</span>
+                                                        )}
                                                     </td>
                                                 </tr>
                                             ))}

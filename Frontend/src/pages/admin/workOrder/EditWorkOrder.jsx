@@ -1,10 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate, useParams, useLocation } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import Navbar from "../../../components/Navbar";
 import { getWorkOrderById, updateWorkOrder } from "../../../api/workOrderApi";
-import { getAllMoulds } from "../../../api/mouldApi";
+import { getMaterials } from "../../../api/materialApi";
 import { getAllMachines } from "../../../api/machineApi";
-import { getNextFreeSlot } from "../../../api/machineScheduleApi";
 import { getBOMs } from "../../../api/bomApi";
 import { getJobParties } from "../../../api/jobPartyApi";
 import toast from "react-hot-toast";
@@ -13,9 +12,7 @@ import DateInput from "../../../components/DateInput";
 export default function EditWorkOrder() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
-  const queryParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
-  const fromPlanning = queryParams.get("from") === "planning";
+
 
   const formatDate = (d) => {
     if (!d) return "—";
@@ -33,7 +30,7 @@ export default function EditWorkOrder() {
   const [workOrderDate, setWorkOrderDate] = useState("");
   const [items, setItems] = useState([]);
 
-  const [moulds, setMoulds] = useState([]);
+  const [materials, setMaterials] = useState([]);
   const [machines, setMachines] = useState([]);
   const [boms, setBoms] = useState([]);
   const [jobParties, setJobParties] = useState([]);
@@ -48,20 +45,18 @@ export default function EditWorkOrder() {
     batch_no: "",
     actual_delivery_date: "",
     remarks: "",
-    mould_id: "",
     machine_id: "",
     job_party_id: ""
   });
-  const [estProdTime, setEstProdTime] = useState(null);
-  const [nextSlotInfo, setNextSlotInfo] = useState(null);
+
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [woRes, mouldRes, machineRes, bomRes, jobPartiesRes] = await Promise.all([
+        const [woRes, matRes, machineRes, bomRes, jobPartiesRes] = await Promise.all([
           getWorkOrderById(id),
-          getAllMoulds(),
+          getMaterials(),
           getAllMachines(),
           getBOMs(),
           getJobParties()
@@ -80,7 +75,6 @@ export default function EditWorkOrder() {
         // Map items
         const mappedItems = (woData.items || []).map(item => ({
           id: item.id,
-          sales_order_item_id: item.sales_order_item_id,
           material_id: item.material_id,
           material_name: item.material_name || "Unknown Material",
           material_code: item.material_code || "",
@@ -90,15 +84,19 @@ export default function EditWorkOrder() {
           batch_no: item.batch_no || "",
           actual_delivery_date: item.actual_delivery_date ? item.actual_delivery_date.substring(0, 10) : "",
           remarks: item.remarks || "",
-          mould_id: item.mould_id || "",
           machine_id: item.machine_id || "",
-          job_party_id: item.job_party_id || "",
-          original_so_quantity: Number(item.original_so_quantity || 0)
+          job_party_id: item.job_party_id || ""
         }));
         setItems(mappedItems);
 
-        const mouldsList = Array.isArray(mouldRes.data) ? mouldRes.data : (mouldRes.data?.data || []);
-        setMoulds(mouldsList);
+        // Filter materials for Finished / Semi-Finished
+        const allMaterials = matRes.data.data || [];
+        const filteredMat = allMaterials.filter(m => {
+          const type = (m.material_type || "").toLowerCase();
+          const group = (m.material_group_name || "").toLowerCase();
+          return type.includes("finish") || type.includes("semi") || group.includes("finish") || group.includes("semi");
+        });
+        setMaterials(filteredMat);
 
         const machinesList = Array.isArray(machineRes.data) ? machineRes.data : (machineRes.data?.data || []);
         setMachines(machinesList);
@@ -115,6 +113,56 @@ export default function EditWorkOrder() {
     fetchData();
   }, [id, navigate]);
 
+  const handleMaterialChange = (index, materialId) => {
+    const updated = [...items];
+    const material = materials.find(m => String(m.id) === String(materialId));
+
+    updated[index] = {
+      ...updated[index],
+      material_id: materialId,
+      material_name: material ? material.material_name : "",
+      material_code: material ? material.material_code : "",
+      machine_id: "",
+      job_party_id: "",
+      exp_delivery_date: "",
+      batch_no: "",
+      actual_delivery_date: "",
+      remarks: ""
+    };
+    setItems(updated);
+  };
+
+  const handleQtyChange = (index, qty) => {
+    const updated = [...items];
+    updated[index].quantity = Number(qty);
+    updated[index].production_quantity = Number(qty);
+    setItems(updated);
+  };
+
+  const addItemRow = () => {
+    setItems([...items, {
+      material_id: "",
+      material_name: "",
+      material_code: "",
+      quantity: 1,
+      production_quantity: 1,
+      exp_delivery_date: "",
+      batch_no: "",
+      actual_delivery_date: "",
+      remarks: "",
+      machine_id: "",
+      job_party_id: ""
+    }]);
+  };
+
+  const removeItemRow = (index) => {
+    if (items.length > 1) {
+      setItems(items.filter((_, idx) => idx !== index));
+    } else {
+      toast.error("Work order must have at least one item");
+    }
+  };
+
   const openEditModal = (index) => {
     setCurrentEditIndex(index);
     setModalData({
@@ -124,7 +172,6 @@ export default function EditWorkOrder() {
       batch_no: items[index].batch_no || "",
       actual_delivery_date: items[index].actual_delivery_date || "",
       remarks: items[index].remarks || "",
-      mould_id: items[index].mould_id || "",
       machine_id: items[index].machine_id || "",
       job_party_id: items[index].job_party_id || ""
     });
@@ -144,55 +191,25 @@ export default function EditWorkOrder() {
     toast.success("Row details updated locally");
   };
 
-  useEffect(() => {
-    // Calculate estimated time
-    if (modalData.mould_id && modalData.quantity) {
-      const mould = moulds.find(m => String(m.id) === String(modalData.mould_id));
-      if (mould && mould.cavity && mould.std_cycle_time) {
-        const totalSecs = modalData.quantity * (mould.std_cycle_time / mould.cavity);
-        const totalHours = totalSecs / 3600;
-        setEstProdTime(totalHours);
-      } else {
-        setEstProdTime(null);
-      }
-    } else {
-      setEstProdTime(null);
-    }
-  }, [modalData.mould_id, modalData.quantity, moulds]);
 
-  useEffect(() => {
-    // Fetch next slot
-    const fetchSlot = async () => {
-      if (modalData.machine_id) {
-        try {
-          const res = await getNextFreeSlot(modalData.machine_id);
-          if (res.data.data) {
-             setNextSlotInfo(res.data.data);
-          } else {
-             setNextSlotInfo({ notConfigured: true });
-          }
-        } catch (err) {
-          console.error(err);
-          setNextSlotInfo({ error: true });
-        }
-      } else {
-        setNextSlotInfo(null);
-      }
-    };
-    fetchSlot();
-  }, [modalData.machine_id]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const hasInvalid = items.some(it => !it.material_id || Number(it.quantity) <= 0);
+    if (hasInvalid) {
+      toast.error("Please complete details for all items");
+      return;
+    }
+
     setSaving(true);
     try {
       const payload = {
         work_order_date: workOrderDate,
         items: items.map(it => ({
-          id: it.id,
-          quantity: it.quantity,
-          production_quantity: it.production_quantity,
-          mould_id: it.mould_id ? Number(it.mould_id) : null,
+          id: it.id || null,
+          material_id: Number(it.material_id),
+          quantity: Number(it.quantity),
+          production_quantity: Number(it.production_quantity),
           machine_id: it.machine_id ? Number(it.machine_id) : null,
           exp_delivery_date: it.exp_delivery_date || null,
           batch_no: it.batch_no || null,
@@ -204,11 +221,7 @@ export default function EditWorkOrder() {
 
       await updateWorkOrder(id, payload);
       toast.success("Work Order updated successfully!");
-      if (fromPlanning) {
-        navigate("/production/production-planning");
-      } else {
-        navigate("/sales/work-orders");
-      }
+      navigate("/sales/work-orders");
     } catch (err) {
       console.error(err);
       toast.error(err?.response?.data?.message || "Failed to update work order");
@@ -218,18 +231,8 @@ export default function EditWorkOrder() {
   };
 
   const handleCancel = () => {
-    if (fromPlanning) {
-      navigate("/production/production-planning");
-    } else {
-      navigate("/sales/work-orders");
-    }
+    navigate("/sales/work-orders");
   };
-
-  const selectedMouldObj = moulds.find(m => String(m.id) === String(modalData.mould_id));
-  const compatibleMachineIds = selectedMouldObj?.machine_ids ? selectedMouldObj.machine_ids.split(',').map(Number) : [];
-  const filteredMachines = modalData.mould_id
-    ? machines.filter(m => compatibleMachineIds.includes(m.id))
-    : [];
 
   if (loading) {
     return (
@@ -265,10 +268,10 @@ export default function EditWorkOrder() {
           {/* Card: Header details */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
             <h2 className="text-base font-bold text-slate-800 mb-4 flex items-center gap-2">
-              <i className="fa-solid fa-file-invoice text-indigo-500"></i>
+              <i className="fa-solid fa-file-invoice text-[#369ACF]"></i>
               Header Info
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
                   Work Order No.
@@ -294,25 +297,13 @@ export default function EditWorkOrder() {
 
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                  Sales Order
-                </label>
-                <input
-                  type="text"
-                  value={workOrder?.sales_order_code || ""}
-                  disabled
-                  className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-lg text-slate-500 font-semibold cursor-not-allowed"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
                   Customer Name
                 </label>
                 <input
                   type="text"
                   value={workOrder?.customer_name || ""}
                   disabled
-                  className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-lg text-slate-600 cursor-not-allowed"
+                  className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-lg text-slate-650 font-semibold cursor-not-allowed"
                 />
               </div>
             </div>
@@ -322,23 +313,25 @@ export default function EditWorkOrder() {
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
               <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                <i className="fa-solid fa-boxes-stacked text-indigo-500"></i>
+                <i className="fa-solid fa-boxes-stacked text-[#369ACF]"></i>
                 Work Order Items
               </h2>
-              <span className="bg-indigo-50 text-indigo-700 text-xs font-bold px-2.5 py-1 rounded-full">
-                {items.length} Items Listed
-              </span>
+              <button
+                type="button"
+                onClick={addItemRow}
+                className="text-sm font-semibold text-[#369ACF] hover:text-[#2583b4] flex items-center gap-1 cursor-pointer"
+              >
+                <i className="fa-solid fa-plus text-xs"></i> Add Item Row
+              </button>
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-left text-sm text-slate-600">
                 <thead className="bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider">
                   <tr>
-                    <th className="px-6 py-3.5">Material Details</th>
-                    <th className="px-6 py-3.5 text-right">S.O. Qty</th>
-                    <th className="px-6 py-3.5 text-right">WO Qty</th>
-                    <th className="px-6 py-3.5 text-right">Prod Qty</th>
-                    <th className="px-6 py-3.5">Mould</th>
+                    <th className="px-6 py-3.5 min-w-[250px]">Material Details *</th>
+                    <th className="px-6 py-3.5 w-32 text-right">Quantity *</th>
+                    <th className="px-6 py-3.5 w-32 text-right">Prod Qty</th>
                     <th className="px-6 py-3.5">Machine</th>
                     <th className="px-6 py-3.5">Exp Deliv.</th>
                     <th className="px-6 py-3.5">Batch No</th>
@@ -347,42 +340,39 @@ export default function EditWorkOrder() {
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                   {items.map((item, idx) => {
-                    const mouldName = moulds.find(m => String(m.id) === String(item.mould_id))?.mould_name || "";
                     const machineName = machines.find(m => String(m.id) === String(item.machine_id))?.name || "";
 
                     return (
                       <tr key={idx} className="hover:bg-slate-50/50">
                         <td className="px-6 py-4">
-                          <div className="flex flex-col">
-                            <span className="font-semibold text-slate-900">{item.material_name}</span>
-                            <span className="text-xs text-slate-500 font-mono mt-0.5">{item.material_code}</span>
-                          </div>
+                          <select
+                            value={item.material_id}
+                            onChange={(e) => handleMaterialChange(idx, e.target.value)}
+                            required
+                            className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none"
+                          >
+                            <option value="">Select Material</option>
+                            {materials.map(m => (
+                              <option key={m.id} value={m.id}>{m.material_name} ({m.material_code})</option>
+                            ))}
+                          </select>
                         </td>
-                        <td className="px-6 py-4 text-xs font-semibold text-slate-700">
-                          {jobParties.find(jp => String(jp.id) === String(item.job_party_id))?.party_name || <span className="text-slate-400 italic text-xs">Not Set</span>}
-                        </td>
-                        <td className="px-6 py-4 text-right text-slate-500 text-xs font-semibold">
-                          {item.original_so_quantity}
-                        </td>
-                        <td className="px-6 py-4 text-right font-semibold text-slate-950">
-                          {item.quantity}
+                        <td className="px-6 py-4 text-right">
+                          <input
+                            type="number"
+                            step="0.001"
+                            value={item.quantity}
+                            onChange={(e) => handleQtyChange(idx, e.target.value)}
+                            required
+                            className="w-24 px-2 py-1 border border-slate-200 rounded-lg text-right text-sm"
+                          />
                         </td>
                         <td className="px-6 py-4 text-right text-indigo-600 font-semibold">
                           {item.production_quantity}
                         </td>
                         <td className="px-6 py-4">
-                          {mouldName ? (
-                            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-slate-100 text-slate-700 text-xs">
-                              <i className="fa-solid fa-shapes text-slate-400"></i>
-                              {mouldName}
-                            </span>
-                          ) : (
-                            <span className="text-slate-400 italic text-xs">Not Set</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4">
                           {machineName ? (
-                            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-slate-100 text-slate-700 text-xs">
+                            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-slate-100 text-slate-700 text-xs font-medium">
                               <i className="fa-solid fa-industry text-slate-400"></i>
                               {machineName}
                             </span>
@@ -397,14 +387,25 @@ export default function EditWorkOrder() {
                           {item.batch_no || <span className="text-slate-400 italic">Not Set</span>}
                         </td>
                         <td className="px-6 py-4 text-center">
-                          <button
-                            type="button"
-                            onClick={() => openEditModal(idx)}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 cursor-pointer"
-                            title="Edit Row Details"
-                          >
-                            <i className="fa-solid fa-pencil text-xs"></i>
-                          </button>
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(idx)}
+                              disabled={!item.material_id}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 cursor-pointer disabled:opacity-50"
+                              title="Edit Setup Details"
+                            >
+                              <i className="fa-solid fa-gears text-sm"></i>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeItemRow(idx)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-250 bg-rose-50 text-rose-600 hover:bg-rose-100 cursor-pointer"
+                              title="Delete Row"
+                            >
+                              <i className="fa-solid fa-trash-can text-sm"></i>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -439,7 +440,7 @@ export default function EditWorkOrder() {
           <div className="bg-white rounded-xl border border-slate-200 shadow-xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
               <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                <i className="fa-solid fa-pen-to-square text-indigo-500"></i>
+                <i className="fa-solid fa-pen-to-square text-[#369ACF]"></i>
                 Configure Item Production Details
               </h3>
               <button
@@ -537,45 +538,7 @@ export default function EditWorkOrder() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                    Select Mould
-                  </label>
-                  <select
-                    value={modalData.mould_id}
-                    onChange={(e) => {
-                      const newMouldId = e.target.value;
-                      const selMould = moulds.find(m => String(m.id) === String(newMouldId));
-                      const linkedMachineIds = selMould?.machine_ids ? selMould.machine_ids.split(',').map(Number) : [];
-                      let newMachineId = modalData.machine_id;
-                      if (newMouldId && newMachineId && !linkedMachineIds.includes(Number(newMachineId))) {
-                        newMachineId = "";
-                      }
-                      setModalData({ ...modalData, mould_id: newMouldId, machine_id: newMachineId });
-                    }}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-indigo-500"
-                  >
-                    <option value="">-- None --</option>
-                    {(() => {
-                      const itemMaterialId = items[currentEditIndex]?.material_id;
-                      const matchingBOM = boms.find(b => b.material_id === itemMaterialId);
-                      let allowedMoulds = moulds;
-                      if (matchingBOM && (matchingBOM.mould_ids || matchingBOM.mould_id)) {
-                        const compatibleIds = matchingBOM.mould_ids 
-                          ? String(matchingBOM.mould_ids).split(',').map(Number) 
-                          : [Number(matchingBOM.mould_id)];
-                        allowedMoulds = moulds.filter(m => compatibleIds.includes(m.id));
-                      }
-                      return allowedMoulds.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.mould_name}
-                        </option>
-                      ));
-                    })()}
-                  </select>
-                </div>
-
+              <div className="grid grid-cols-1 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
                     Machine
@@ -586,7 +549,7 @@ export default function EditWorkOrder() {
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-indigo-500"
                   >
                     <option value="">-- None --</option>
-                    {filteredMachines.map((m) => (
+                    {machines.map((m) => (
                       <option key={m.id} value={m.id}>
                         {m.name}
                       </option>
@@ -620,33 +583,7 @@ export default function EditWorkOrder() {
                 </div>
               </div>
 
-              {/* Informational Section for Scheduling */}
-              {(estProdTime !== null || nextSlotInfo !== null) && (
-                  <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-4 space-y-2 mt-4">
-                      {estProdTime !== null && (
-                          <div className="flex items-center gap-2 text-sm text-indigo-800">
-                              <i className="fa-regular fa-clock w-4"></i>
-                              <span className="font-semibold">Est. Production Time:</span> 
-                              {Math.floor(estProdTime)} hrs {Math.round((estProdTime % 1) * 60)} mins
-                          </div>
-                      )}
-                      {nextSlotInfo !== null && (
-                          <div className="flex items-center gap-2 text-sm">
-                              <i className="fa-regular fa-calendar-check w-4 text-indigo-800"></i>
-                              <span className="font-semibold text-indigo-800">Machine next available:</span> 
-                              {nextSlotInfo.error ? (
-                                  <span className="text-red-600">Failed to fetch availability</span>
-                              ) : nextSlotInfo.notConfigured ? (
-                                  <span className="text-red-600 font-bold">Unconfigured Working Hours (Cannot Schedule)</span>
-                              ) : (
-                                  <span className="text-indigo-800">
-                                      {formatDate(nextSlotInfo.date)} from Hour {parseFloat(nextSlotInfo.start_hour).toFixed(1)}
-                                  </span>
-                              )}
-                          </div>
-                      )}
-                  </div>
-              )}
+
             </div>
 
             <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-3">

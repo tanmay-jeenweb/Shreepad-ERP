@@ -245,7 +245,7 @@ export default function PMemoPage() {
             } catch (err) {
                 console.error("Failed to load P Memo details:", err);
                 toast.error("Failed to load P Memo details");
-                navigate("/production/production-planning");
+                navigate("/sales/work-orders");
             } finally {
                 setLoading(false);
             }
@@ -291,7 +291,7 @@ export default function PMemoPage() {
                 }))
             });
             toast.success(isEditMode ? "P Memo updated successfully" : "P Memo created successfully");
-            navigate("/production/production-planning");
+            navigate("/sales/work-orders");
         } catch (err) {
             console.error("Failed to save P Memo:", err);
             toast.error(err?.response?.data?.message || "Failed to save P Memo");
@@ -324,11 +324,11 @@ export default function PMemoPage() {
                             </h1>
                         </div>
                         <button
-                            onClick={() => navigate("/production/production-planning")}
+                            onClick={() => navigate("/sales/work-orders")}
                             className="text-slate-500 hover:text-slate-700 font-medium text-sm flex items-center gap-2 cursor-pointer font-semibold"
                         >
                             <i className="fa-solid fa-arrow-left"></i>
-                            Back to Planning
+                            Back to Work Orders
                         </button>
                     </div>
 
@@ -754,7 +754,7 @@ export default function PMemoPage() {
                         <div className="py-4 flex justify-end gap-3">
                             <button
                                 type="button"
-                                onClick={() => navigate("/production/production-planning")}
+                                onClick={() => navigate("/sales/work-orders")}
                                 className="px-5 py-2.5 rounded-lg border border-slate-300 text-slate-700 font-semibold bg-white hover:bg-slate-50 transition-colors cursor-pointer text-sm"
                             >
                                 Cancel

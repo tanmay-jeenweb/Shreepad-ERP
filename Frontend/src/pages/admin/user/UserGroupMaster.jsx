@@ -64,10 +64,9 @@ const MODULE_GROUPS = [
   {
     groupName: "Sales & Distribution",
     icon: "fa-solid fa-file-invoice-dollar",
-    description: "Sales orders and approvals.",
+    description: "Work orders.",
     masters: [
-      { key: "sales_order",         label: "Sales Order" },
-      { key: "so_approval",         label: "Sales Approval", allowedPerms: ["canRead", "canApprove"] },
+      { key: "work_order",          label: "Work Order" },
     ]
   }
 ];
