@@ -346,11 +346,11 @@ export default function Navbar({ title }) {
 
     const availableStoreLinks = [
         { name: "Material Add", path: "/store/material-add", icon: "fa-solid fa-box-open", masterKey: "material_add" },
-        { name: "Material Remove", path: "/store/material-remove", icon: "fa-solid fa-trash-can", masterKey: "rm_stock_book" }
+        { name: "Material Remove", path: "/store/material-remove", icon: "fa-solid fa-trash-can", masterKey: "stock_book" }
     ].filter(m => {
         if (isAdmin) return true;
         if (m.name === "Material Remove") {
-            return hasPermission("rm_stock_book", "read") || hasPermission("general_stock_book", "read");
+            return hasPermission("stock_book", "read") || hasPermission("rm_stock_book", "read") || hasPermission("general_stock_book", "read");
         }
         return hasPermission(m.masterKey, "read");
     });
@@ -373,14 +373,12 @@ export default function Navbar({ title }) {
 
     const availableReportsLinks = [
         { name: "Activity Report", path: "/reports", icon: "fa-solid fa-list-check", masterKey: "activity_report" },
-        { name: "Raw Material Stock Status", path: "/store/rm-stock", icon: "fa-solid fa-boxes-stacked", masterKey: "rm_stock_status" },
-        { name: "General Stock Status", path: "/store/general-stock", icon: "fa-solid fa-box-open", masterKey: "batchwise_stock_status" },
-        { name: "Raw Material Stock Book", path: "/purchase/rm-stock-book", icon: "fa-solid fa-book-open", masterKey: "rm_stock_book" },
-        { name: "General Stock Book", path: "/purchase/general-stock-book", icon: "fa-solid fa-book-open", masterKey: "general_stock_book" }
+        { name: "Stock Status", path: "/store/stock-status", icon: "fa-solid fa-boxes-stacked", masterKey: "stock_status" },
+        { name: "Stock Book", path: "/store/stock-book", icon: "fa-solid fa-book-open", masterKey: "stock_book" }
     ].filter(m => {
         if (isAdmin) return true;
         if (!m.masterKey) return true;
-        return hasPermission(m.masterKey, "read");
+        return hasPermission(m.masterKey, "read") || (m.masterKey === "stock_status" && (hasPermission("rm_stock_status", "read") || hasPermission("batchwise_stock_status", "read"))) || (m.masterKey === "stock_book" && (hasPermission("rm_stock_book", "read") || hasPermission("general_stock_book", "read")));
     });
 
     const hasAnyNavbarAccess = availableMasters.length > 0 || availableStoreLinks.length > 0 || availableProductionLinks.length > 0 || availableSalesLinks.length > 0 || availableApprovalLinks.length > 0 || availableReportsLinks.length > 0 || isAdmin;

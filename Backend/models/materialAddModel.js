@@ -87,14 +87,25 @@ const toIntOrNull = (v) => {
 
 // ─── Number Generation ────────────────────────────────────────────────────────
 
-const generateMaNumber = async () => {
+const generateMaNumber = async (connection) => {
+    const conn = connection || db;
     const year = new Date().getFullYear();
-    const [rows] = await db.execute(
-        `SELECT COUNT(*) AS cnt FROM material_add_master WHERE ma_number LIKE ?`,
-        [`MA-${year}-%`]
+    const prefix = `MA-${year}-`;
+    const [rows] = await conn.execute(
+        `SELECT ma_number FROM material_add_master WHERE ma_number LIKE ?`,
+        [`${prefix}%`]
     );
-    const seq = (rows[0].cnt || 0) + 1;
-    return `MA-${year}-${String(seq).padStart(4, '0')}`;
+    let maxSeq = 0;
+    for (const r of rows) {
+        if (r.ma_number && r.ma_number.startsWith(prefix)) {
+            const numPart = parseInt(r.ma_number.slice(prefix.length), 10);
+            if (!isNaN(numPart) && numPart > maxSeq) {
+                maxSeq = numPart;
+            }
+        }
+    }
+    const seq = maxSeq + 1;
+    return `${prefix}${String(seq).padStart(4, '0')}`;
 };
 
 const mapMaterialTypeToPrefixKey = (type) => {
@@ -181,7 +192,7 @@ const createMaterialAdd = async (headerData, itemsData, addedBy) => {
     try {
         await connection.beginTransaction();
 
-        const maNumber = await generateMaNumber();
+        const maNumber = await generateMaNumber(connection);
 
         const insertMasterQuery = `
             INSERT INTO material_add_master

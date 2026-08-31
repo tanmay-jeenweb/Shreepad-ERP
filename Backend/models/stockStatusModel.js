@@ -67,7 +67,6 @@ const upsertStockStatusForReturn = async (connection, returnId, returnData) => {
 
     let totalKg = parseFloat(returnData.quantity || 0);
 
-    // Fetch material_type from materials table
     let materialType = null;
     let materialId   = returnData.material_id || null;
     if (materialId) {
@@ -78,9 +77,6 @@ const upsertStockStatusForReturn = async (connection, returnId, returnData) => {
         if (matRows.length > 0) materialType = matRows[0].material_type;
     }
 
-    const rmGrade = (materialType === 'Raw Materials') ? (returnData.grade || null) : null;
-
-    // Check if row already exists
     const [existing] = await connection.execute(
         `SELECT id FROM stock_status WHERE internal_batch_number = ?`,
         [internalBatchNumber]
@@ -94,9 +90,6 @@ const upsertStockStatusForReturn = async (connection, returnId, returnData) => {
                 material_id     = ?,
                 material_name   = ?,
                 material_type   = ?,
-                rm_grade        = ?,
-                number_of_bags  = 0,
-                kgs_per_bag     = 0,
                 total_kg        = ?,
                 remaining_kg    = ?,
                 rm_return_id    = ?
@@ -107,7 +100,6 @@ const upsertStockStatusForReturn = async (connection, returnId, returnData) => {
                 materialId,
                 returnData.material_name || null,
                 materialType,
-                rmGrade,
                 totalKg,
                 totalKg,
                 returnId,
@@ -118,8 +110,8 @@ const upsertStockStatusForReturn = async (connection, returnId, returnData) => {
         await connection.execute(
             `INSERT INTO stock_status
                 (internal_batch_number, party, location, material_id, material_name,
-                 material_type, rm_grade, number_of_bags, kgs_per_bag, total_kg, remaining_kg, rm_return_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?)`,
+                 material_type, total_kg, remaining_kg, rm_return_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 internalBatchNumber,
                 returnData.job_party_name || null,
@@ -127,7 +119,6 @@ const upsertStockStatusForReturn = async (connection, returnId, returnData) => {
                 materialId,
                 returnData.material_name || null,
                 materialType,
-                rmGrade,
                 totalKg,
                 totalKg,
                 returnId
@@ -144,7 +135,6 @@ const upsertStockStatusForMa = async (connection, maId, item, maHeader) => {
 
     let totalKg = parseFloat(item.quantity || 0);
 
-    // Fetch material_type from materials table
     let materialType = null;
     let materialId   = item.material_id || null;
     if (materialId) {
@@ -155,9 +145,6 @@ const upsertStockStatusForMa = async (connection, maId, item, maHeader) => {
         if (matRows.length > 0) materialType = matRows[0].material_type;
     }
 
-    const rmGrade = item.grade || (materialType === 'Raw Materials' ? item.rm_grade : null) || null;
-
-    // Check if row already exists
     const [existing] = await connection.execute(
         `SELECT id FROM stock_status WHERE internal_batch_number = ?`,
         [internalBatchNumber]
@@ -171,9 +158,6 @@ const upsertStockStatusForMa = async (connection, maId, item, maHeader) => {
                 material_id     = ?,
                 material_name   = ?,
                 material_type   = ?,
-                rm_grade        = ?,
-                number_of_bags  = ?,
-                kgs_per_bag     = ?,
                 total_kg        = ?,
                 remaining_kg    = ?,
                 ma_id           = ?
@@ -184,9 +168,6 @@ const upsertStockStatusForMa = async (connection, maId, item, maHeader) => {
                 materialId,
                 item.material_name || null,
                 materialType,
-                rmGrade,
-                0,
-                0,
                 totalKg,
                 totalKg,
                 maId,
@@ -197,8 +178,8 @@ const upsertStockStatusForMa = async (connection, maId, item, maHeader) => {
         await connection.execute(
             `INSERT INTO stock_status
                 (internal_batch_number, party, location, material_id, material_name,
-                 material_type, rm_grade, number_of_bags, kgs_per_bag, total_kg, remaining_kg, ma_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 material_type, total_kg, remaining_kg, ma_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 internalBatchNumber,
                 maHeader.particular || null,
@@ -206,9 +187,6 @@ const upsertStockStatusForMa = async (connection, maId, item, maHeader) => {
                 materialId,
                 item.material_name || null,
                 materialType,
-                rmGrade,
-                0,
-                0,
                 totalKg,
                 totalKg,
                 maId
@@ -220,23 +198,24 @@ const upsertStockStatusForMa = async (connection, maId, item, maHeader) => {
 // ─── Get All Stock Status Records ─────────────────────────────────────────────
 
 const getAllStockStatus = async (typeFilter, filters = {}) => {
-    let whereClause = '';
+    let whereClause = 'WHERE 1=1';
     const params = [];
-    if (typeFilter === 'rm') {
-        whereClause = `WHERE ss.material_type = 'Raw Materials'`;
-    } else if (typeFilter === 'general') {
-        whereClause = `WHERE (ss.material_type != 'Raw Materials' OR ss.material_type IS NULL)`;
-    } else {
-        whereClause = `WHERE 1=1`;
+
+    const matType = filters.material_type || typeFilter;
+    if (matType && matType !== 'all' && matType !== '') {
+        if (matType === 'rm') {
+            whereClause += ` AND ss.material_type = 'Raw Materials'`;
+        } else if (matType === 'general') {
+            whereClause += ` AND (ss.material_type != 'Raw Materials' OR ss.material_type IS NULL)`;
+        } else {
+            whereClause += ` AND ss.material_type = ?`;
+            params.push(matType);
+        }
     }
 
     if (filters.material_id && filters.material_id !== 'all' && filters.material_id !== '') {
         whereClause += ` AND ss.material_id = ?`;
         params.push(filters.material_id);
-    }
-    if (filters.rm_grade && filters.rm_grade !== 'all' && filters.rm_grade !== '') {
-        whereClause += ` AND ss.rm_grade = ?`;
-        params.push(filters.rm_grade);
     }
     if (filters.location_id && filters.location_id !== 'all' && filters.location_id !== '') {
         whereClause += ` AND (ma.location_id = ? OR r.location_id = ?)`;
@@ -260,11 +239,6 @@ const getAllStockStatus = async (typeFilter, filters = {}) => {
             ss.location,
             ss.material_name,
             ss.material_type,
-            ss.rm_grade,
-            ss.mfi,
-            COALESCE(FLOOR(GREATEST(0, (COALESCE(r.quantity, ss.total_kg) - COALESCE(issue_agg.issued_qty, 0))) / NULLIF(ss.kgs_per_bag, 0)), 0) AS number_of_bags,
-            ss.kgs_per_bag,
-            (GREATEST(0, (COALESCE(r.quantity, ss.total_kg) - COALESCE(issue_agg.issued_qty, 0))) - COALESCE(FLOOR(GREATEST(0, (COALESCE(r.quantity, ss.total_kg) - COALESCE(issue_agg.issued_qty, 0))) / NULLIF(ss.kgs_per_bag, 0)), 0) * ss.kgs_per_bag) AS remaining_kg,
             (COALESCE(r.quantity, ss.total_kg) - COALESCE(issue_agg.issued_qty, 0)) AS total_kg,
             ss.grn_id,
             ss.ma_id,
@@ -276,7 +250,7 @@ const getAllStockStatus = async (typeFilter, filters = {}) => {
             ss.updated_at,
             u.unit_name as unit,
             SUM(COALESCE(r.quantity, ss.total_kg) - COALESCE(issue_agg.issued_qty, 0)) OVER (
-                PARTITION BY ss.material_id, COALESCE(ss.rm_grade, '') 
+                PARTITION BY ss.material_id 
                 ORDER BY COALESCE(ma.ma_date, r.return_date) ASC, ss.id ASC
             ) AS balance_quantity
         FROM stock_status ss

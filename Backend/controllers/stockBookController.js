@@ -21,7 +21,7 @@ const getStockBookRecords = async (req, res) => {
 
 const createStockIssue = async (req, res) => {
     try {
-        const { material_id, grade, issue_quantity, p_memo_number, issue_date, remarks } = req.body;
+        const { material_id, issue_quantity, p_memo_number, issue_date, remarks } = req.body;
         const addedBy = req.user.id;
 
         if (!material_id || !issue_quantity || !issue_date) {
@@ -30,7 +30,6 @@ const createStockIssue = async (req, res) => {
 
         const issueId = await stockBookModel.createStockIssue({
             material_id,
-            grade,
             issue_quantity,
             p_memo_number,
             issue_date,
@@ -47,12 +46,11 @@ const createStockIssue = async (req, res) => {
 const getStockIssueLogs = async (req, res) => {
     try {
         const { materialId } = req.params;
-        const { grade } = req.query;
         if (!materialId) {
             return res.status(400).json({ success: false, message: 'Material ID is required' });
         }
 
-        const logs = await stockBookModel.getStockIssueLogs(materialId, grade);
+        const logs = await stockBookModel.getStockIssueLogs(materialId);
         res.json({ success: true, data: logs });
     } catch (error) {
         console.error('Error fetching stock issue logs:', error);

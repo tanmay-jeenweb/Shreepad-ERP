@@ -29,7 +29,7 @@ const getStockBookRecords = async (filters = {}) => {
             SELECT 
                 t.*,
                 SUM(t.approved_quantity - t.issued_quantity) OVER (
-                    PARTITION BY t.material_id, COALESCE(t.grade, '') 
+                    PARTITION BY t.material_id 
                     ORDER BY t.created_at ASC
                 ) AS balance_quantity
             FROM (
@@ -43,7 +43,6 @@ const getStockBookRecords = async (filters = {}) => {
                 mai.material_name AS product,
                 mai.internal_batch_number AS internal_batch_number,
                 '' AS supplier_batch_number,
-                '' AS grade,
                 '' AS vendor_name,
                 NULL AS job_party_name,
                 '' AS invoice_number,
@@ -71,7 +70,6 @@ const getStockBookRecords = async (filters = {}) => {
                 r.material_name AS product,
                 r.internal_batch_number AS internal_batch_number,
                 '' AS supplier_batch_number,
-                r.grade AS grade,
                 '' AS vendor_name,
                 NULL AS job_party_name,
                 '' AS invoice_number,
@@ -100,7 +98,6 @@ const getStockBookRecords = async (filters = {}) => {
                 mai.material_name AS product,
                 mai.internal_batch_number AS internal_batch_number,
                 '' AS supplier_batch_number,
-                '' AS grade,
                 '' AS vendor_name,
                 NULL AS job_party_name,
                 '' AS invoice_number,
@@ -132,7 +129,6 @@ const getStockBookRecords = async (filters = {}) => {
                 r.material_name AS product,
                 r.internal_batch_number AS internal_batch_number,
                 '' AS supplier_batch_number,
-                r.grade AS grade,
                 '' AS vendor_name,
                 NULL AS job_party_name,
                 '' AS invoice_number,
@@ -162,10 +158,15 @@ const getStockBookRecords = async (filters = {}) => {
         query += ` AND t.location_id = ?`;
         queryParams.push(filters.location_id);
     }
-    if (filters.material_type === 'rm') {
-        query += ` AND m.material_type = 'Raw Materials'`;
-    } else if (filters.material_type === 'general') {
-        query += ` AND (m.material_type != 'Raw Materials' OR m.material_type IS NULL)`;
+    if (filters.material_type && filters.material_type !== 'all' && filters.material_type !== '') {
+        if (filters.material_type === 'rm') {
+            query += ` AND m.material_type = 'Raw Materials'`;
+        } else if (filters.material_type === 'general') {
+            query += ` AND (m.material_type != 'Raw Materials' OR m.material_type IS NULL)`;
+        } else {
+            query += ` AND m.material_type = ?`;
+            queryParams.push(filters.material_type);
+        }
     }
 
     query += `
@@ -194,7 +195,6 @@ const createStockIssue = async (data, addedBy) => {
         await connection.beginTransaction();
 
         const materialId = data.material_id;
-        const grade = data.grade || '';
         const requestedQuantity = Number(data.issue_quantity);
 
         if (requestedQuantity <= 0) {
@@ -238,12 +238,12 @@ const createStockIssue = async (data, addedBy) => {
                 FROM stock_issues WHERE rm_return_id IS NOT NULL
                 GROUP BY rm_return_id
             ) issue_agg ON r.id = issue_agg.rm_return_id
-            WHERE r.material_id = ? AND (r.grade = ? OR ? = '')
+            WHERE r.material_id = ?
 
             ORDER BY receipt_date ASC, item_id ASC
         `;
 
-        const [batches] = await connection.execute(queryBatches, [materialId, materialId, grade, grade]);
+        const [batches] = await connection.execute(queryBatches, [materialId, materialId]);
 
         let totalAvailable = 0;
         const activeBatches = [];
@@ -306,7 +306,7 @@ const createStockIssue = async (data, addedBy) => {
     }
 };
 
-const getStockIssueLogs = async (materialId, grade) => {
+const getStockIssueLogs = async (materialId) => {
     const query = `
         SELECT 
             si.id,
@@ -322,10 +322,10 @@ const getStockIssueLogs = async (materialId, grade) => {
         LEFT JOIN material_add_items mai ON si.ma_item_id = mai.id
         LEFT JOIN rm_returns r ON si.rm_return_id = r.id
         LEFT JOIN users u ON si.added_by = u.id
-        WHERE mai.material_id = ? OR (r.material_id = ? AND (r.grade = ? OR ? = ''))
+        WHERE mai.material_id = ? OR r.material_id = ?
         ORDER BY si.issue_date DESC, si.id DESC
     `;
-    const [rows] = await db.execute(query, [materialId, materialId, grade || '', grade || '']);
+    const [rows] = await db.execute(query, [materialId, materialId]);
     return rows;
 };
 
@@ -374,7 +374,6 @@ const getActiveBatches = async () => {
             COALESCE(mai.material_name, r.material_name) AS product,
             NULL AS job_party_name,
             ss.material_type,
-            COALESCE(r.grade, '') AS grade,
             (COALESCE(r.quantity, ss.total_kg, 0) - COALESCE(issue_agg.issued_qty, 0)) AS balance_quantity
         FROM stock_status ss
         LEFT JOIN material_add_items mai ON ss.internal_batch_number = mai.internal_batch_number AND ss.ma_id IS NOT NULL

@@ -6,24 +6,26 @@ import { getStockBook, issueStock, getStockIssueLogs } from "../../api/stockBook
 import { getAllVendors } from "../../api/vendorApi";
 import { getMaterials } from "../../api/materialApi";
 import { getLocations } from "../../api/locationApi";
+import { getMaterialTypes } from "../../api/materialAddApi";
 import DateInput from "../../components/DateInput";
 
-export default function StockBook({ type }) {
+export default function StockBook() {
     const [records, setRecords] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
 
     // Filter states
+    const [materialTypes, setMaterialTypes] = useState([]);
+    const [allMaterials, setAllMaterials] = useState([]);
     const [vendors, setVendors] = useState([]);
-    const [materials, setMaterials] = useState([]);
     const [locations, setLocations] = useState([]);
     const [filters, setFilters] = useState({
+        material_type: "",
         vendor_id: "",
         material_id: "",
         location_id: "",
         start_date: "",
         end_date: ""
     });
-    const [showFilters, setShowFilters] = useState(false);
 
     // Modal states
     const [issueModalOpen, setIssueModalOpen] = useState(false);
@@ -46,7 +48,7 @@ export default function StockBook({ type }) {
         }
         setLoading(true);
         try {
-            const res = await getStockBook({ ...filters, material_type: type });
+            const res = await getStockBook(filters);
             setRecords(res.data?.data || []);
         } catch (error) {
             console.error("Failed to fetch stock book records:", error);
@@ -58,23 +60,15 @@ export default function StockBook({ type }) {
 
     const loadFilterOptions = async () => {
         try {
-            const [vendorsRes, materialsRes, locationsRes] = await Promise.all([
+            const [typesRes, vendorsRes, materialsRes, locationsRes] = await Promise.all([
+                getMaterialTypes(),
                 getAllVendors(),
                 getMaterials(),
                 getLocations()
             ]);
+            setMaterialTypes(typesRes.data?.data || []);
             setVendors(vendorsRes.data?.data || []);
-            
-            // Filter materials by type
-            const allMaterials = materialsRes.data?.data || [];
-            if (type === "rm") {
-                setMaterials(allMaterials.filter(m => m.material_type === "Raw Materials"));
-            } else if (type === "general") {
-                setMaterials(allMaterials.filter(m => m.material_type !== "Raw Materials"));
-            } else {
-                setMaterials(allMaterials);
-            }
-            
+            setAllMaterials(materialsRes.data?.data || []);
             setLocations(locationsRes.data?.data || []);
         } catch (error) {
             console.error("Failed to load filter options:", error);
@@ -83,22 +77,20 @@ export default function StockBook({ type }) {
     };
 
     useEffect(() => {
-        setFilters({
-            vendor_id: "",
-            material_id: "",
-            location_id: "",
-            start_date: "",
-            end_date: ""
-        });
-    }, [type]);
-
-    useEffect(() => {
         loadFilterOptions();
-    }, [type]);
+    }, []);
 
     useEffect(() => {
         fetchRecords();
-    }, [filters, type]);
+    }, [filters]);
+
+    // Filter materials dynamically based on selected material type
+    const filteredMaterials = useMemo(() => {
+        if (!filters.material_type) return allMaterials;
+        return allMaterials.filter(
+            (m) => String(m.material_type).toLowerCase() === String(filters.material_type).toLowerCase()
+        );
+    }, [allMaterials, filters.material_type]);
 
     const handleOpenIssueModal = (item) => {
         setSelectedItem(item);
@@ -114,7 +106,7 @@ export default function StockBook({ type }) {
         setHistoryModalOpen(true);
         setLoadingHistory(true);
         try {
-            const res = await getStockIssueLogs(item.material_id, item.grade);
+            const res = await getStockIssueLogs(item.material_id);
             setIssueHistory(res.data?.data || []);
         } catch (error) {
             console.error("Failed to fetch issue logs:", error);
@@ -140,7 +132,6 @@ export default function StockBook({ type }) {
         try {
             await issueStock({
                 material_id: selectedItem.material_id,
-                grade: selectedItem.grade,
                 issue_quantity: qty,
                 p_memo_number: pMemoNumber,
                 issue_date: issueDate,
@@ -168,7 +159,7 @@ export default function StockBook({ type }) {
     };
 
     const columns = useMemo(() => {
-        const baseCols = [
+        return [
             {
                 key: "date",
                 label: "Date",
@@ -183,7 +174,7 @@ export default function StockBook({ type }) {
             },
             {
                 key: "product",
-                label: "Product",
+                label: "Product / Material",
                 minWidth: "180px",
                 render: (row) => <span className="font-semibold text-slate-800">{row.product || "—"}</span>,
             },
@@ -207,18 +198,12 @@ export default function StockBook({ type }) {
                     </span>
                 ),
             },
-        ];
-
-
-
-        baseCols.push(
             {
                 key: "vendor_name",
                 label: "Vendor/Supplier",
                 minWidth: "180px",
                 render: (row) => <span className="text-slate-800 font-medium">{row.vendor_name || "—"}</span>,
             },
-
             {
                 key: "invoice_number",
                 label: "Invoice Number",
@@ -227,7 +212,7 @@ export default function StockBook({ type }) {
             },
             {
                 key: "grn_number",
-                label: "Received (GRN)",
+                label: "Receipt No.",
                 minWidth: "140px",
                 render: (row) => (
                     <span className="inline-flex items-center px-2 py-0.5 bg-indigo-50 text-indigo-700 font-mono text-xs font-bold rounded border border-indigo-100">
@@ -243,7 +228,7 @@ export default function StockBook({ type }) {
             },
             {
                 key: "approved_quantity",
-                label: "Approved Qty",
+                label: "Received Qty",
                 minWidth: "120px",
                 render: (row) => (
                     <span className="font-bold text-emerald-600">
@@ -274,36 +259,32 @@ export default function StockBook({ type }) {
                     );
                 },
             }
-        );
-
-        return baseCols;
-    }, [type]);
+        ];
+    }, []);
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-            <Navbar title={type === "rm" ? "Raw Material Stock Book" : type === "general" ? "General Stock Book" : "Stock Book"} />
+            <Navbar title="Stock Book" />
             
-            <main className="flex-1 p-4 sm:p-6 lg:p-8 mx-auto w-full">
-                
-
+            <main className="flex-1 p-4 sm:p-6 lg:p-8 mx-auto w-full max-w-[1600px]">
                 {/* Filters Section */}
                 <div className="bg-white rounded-2xl shadow-sm p-5 mb-6 border border-slate-200">
                     <div className="flex items-center gap-2 mb-4 text-slate-800 font-semibold text-sm">
                         <i className="fa-solid fa-filter text-indigo-600"></i>
                         Filter Stock Records
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                        {/* Vendor Filter */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                        {/* Material Type Filter */}
                         <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Vendor</label>
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Material Type</label>
                             <select
-                                value={filters.vendor_id}
-                                onChange={(e) => setFilters(prev => ({ ...prev, vendor_id: e.target.value }))}
+                                value={filters.material_type}
+                                onChange={(e) => setFilters(prev => ({ ...prev, material_type: e.target.value, material_id: "" }))}
                                 className="h-10 px-3 border border-slate-300 rounded-lg text-sm bg-slate-50 text-slate-700 outline-none focus:border-indigo-600 focus:bg-white transition-colors"
                             >
-                                <option value="">All Vendors</option>
-                                {vendors.map(v => (
-                                    <option key={v.id} value={v.id}>{v.vendor_name}</option>
+                                <option value="">All Types</option>
+                                {materialTypes.map((t, idx) => (
+                                    <option key={idx} value={t}>{t}</option>
                                 ))}
                             </select>
                         </div>
@@ -317,8 +298,23 @@ export default function StockBook({ type }) {
                                 className="h-10 px-3 border border-slate-300 rounded-lg text-sm bg-slate-50 text-slate-700 outline-none focus:border-indigo-600 focus:bg-white transition-colors"
                             >
                                 <option value="">Select Material</option>
-                                {materials.map(m => (
+                                {filteredMaterials.map(m => (
                                     <option key={m.id} value={m.id}>{m.material_name}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Vendor Filter */}
+                        <div className="flex flex-col gap-1.5">
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Vendor</label>
+                            <select
+                                value={filters.vendor_id}
+                                onChange={(e) => setFilters(prev => ({ ...prev, vendor_id: e.target.value }))}
+                                className="h-10 px-3 border border-slate-300 rounded-lg text-sm bg-slate-50 text-slate-700 outline-none focus:border-indigo-600 focus:bg-white transition-colors"
+                            >
+                                <option value="">All Vendors</option>
+                                {vendors.map(v => (
+                                    <option key={v.id} value={v.id}>{v.vendor_name}</option>
                                 ))}
                             </select>
                         </div>
@@ -358,12 +354,13 @@ export default function StockBook({ type }) {
                     </div>
 
                     {/* Reset Button */}
-                    {(filters.vendor_id || filters.material_id || filters.location_id || filters.start_date || filters.end_date) && (
+                    {(filters.material_type || filters.material_id || filters.vendor_id || filters.location_id || filters.start_date || filters.end_date) && (
                         <div className="mt-4 flex justify-end">
                             <button
                                 onClick={() => setFilters({
-                                    vendor_id: "",
+                                    material_type: "",
                                     material_id: "",
+                                    vendor_id: "",
                                     location_id: "",
                                     start_date: "",
                                     end_date: ""
@@ -377,135 +374,126 @@ export default function StockBook({ type }) {
                     )}
                 </div>
 
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                    {(!filters.material_id || !filters.start_date || !filters.end_date) ? (
-                        <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-                            <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center mb-4 border border-indigo-100">
-                                <i className="fa-solid fa-book-open text-indigo-600 text-2xl"></i>
-                            </div>
-                            <h3 className="text-lg font-bold text-slate-800 mb-1">Required Filters Missing</h3>
-                            <p className="text-slate-500 text-sm max-w-sm">
-                                Please select a <span className="font-semibold text-slate-700">Material</span>, <span className="font-semibold text-slate-700">Start Date</span>, and <span className="font-semibold text-slate-700">End Date</span> in the filters above to retrieve the Stock Book transactions and running balance.
-                            </p>
+                {/* Table or Empty State */}
+                {(!filters.material_id || !filters.start_date || !filters.end_date) ? (
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-12 text-center">
+                        <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl shadow-inner">
+                            <i className="fa-solid fa-filter"></i>
                         </div>
-                    ) : (
+                        <h3 className="text-lg font-bold text-slate-800 mb-2">Select Required Filters</h3>
+                        <p className="text-sm text-slate-500 max-w-md mx-auto">
+                            Please select a <span className="font-semibold text-indigo-600">Material</span>, <span className="font-semibold text-indigo-600">Start Date</span>, and <span className="font-semibold text-indigo-600">End Date</span> to view the Stock Book ledger.
+                        </p>
+                    </div>
+                ) : (
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                         <DataTable
-                            tableId={type === "rm" ? "rm_stock_book_table" : type === "general" ? "general_stock_book_table" : "stock_book_table_v2"}
-                            title={type === "rm" ? "Raw Material Stock Book" : type === "general" ? "General Stock Book" : "Stock Book"}
+                            tableId="stock_book_table"
+                            title="Stock Book Records"
                             data={records}
                             columns={columns}
                             loading={loading}
-                            searchPlaceholder="Search products, batch numbers, vendors..."
+                            searchPlaceholder="Search particular, batch number, vendor, invoice..."
                         />
-                    )}
-                </div>
+                    </div>
+                )}
             </main>
 
             {/* Issue Stock Modal */}
             {issueModalOpen && selectedItem && (
-                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
-                    <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                        <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                                <i className="fa-solid fa-arrow-up-right-from-square text-indigo-600"></i>
-                                Issue Stock
-                            </h2>
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
+                        <div className="bg-gradient-to-r from-[#369ACF] to-[#2B82B0] px-6 py-4 flex justify-between items-center text-white">
+                            <div>
+                                <h3 className="font-bold text-lg leading-snug">Issue Material Stock</h3>
+                                <p className="text-white/80 text-xs mt-0.5">{selectedItem.product}</p>
+                            </div>
                             <button
                                 onClick={() => setIssueModalOpen(false)}
-                                className="text-slate-400 hover:text-slate-600 transition-colors cursor-pointer text-xl"
+                                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors cursor-pointer text-white"
                             >
-                                &times;
+                                <i className="fa-solid fa-xmark text-sm"></i>
                             </button>
                         </div>
 
-                        <form onSubmit={handleIssueSubmit}>
-                            <div className="p-6 space-y-4">
-                                <div className="grid grid-cols-5 gap-4 bg-indigo-50/40 p-4 rounded-xl border border-indigo-100/50 text-xs text-indigo-950">
-                                    <div>
-                                        <span className="font-semibold block text-indigo-500 uppercase tracking-wider text-[9px] mb-0.5">Product</span>
-                                        <span className="font-bold text-slate-900 truncate block" title={selectedItem.product}>{selectedItem.product}</span>
-                                    </div>
-                                    <div>
-                                        <span className="font-semibold block text-indigo-500 uppercase tracking-wider text-[9px] mb-0.5">Internal Batch</span>
-                                        <span className="font-mono font-bold text-slate-900 truncate block" title={selectedItem.internal_batch_number}>{selectedItem.internal_batch_number}</span>
-                                    </div>
-                                    <div>
-                                        <span className="font-semibold block text-indigo-500 uppercase tracking-wider text-[9px] mb-0.5">Supplier Batch</span>
-                                        <span className="font-mono font-bold text-slate-900 truncate block" title={selectedItem.supplier_batch_number}>{selectedItem.supplier_batch_number || "—"}</span>
-                                    </div>
-                                    <div>
-                                        <span className="font-semibold block text-indigo-500 uppercase tracking-wider text-[9px] mb-0.5">GRN Reference</span>
-                                        <span className="font-mono font-bold text-slate-900 truncate block" title={selectedItem.grn_number}>{selectedItem.grn_number}</span>
-                                    </div>
-                                    <div>
-                                        <span className="font-semibold block text-indigo-500 uppercase tracking-wider text-[9px] mb-0.5">Available Balance</span>
-                                        <span className="text-indigo-800 font-extrabold text-sm block">{selectedItem.balance_quantity}</span>
-                                    </div>
+                        <form onSubmit={handleIssueSubmit} className="p-6 space-y-4">
+                            <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                                <div>
+                                    <span className="text-xs text-slate-500 block">Internal Batch</span>
+                                    <span className="text-sm font-bold text-slate-800 font-mono">{selectedItem.internal_batch_number || "—"}</span>
                                 </div>
-
-                                <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                                    <div className="space-y-1">
-                                        <label className="text-sm font-semibold text-slate-700">Issue Quantity *</label>
-                                        <input
-                                            type="number"
-                                            step="0.0001"
-                                            required
-                                            min="0.0001"
-                                            max={selectedItem.balance_quantity}
-                                            value={issueQuantity}
-                                            onChange={(e) => setIssueQuantity(e.target.value)}
-                                            placeholder={`Max ${selectedItem.balance_quantity}`}
-                                            className="w-full h-10 px-3 border border-slate-300 rounded-lg text-sm outline-none focus:border-indigo-600"
-                                        />
-                                    </div>
-
-                                    <div className="space-y-1">
-                                        <label className="text-sm font-semibold text-slate-700">P. Memo Number</label>
-                                        <input
-                                            type="text"
-                                            value={pMemoNumber}
-                                            onChange={(e) => setPMemoNumber(e.target.value)}
-                                            placeholder="Leave blank for now"
-                                            className="w-full h-10 px-3 border border-slate-300 rounded-lg text-sm outline-none focus:border-indigo-600"
-                                        />
-                                    </div>
-
-                                    <div className="space-y-1">
-                                        <label className="text-sm font-semibold text-slate-700">Issue Date *</label>
-                                        <DateInput
-                                            required
-                                            value={issueDate}
-                                            onChange={(e) => setIssueDate(e.target.value)}
-                                        />
-                                    </div>
-
-                                    <div className="space-y-1">
-                                        <label className="text-sm font-semibold text-slate-700">Remarks</label>
-                                        <input
-                                            type="text"
-                                            value={remarks}
-                                            onChange={(e) => setRemarks(e.target.value)}
-                                            placeholder="Add any issue remarks..."
-                                            className="w-full h-10 px-3 border border-slate-300 rounded-lg text-sm outline-none focus:border-indigo-600"
-                                        />
-                                    </div>
+                                <div>
+                                    <span className="text-xs text-slate-500 block">Available Balance</span>
+                                    <span className="text-sm font-extrabold text-indigo-700">{selectedItem.balance_quantity}</span>
                                 </div>
                             </div>
 
-                            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                                    Issue Quantity <span className="text-rose-500">*</span>
+                                </label>
+                                <input
+                                    type="number"
+                                    step="any"
+                                    required
+                                    placeholder="Enter quantity to issue"
+                                    value={issueQuantity}
+                                    onChange={(e) => setIssueQuantity(e.target.value)}
+                                    className="w-full h-10 px-3 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 transition-all font-semibold"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                                        P. Memo Number
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="Optional P.Memo No."
+                                        value={pMemoNumber}
+                                        onChange={(e) => setPMemoNumber(e.target.value)}
+                                        className="w-full h-10 px-3 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:border-indigo-600 transition-all font-mono"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                                        Issue Date <span className="text-rose-500">*</span>
+                                    </label>
+                                    <DateInput
+                                        value={issueDate}
+                                        onChange={(e) => setIssueDate(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                                    Remarks
+                                </label>
+                                <textarea
+                                    rows={2}
+                                    placeholder="Add any additional notes..."
+                                    value={remarks}
+                                    onChange={(e) => setRemarks(e.target.value)}
+                                    className="w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:border-indigo-600 transition-all resize-none"
+                                />
+                            </div>
+
+                            <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
                                 <button
                                     type="button"
                                     onClick={() => setIssueModalOpen(false)}
-                                    className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                                    className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={submittingIssue}
-                                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+                                    className="px-5 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-lg transition-all shadow-md shadow-indigo-200 cursor-pointer"
                                 >
-                                    {submittingIssue ? "Issuing..." : "Submit Issue"}
+                                    {submittingIssue ? "Processing..." : "Confirm Issue"}
                                 </button>
                             </div>
                         </form>
@@ -513,77 +501,64 @@ export default function StockBook({ type }) {
                 </div>
             )}
 
-            {/* History Modal */}
-            {historyModalOpen && selectedItem && (
-                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
-                    <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                        <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+            {/* Issue History Modal */}
+            {historyModalOpen && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-slate-100">
+                        <div className="bg-slate-900 px-6 py-4 flex justify-between items-center text-white">
                             <div>
-                                <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                                    <i className="fa-solid fa-history text-indigo-600"></i>
-                                    Issue History
-                                </h2>
-                                <p className="text-xs text-slate-500 font-mono mt-0.5">
-                                    {selectedItem.product} ({selectedItem.grade || "No Grade"})
-                                </p>
+                                <h3 className="font-bold text-lg">Stock Issue History</h3>
+                                <p className="text-slate-400 text-xs mt-0.5">{selectedItem?.product}</p>
                             </div>
                             <button
                                 onClick={() => setHistoryModalOpen(false)}
-                                className="text-slate-400 hover:text-slate-600 transition-colors cursor-pointer text-xl"
+                                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center transition-colors cursor-pointer text-white"
                             >
-                                &times;
+                                <i className="fa-solid fa-xmark text-sm"></i>
                             </button>
                         </div>
 
-                        <div className="p-6 max-h-[60vh] overflow-y-auto">
+                        <div className="flex-1 overflow-y-auto p-6">
                             {loadingHistory ? (
-                                <div className="text-center text-slate-500 py-8 text-sm">
-                                    Loading history logs...
+                                <div className="text-center py-8 text-slate-400">
+                                    <i className="fa-solid fa-circle-notch fa-spin text-2xl mb-2 text-indigo-600"></i>
+                                    <p className="text-sm">Loading issue logs...</p>
                                 </div>
-                            ) : issueHistory.length > 0 ? (
-                                <div className="overflow-hidden border border-slate-200 rounded-xl">
-                                    <table className="min-w-full divide-y divide-slate-200">
-                                        <thead className="bg-slate-50">
-                                            <tr>
-                                                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Date</th>
-                                                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Quantity</th>
-                                                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Allocated Batch</th>
-                                                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Supplier Batch</th>
-                                                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">P. Memo</th>
-                                                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Issued By</th>
-                                                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Remarks</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="bg-white divide-y divide-slate-100 text-sm">
-                                            {issueHistory.map((log) => (
-                                                <tr key={log.id} className="hover:bg-slate-50/50">
-                                                    <td className="px-4 py-3 whitespace-nowrap text-slate-600 font-medium">{formatDate(log.issue_date)}</td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-indigo-700 font-bold">{Number(log.issue_quantity)}</td>
-                                                    <td className="px-4 py-3 whitespace-nowrap font-mono text-xs text-blue-700 font-semibold">{log.internal_batch_number || "—"}</td>
-                                                    <td className="px-4 py-3 whitespace-nowrap font-mono text-xs text-slate-700 font-medium">{log.supplier_batch_number || "—"}</td>
-                                                    <td className="px-4 py-3 whitespace-nowrap font-mono text-xs text-slate-500">{log.p_memo_number || "—"}</td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-slate-700 font-medium">{log.added_by_name}</td>
-                                                    <td className="px-4 py-3 text-slate-500 max-w-[150px] truncate" title={log.remarks}>{log.remarks || "—"}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                            ) : issueHistory.length === 0 ? (
+                                <div className="text-center py-8 text-slate-400">
+                                    <i className="fa-solid fa-inbox text-3xl mb-2 text-slate-300"></i>
+                                    <p className="text-sm">No issue records found for this material.</p>
                                 </div>
                             ) : (
-                                <div className="text-center text-slate-500 py-12">
-                                    <i className="fa-solid fa-box-open text-slate-300 text-3xl block mb-2"></i>
-                                    No issue history found for this item
+                                <div className="space-y-3">
+                                    {issueHistory.map((log) => (
+                                        <div key={log.id} className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex items-start justify-between">
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-bold text-slate-800 text-sm">Issued: {log.issue_quantity}</span>
+                                                    {log.p_memo_number && (
+                                                        <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 font-mono text-xs font-bold rounded">
+                                                            {log.p_memo_number}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-slate-500 mt-1">
+                                                    Date: <span className="font-medium text-slate-700">{formatDate(log.issue_date)}</span> | Batch: <span className="font-mono text-slate-700">{log.internal_batch_number || "—"}</span>
+                                                </p>
+                                                {log.remarks && (
+                                                    <p className="text-xs text-slate-600 mt-1 bg-white p-2 rounded border border-slate-100">
+                                                        {log.remarks}
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <div className="text-right">
+                                                <span className="text-xs text-slate-400 block">{formatDate(log.created_at)}</span>
+                                                <span className="text-xs font-semibold text-slate-600 block mt-0.5">By {log.added_by_name}</span>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
-                        </div>
-
-                        <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end">
-                            <button
-                                onClick={() => setHistoryModalOpen(false)}
-                                className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-sm font-semibold transition-colors cursor-pointer"
-                            >
-                                Close
-                            </button>
                         </div>
                     </div>
                 </div>

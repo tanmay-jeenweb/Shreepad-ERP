@@ -44,14 +44,25 @@ const createRmReturnsTable = async () => {
     }
 };
 
-const generateReturnNo = async () => {
+const generateReturnNo = async (connection) => {
+    const conn = connection || db;
     const year = new Date().getFullYear();
-    const [rows] = await db.execute(
-        `SELECT COUNT(*) AS cnt FROM rm_returns WHERE return_no LIKE ?`,
-        [`RTR-${year}-%`]
+    const prefix = `RTR-${year}-`;
+    const [rows] = await conn.execute(
+        `SELECT return_no FROM rm_returns WHERE return_no LIKE ?`,
+        [`${prefix}%`]
     );
-    const seq = (rows[0].cnt || 0) + 1;
-    return `RTR-${year}-${String(seq).padStart(4, '0')}`;
+    let maxSeq = 0;
+    for (const r of rows) {
+        if (r.return_no && r.return_no.startsWith(prefix)) {
+            const numPart = parseInt(r.return_no.slice(prefix.length), 10);
+            if (!isNaN(numPart) && numPart > maxSeq) {
+                maxSeq = numPart;
+            }
+        }
+    }
+    const seq = maxSeq + 1;
+    return `${prefix}${String(seq).padStart(4, '0')}`;
 };
 
 const mapMaterialTypeToPrefixKey = (type) => {
@@ -76,7 +87,7 @@ const generateInternalBatchNumber = async (connection, materialId, settings) => 
     const [matRows] = await connection.execute('SELECT code, material_type FROM materials WHERE id = ?', [materialId]);
     if (matRows.length === 0) return null;
     const mat = matRows[0];
-    if (!mat.code) return null;
+    if (!mat.code) return null; // No code, no batch number
 
     const prefixKey = mapMaterialTypeToPrefixKey(mat.material_type);
     const prefix = settings ? (settings[prefixKey] || 'OTH') : 'OTH';
@@ -94,7 +105,7 @@ const createRmReturn = async (data, addedBy) => {
         await connection.beginTransaction();
 
         // 1. Generate return_no
-        const returnNo = await generateReturnNo();
+        const returnNo = await generateReturnNo(connection);
 
         // 2. Fetch material details
         const [matRows] = await connection.execute('SELECT material_name FROM materials WHERE id = ?', [data.material_id]);

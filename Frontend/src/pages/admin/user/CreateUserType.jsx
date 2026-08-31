@@ -49,13 +49,11 @@ const MODULE_GROUPS = [
   {
     groupName: "Store & Inventory",
     icon: "fa-solid fa-warehouse",
-    description: "Store material add, removal, and stock views.",
+    description: "Store material add, removal, stock status, and stock book.",
     masters: [
       { key: "material_add",            label: "Material Add" },
-      { key: "rm_stock_status",         label: "RM Stock Status", allowedPerms: ["canRead"] },
-      { key: "batchwise_stock_status",  label: "Batchwise Stock Status", allowedPerms: ["canRead"] },
-      { key: "rm_stock_book",           label: "Raw Material Stock Book", allowedPerms: ["canRead"] },
-      { key: "general_stock_book",      label: "General Stock Book", allowedPerms: ["canRead"] },
+      { key: "stock_status",            label: "Stock Status", allowedPerms: ["canRead"] },
+      { key: "stock_book",              label: "Stock Book", allowedPerms: ["canRead"] },
     ]
   },
   {
