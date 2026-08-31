@@ -22,7 +22,6 @@ import DateInput from "../../components/DateInput";
 const EMPTY_ITEM = {
     material_id: "",
     material_name: "",
-    grade: "",
     hsn_code: "",
     unit: "",
     quantity: "",
@@ -161,7 +160,6 @@ export default function CreatePurchaseOrder() {
                             setItems(po.items.map(item => ({
                                 material_id: item.material_id || "",
                                 material_name: item.material_name || "",
-                                grade: item.grade || "",
                                 hsn_code: item.hsn_code || "",
                                 unit: item.unit || "",
                                 quantity: item.quantity || "",
@@ -317,7 +315,6 @@ export default function CreatePurchaseOrder() {
                 const mat = mats.find(m => String(m.id) === String(value));
                 if (mat) {
                     item.material_name = mat.material_name;
-                    item.grade = ""; // reset grade on material change
                     item.hsn_code = mat.hsn_code || "";
                     item.unit = mat.unit_name || "";
 
@@ -334,7 +331,6 @@ export default function CreatePurchaseOrder() {
                     }
                 } else {
                     item.material_name = "";
-                    item.grade = "";
                     item.hsn_code = "";
                     item.unit = "";
                     item.cgst_percent = "";
@@ -591,9 +587,7 @@ export default function CreatePurchaseOrder() {
                                 <tr className="bg-slate-50 border-b border-slate-200">
                                     <th className="px-3 py-3 text-left font-semibold text-slate-500 whitespace-nowrap w-6">#</th>
                                     <th className="px-3 py-3 text-left font-semibold text-slate-500 whitespace-nowrap min-w-[160px]">Material Name</th>
-                                    {header.purchase_type?.toLowerCase().includes("raw material") && (
-                                        <th className="px-3 py-3 text-left font-semibold text-slate-500 whitespace-nowrap min-w-[120px]">Grade</th>
-                                    )}
+
                                     <th className="px-3 py-3 text-left font-semibold text-slate-500 whitespace-nowrap min-w-[90px]">HSN</th>
                                     <th className="px-3 py-3 text-left font-semibold text-slate-500 whitespace-nowrap min-w-[70px]">Unit</th>
                                     <th className="px-3 py-3 text-left font-semibold text-slate-500 whitespace-nowrap min-w-[80px]">Qty</th>
@@ -639,39 +633,6 @@ export default function CreatePurchaseOrder() {
                                             </select>
                                         </td>
 
-                                        {/* Grade (Conditional) */}
-                                        {header.purchase_type?.toLowerCase().includes("raw material") && (
-                                            <td className="px-3 py-2.5">
-                                                {(() => {
-                                                    if (!item.material_id) {
-                                                        return (
-                                                            <input type="text" disabled value="Select Material First" 
-                                                                className="w-full px-2.5 py-2 border border-slate-200 rounded-lg text-xs bg-slate-50 text-slate-400 focus:outline-none" />
-                                                        );
-                                                    }
-                                                    const availableGrades = rawMaterialsList.filter(rm => String(rm.material_id) === String(item.material_id));
-                                                    if (availableGrades.length === 0) {
-                                                        return (
-                                                            <span className="block px-2.5 py-2 text-[10px] text-amber-600 bg-amber-50 rounded-lg border border-amber-200 truncate">
-                                                                Material grade not available
-                                                            </span>
-                                                        );
-                                                    }
-                                                    return (
-                                                        <select
-                                                            value={item.grade}
-                                                            onChange={e => handleItemChange(idx, "grade", e.target.value)}
-                                                            className="w-full px-2.5 py-2 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#369ACF]/20 bg-white cursor-pointer"
-                                                        >
-                                                            <option value="">— Select Grade —</option>
-                                                            {availableGrades.map(g => (
-                                                                <option key={g.id} value={g.grade}>{g.grade}</option>
-                                                            ))}
-                                                        </select>
-                                                    );
-                                                })()}
-                                            </td>
-                                        )}
 
                                         {/* HSN (auto-filled) */}
                                         <td className="px-3 py-2.5">

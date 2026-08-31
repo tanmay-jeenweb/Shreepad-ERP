@@ -167,7 +167,6 @@ export default function PrintPurchaseOrder() {
                                     <td className="py-2 px-3 border-r border-slate-200 text-center text-slate-500">{idx + 1}</td>
                                     <td className="py-2 px-3 border-r border-slate-200">
                                         <div className="font-semibold text-slate-900">{item.material_name}</div>
-                                        {item.grade && <div className="text-[11px] text-slate-500 mt-0.5">Grade: {item.grade}</div>}
                                     </td>
                                     <td className="py-2 px-3 border-r border-slate-200 text-center text-slate-600">{item.hsn_code || "—"}</td>
                                     <td className="py-2 px-3 border-r border-slate-200 text-right font-medium">

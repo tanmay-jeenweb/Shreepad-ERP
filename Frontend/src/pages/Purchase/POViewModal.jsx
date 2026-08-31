@@ -159,7 +159,6 @@ export default function POViewModal({ poId, onClose }) {
                                                     <tr key={idx} className="hover:bg-slate-50/50">
                                                         <td className="px-3 py-2 text-sm text-slate-800">
                                                             <span className="font-medium">{item.material_name}</span>
-                                                            {item.grade && <span className="text-xs text-slate-500 block">Grade: {item.grade}</span>}
                                                         </td>
                                                         <td className="px-3 py-2 text-sm text-slate-600">{item.hsn_code || "—"}</td>
                                                         <td className="px-3 py-2 text-sm text-slate-800 text-right">{item.quantity} {item.unit}</td>

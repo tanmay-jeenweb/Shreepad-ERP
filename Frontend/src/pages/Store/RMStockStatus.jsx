@@ -96,14 +96,7 @@ export default function RMStockStatus() {
             minWidth: "150px",
             render: (row) => <span className="font-semibold text-slate-700">{row.material_name || "—"}</span>,
         },
-        {
-            key: "job_party_name",
-            label: "Job of Party",
-            minWidth: "150px",
-            render: (row) => (
-                <span className="text-slate-700 font-medium">{row.job_party_name || "—"}</span>
-            ),
-        },
+
         {
             key: "location",
             label: "Location",
@@ -120,19 +113,7 @@ export default function RMStockStatus() {
                 <span className="font-semibold text-slate-800">{row.party || "—"}</span>
             ),
         },
-        {
-            key: "rm_grade",
-            label: "Grade",
-            minWidth: "110px",
-            render: (row) =>
-                row.rm_grade ? (
-                    <span className="inline-flex items-center px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-semibold rounded">
-                        {row.rm_grade}
-                    </span>
-                ) : (
-                    <span className="text-slate-400 italic">—</span>
-                ),
-        },
+
         {
             key: "supplier_batch_number",
             label: "Supplier No.",
@@ -220,7 +201,7 @@ export default function RMStockStatus() {
                         <i className="fa-solid fa-filter text-indigo-600"></i>
                         Filter Stock Records
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4">
                         {/* Vendor Filter */}
                         <div className="flex flex-col gap-1.5">
                             <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Vendor</label>
@@ -236,21 +217,6 @@ export default function RMStockStatus() {
                             </select>
                         </div>
 
-                        {/* Job of Party Filter */}
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Job of Party</label>
-                            <select
-                                value={filters.job_party_id}
-                                onChange={(e) => setFilters(prev => ({ ...prev, job_party_id: e.target.value }))}
-                                className="h-10 px-3 border border-slate-300 rounded-lg text-sm bg-slate-50 text-slate-700 outline-none focus:border-indigo-600 focus:bg-white transition-colors"
-                            >
-                                <option value="">All Job Parties</option>
-                                {jobParties.map(jp => (
-                                    <option key={jp.id} value={jp.id}>{jp.party_name}</option>
-                                ))}
-                            </select>
-                        </div>
-
                         {/* Material Filter */}
                         <div className="flex flex-col gap-1.5">
                             <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Raw Material</label>
@@ -262,21 +228,6 @@ export default function RMStockStatus() {
                                 <option value="">All Raw Materials</option>
                                 {materials.map(m => (
                                     <option key={m.id} value={m.id}>{m.material_name}</option>
-                                ))}
-                            </select>
-                        </div>
-
-                        {/* Grade Filter */}
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Grade</label>
-                            <select
-                                value={filters.rm_grade}
-                                onChange={(e) => setFilters(prev => ({ ...prev, rm_grade: e.target.value }))}
-                                className="h-10 px-3 border border-slate-300 rounded-lg text-sm bg-slate-50 text-slate-700 outline-none focus:border-indigo-600 focus:bg-white transition-colors"
-                            >
-                                <option value="">All Grades</option>
-                                {rmGradesList.map(g => (
-                                    <option key={g} value={g}>{g}</option>
                                 ))}
                             </select>
                         </div>
