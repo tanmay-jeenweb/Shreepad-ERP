@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { getWorkOrderById } from "../../../api/workOrderApi";
 import toast from "react-hot-toast";
+import { useNavigate } from "react-router-dom";
+import { usePermission } from "../../../context/PermissionContext";
 
 export default function WorkOrderViewModal({ workOrderId, onClose }) {
+    const navigate = useNavigate();
+    const { hasPermission } = usePermission();
+    const canReadBOM = hasPermission("bom", "read");
     const [workOrder, setWorkOrder] = useState(null);
     const [loading, setLoading] = useState(true);
 
@@ -133,6 +138,7 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                                 <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase whitespace-nowrap">Actual Delivery</th>
                                                 <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase whitespace-nowrap">Batch No.</th>
                                                 <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase whitespace-nowrap">Remarks</th>
+                                                <th className="px-3 py-2 text-center text-xs font-semibold text-slate-500 uppercase whitespace-nowrap">Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody className="bg-white divide-y divide-slate-200">
@@ -157,6 +163,23 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                                     <td className="px-3 py-2 text-sm text-slate-800 font-mono text-xs">{item.batch_no || "N/A"}</td>
                                                     <td className="px-3 py-2 text-sm text-slate-500 max-w-[150px] truncate" title={item.remarks}>
                                                         {item.remarks || "N/A"}
+                                                    </td>
+                                                    <td className="px-3 py-2 text-sm whitespace-nowrap text-center">
+                                                        {canReadBOM ? (
+                                                            <button
+                                                                onClick={() => {
+                                                                    onClose();
+                                                                    navigate(`/production/p-memo/${item.id}`);
+                                                                }}
+                                                                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-[#369ACF] hover:bg-[#2583b4] rounded-lg shadow-sm transition-all cursor-pointer"
+                                                                title="Create/View Production Memo (P Memo)"
+                                                            >
+                                                                <i className="fa-solid fa-file-invoice text-[10px]"></i>
+                                                                P Memo
+                                                            </button>
+                                                        ) : (
+                                                            <span className="text-slate-400 italic text-xs">No Permission</span>
+                                                        )}
                                                     </td>
                                                 </tr>
                                             ))}

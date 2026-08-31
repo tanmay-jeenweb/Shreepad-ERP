@@ -1,5 +1,4 @@
 const db = require('../config/db.js');
-const { bookMachineTime, deleteScheduleByWorkOrderItemId } = require('./machineScheduleModel.js');
 
 const dropForeignKeyIfExist = async (tableName, referencedTableName) => {
     try {
@@ -267,25 +266,7 @@ const createWorkOrder = async (customerId, workOrderDate, addedBy, deviceId, ite
 
             const workOrderItemId = itemResult.insertId;
 
-            if (item.machine_id && productionTimeHours && productionTimeHours > 0) {
-                 await bookMachineTime(item.machine_id, workOrderItemId, productionTimeHours, connection);
 
-                 // Fetch the computed planned_start and planned_end dates and save them
-                 const [datesResult] = await connection.execute(
-                     `SELECT MIN(schedule_date) AS planned_start, MAX(schedule_date) AS planned_end 
-                      FROM machine_schedule 
-                      WHERE work_order_item_id = ?`,
-                     [workOrderItemId]
-                 );
-                 if (datesResult.length > 0 && datesResult[0].planned_start) {
-                     await connection.execute(
-                         `UPDATE work_order_items 
-                          SET planned_start_date = ?, planned_end_date = ? 
-                          WHERE id = ?`,
-                         [datesResult[0].planned_start, datesResult[0].planned_end, workOrderItemId]
-                     );
-                 }
-            }
 
             // Deduct from stock if we are getting quantity from stock
             const stockDeductQty = Number(item.quantity) - Number(item.production_quantity || 0);
@@ -490,28 +471,8 @@ const deleteWorkOrder = async (id) => {
             // );
         }
 
-        // 3. Delete schedules (within the same transaction to avoid lock contention)
-        const [itemsRows] = await connection.execute(`SELECT id, machine_id FROM work_order_items WHERE work_order_id = ?`, [id]);
-        const machinesToReschedule = new Set();
-        for (const it of itemsRows) {
-            if (it.machine_id) {
-                machinesToReschedule.add(it.machine_id);
-            }
-            await connection.execute(`DELETE FROM machine_schedule WHERE work_order_item_id = ?`, [it.id]);
-        }
-
-        // 4. Delete work order (will cascade delete work_order_items)
+        // 3. Delete work order (will cascade delete work_order_items)
         await connection.execute(`DELETE FROM work_orders WHERE id = ?`, [id]);
-
-        // 5. Reschedule affected machines
-        const { rescheduleMachine } = require('./machineScheduleModel.js');
-        const { getSettings } = require('./settingMasterModel.js');
-        const settings = await getSettings();
-        const waitHour = settings ? parseInt(settings.wait_hour || 0, 10) : 0;
-        
-        for (const machineId of machinesToReschedule) {
-            await rescheduleMachine(machineId, connection, waitHour);
-        }
 
         await connection.commit();
         return true;
@@ -596,26 +557,18 @@ const updateWorkOrder = async (workOrderId, workOrderDate, itemsArray) => {
         `;
         await connection.execute(updateHeaderQuery, [workOrderDate, workOrderId]);
 
-        // 2. Fetch existing items for tracking before any updates
+        // 2. Process Deleted Items
+        const incomingIds = itemsArray.filter(it => it.id).map(it => Number(it.id));
         const [existingItems] = await connection.execute(
             `SELECT id, machine_id, quantity, production_time_hours, sort_order FROM work_order_items WHERE work_order_id = ?`,
             [workOrderId]
         );
-
-        const machinesToReschedule = new Set();
-
-        // 3. Process Deleted Items
-        const incomingIds = itemsArray.filter(it => it.id).map(it => Number(it.id));
         const itemsToDelete = existingItems.filter(it => !incomingIds.includes(it.id));
         for (const it of itemsToDelete) {
-            if (it.machine_id) {
-                machinesToReschedule.add(it.machine_id);
-            }
-            await connection.execute(`DELETE FROM machine_schedule WHERE work_order_item_id = ?`, [it.id]);
             await connection.execute(`DELETE FROM work_order_items WHERE id = ?`, [it.id]);
         }
 
-        // 4. Process Inserted Items (New items with no id)
+        // 3. Process Inserted Items (New items with no id)
         const itemsToInsert = itemsArray.filter(it => !it.id);
         for (const item of itemsToInsert) {
             let productionTimeHours = null;
@@ -626,7 +579,6 @@ const updateWorkOrder = async (workOrderId, workOrderDate, itemsArray) => {
                     [item.machine_id]
                 );
                 sortOrder = maxRows[0].next_order;
-                machinesToReschedule.add(Number(item.machine_id));
             }
 
             const itemQuery = `
@@ -651,7 +603,7 @@ const updateWorkOrder = async (workOrderId, workOrderDate, itemsArray) => {
             item.id = itemResult.insertId;
         }
 
-        // 5. Process Updated Items
+        // 4. Process Updated Items
         const itemsToUpdate = itemsArray.filter(it => it.id);
         for (const item of itemsToUpdate) {
             const existingItem = existingItems.find(it => it.id === Number(item.id));
@@ -661,48 +613,19 @@ const updateWorkOrder = async (workOrderId, workOrderDate, itemsArray) => {
 
             const oldMachineId = existingItem.machine_id;
             const newMachineId = item.machine_id ? Number(item.machine_id) : null;
-            const oldQty = Number(existingItem.quantity);
-            const newQty = Number(item.quantity);
             
-            // Compute production time hours
-            let productionTimeHours = existingItem.production_time_hours;
-            if (newQty !== oldQty) {
-                productionTimeHours = null;
-            }
-
             let sortOrder = existingItem.sort_order;
 
             // Handle machine changes
             if (newMachineId !== oldMachineId) {
-                // Machine changed! Delete old schedule entries
-                await connection.execute(
-                    `DELETE FROM machine_schedule WHERE work_order_item_id = ?`,
-                    [item.id]
-                );
-
-                if (oldMachineId) {
-                    machinesToReschedule.add(oldMachineId);
-                }
-
                 if (newMachineId) {
                     const [maxRows] = await connection.execute(
                         `SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_order FROM work_order_items WHERE machine_id = ?`,
                         [newMachineId]
                     );
                     sortOrder = maxRows[0].next_order;
-                    machinesToReschedule.add(newMachineId);
                 } else {
                     sortOrder = null;
-                }
-            } else if (newMachineId) {
-                // Machine is same, but if production_time_hours changed, delete schedule for re-booking
-                const hoursDiff = Math.abs((productionTimeHours || 0) - (existingItem.production_time_hours || 0));
-                if (hoursDiff > 0.001) {
-                    await connection.execute(
-                        `DELETE FROM machine_schedule WHERE work_order_item_id = ?`,
-                        [item.id]
-                    );
-                    machinesToReschedule.add(newMachineId);
                 }
             }
 
@@ -721,10 +644,10 @@ const updateWorkOrder = async (workOrderId, workOrderDate, itemsArray) => {
             `;
 
             await connection.execute(updateItemQuery, [
-                newQty,
+                Number(item.quantity),
                 item.production_quantity ? Number(item.production_quantity) : 0,
                 newMachineId,
-                productionTimeHours,
+                existingItem.production_time_hours,
                 sortOrder,
                 item.exp_delivery_date || null,
                 item.batch_no || null,
@@ -734,49 +657,14 @@ const updateWorkOrder = async (workOrderId, workOrderDate, itemsArray) => {
             ]);
         }
 
-        // 6. Reschedule all affected machines
-        const { rescheduleMachine } = require('./machineScheduleModel.js');
-        const { getSettings } = require('./settingMasterModel.js');
-        const settings = await getSettings();
-        const waitHour = settings ? parseInt(settings.wait_hour || 0, 10) : 0;
-
-        for (const mId of machinesToReschedule) {
-            await rescheduleMachine(mId, connection, waitHour);
-        }
-
-        // 7. Update planned start/end dates for items that were updated or inserted
+        // 5. Clean planned dates for items
         for (const item of itemsArray) {
-            const newMachineId = item.machine_id ? Number(item.machine_id) : null;
-            if (newMachineId) {
-                const [datesResult] = await connection.execute(
-                    `SELECT MIN(schedule_date) AS planned_start, MAX(schedule_date) AS planned_end 
-                     FROM machine_schedule 
-                     WHERE work_order_item_id = ?`,
-                     [item.id]
-                );
-                if (datesResult.length > 0 && datesResult[0].planned_start) {
-                    await connection.execute(
-                        `UPDATE work_order_items 
-                         SET planned_start_date = ?, planned_end_date = ? 
-                         WHERE id = ?`,
-                        [datesResult[0].planned_start, datesResult[0].planned_end, item.id]
-                    );
-                } else {
-                    await connection.execute(
-                        `UPDATE work_order_items 
-                         SET planned_start_date = NULL, planned_end_date = NULL 
-                         WHERE id = ?`,
-                        [item.id]
-                    );
-                }
-            } else {
-                await connection.execute(
-                    `UPDATE work_order_items 
-                     SET planned_start_date = NULL, planned_end_date = NULL 
-                     WHERE id = ?`,
-                    [item.id]
-                );
-            }
+            await connection.execute(
+                `UPDATE work_order_items 
+                 SET planned_start_date = NULL, planned_end_date = NULL 
+                 WHERE id = ?`,
+                [item.id]
+            );
         }
 
         await connection.commit();

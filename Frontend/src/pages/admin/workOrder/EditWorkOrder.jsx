@@ -1,10 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate, useParams, useLocation } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import Navbar from "../../../components/Navbar";
 import { getWorkOrderById, updateWorkOrder } from "../../../api/workOrderApi";
 import { getMaterials } from "../../../api/materialApi";
 import { getAllMachines } from "../../../api/machineApi";
-import { getNextFreeSlot } from "../../../api/machineScheduleApi";
 import { getBOMs } from "../../../api/bomApi";
 import { getJobParties } from "../../../api/jobPartyApi";
 import toast from "react-hot-toast";
@@ -13,9 +12,7 @@ import DateInput from "../../../components/DateInput";
 export default function EditWorkOrder() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
-  const queryParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
-  const fromPlanning = queryParams.get("from") === "planning";
+
 
   const formatDate = (d) => {
     if (!d) return "—";
@@ -51,7 +48,7 @@ export default function EditWorkOrder() {
     machine_id: "",
     job_party_id: ""
   });
-  const [nextSlotInfo, setNextSlotInfo] = useState(null);
+
 
   useEffect(() => {
     const fetchData = async () => {
@@ -194,27 +191,7 @@ export default function EditWorkOrder() {
     toast.success("Row details updated locally");
   };
 
-  useEffect(() => {
-    // Fetch next slot
-    const fetchSlot = async () => {
-      if (modalData.machine_id) {
-        try {
-          const res = await getNextFreeSlot(modalData.machine_id);
-          if (res.data.data) {
-             setNextSlotInfo(res.data.data);
-          } else {
-             setNextSlotInfo({ notConfigured: true });
-          }
-        } catch (err) {
-          console.error(err);
-          setNextSlotInfo({ error: true });
-        }
-      } else {
-        setNextSlotInfo(null);
-      }
-    };
-    fetchSlot();
-  }, [modalData.machine_id]);
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -244,11 +221,7 @@ export default function EditWorkOrder() {
 
       await updateWorkOrder(id, payload);
       toast.success("Work Order updated successfully!");
-      if (fromPlanning) {
-        navigate("/production/production-planning");
-      } else {
-        navigate("/sales/work-orders");
-      }
+      navigate("/sales/work-orders");
     } catch (err) {
       console.error(err);
       toast.error(err?.response?.data?.message || "Failed to update work order");
@@ -258,11 +231,7 @@ export default function EditWorkOrder() {
   };
 
   const handleCancel = () => {
-    if (fromPlanning) {
-      navigate("/production/production-planning");
-    } else {
-      navigate("/sales/work-orders");
-    }
+    navigate("/sales/work-orders");
   };
 
   if (loading) {
@@ -614,24 +583,7 @@ export default function EditWorkOrder() {
                 </div>
               </div>
 
-              {/* Informational Section for Scheduling */}
-              {nextSlotInfo !== null && (
-                  <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-4 space-y-2 mt-4">
-                      <div className="flex items-center gap-2 text-sm">
-                          <i className="fa-regular fa-calendar-check w-4 text-indigo-800"></i>
-                          <span className="font-semibold text-indigo-800">Machine next available:</span> 
-                          {nextSlotInfo.error ? (
-                              <span className="text-red-600">Failed to fetch availability</span>
-                          ) : nextSlotInfo.notConfigured ? (
-                              <span className="text-red-600 font-bold">Unconfigured Working Hours (Cannot Schedule)</span>
-                          ) : (
-                              <span className="text-indigo-800">
-                                  {formatDate(nextSlotInfo.date)} from Hour {parseFloat(nextSlotInfo.start_hour).toFixed(1)}
-                              </span>
-                          )}
-                      </div>
-                  </div>
-              )}
+
             </div>
 
             <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-3">

@@ -5,7 +5,6 @@ import { createWorkOrder, getNextWorkOrderNo } from "../../../api/workOrderApi";
 import { getAllCustomers } from "../../../api/customerApi";
 import { getMaterials } from "../../../api/materialApi";
 import { getAllMachines } from "../../../api/machineApi";
-import { getNextFreeSlot } from "../../../api/machineScheduleApi";
 import { getBOMs } from "../../../api/bomApi";
 import { getJobParties } from "../../../api/jobPartyApi";
 import toast from "react-hot-toast";
@@ -40,8 +39,7 @@ export default function CreateWorkOrder() {
     machine_id: "",
     job_party_id: ""
   });
-  const [nextSlotInfo, setNextSlotInfo] = useState(null);
-  const [confirmSlots, setConfirmSlots] = useState({});
+
 
   const formatDate = (d) => {
     if (!d) return "—";
@@ -53,19 +51,7 @@ export default function CreateWorkOrder() {
     return `${day}/${month}/${year}`;
   };
 
-  const fetchConfirmSlots = async () => {
-    const uniqueMachineIds = [...new Set(items.map(it => it.machine_id).filter(Boolean))];
-    const slotsMap = {};
-    await Promise.all(uniqueMachineIds.map(async (mId) => {
-      try {
-        const res = await getNextFreeSlot(mId);
-        slotsMap[mId] = res.data.data;
-      } catch (err) {
-        console.error("Failed to fetch slot for machine", mId, err);
-      }
-    }));
-    setConfirmSlots(slotsMap);
-  };
+
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -197,27 +183,7 @@ export default function CreateWorkOrder() {
     toast.success("Row details updated");
   };
 
-  useEffect(() => {
-    // Fetch next slot
-    const fetchSlot = async () => {
-      if (modalData.machine_id) {
-        try {
-          const res = await getNextFreeSlot(modalData.machine_id);
-          if (res.data.data) {
-             setNextSlotInfo(res.data.data);
-          } else {
-             setNextSlotInfo({ notConfigured: true });
-          }
-        } catch (err) {
-          console.error(err);
-          setNextSlotInfo({ error: true });
-        }
-      } else {
-        setNextSlotInfo(null);
-      }
-    };
-    fetchSlot();
-  }, [modalData.machine_id]);
+
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -230,7 +196,6 @@ export default function CreateWorkOrder() {
       toast.error("Please select materials and quantities for all rows");
       return;
     }
-    fetchConfirmSlots();
     setShowConfirmModal(true);
   };
 
@@ -610,24 +575,7 @@ export default function CreateWorkOrder() {
                 </div>
               </div>
 
-              {/* Informational Section for Scheduling */}
-              {nextSlotInfo !== null && (
-                  <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-4 space-y-2 mt-4">
-                      <div className="flex items-center gap-2 text-sm">
-                          <i className="fa-regular fa-calendar-check w-4 text-indigo-800"></i>
-                          <span className="font-semibold text-indigo-800">Machine next available:</span> 
-                          {nextSlotInfo.error ? (
-                              <span className="text-red-600">Failed to fetch availability</span>
-                          ) : nextSlotInfo.notConfigured ? (
-                              <span className="text-red-600 font-bold">Unconfigured Working Hours (Cannot Schedule)</span>
-                          ) : (
-                              <span className="text-indigo-800">
-                                  {formatDate(nextSlotInfo.date)} from Hour {parseFloat(nextSlotInfo.start_hour).toFixed(1)}
-                              </span>
-                          )}
-                      </div>
-                  </div>
-              )}
+
             </div>
 
             <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-3">

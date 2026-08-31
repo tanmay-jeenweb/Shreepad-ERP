@@ -14,7 +14,6 @@ import MachineTypeMaster from "./pages/admin/machine/MachineTypeMaster";
 import CreateUser from "./pages/admin/user/CreateUser";
 import MachineMaster from "./pages/admin/machine/MachineMaster";
 import CreateMachine from "./pages/admin/machine/CreateMachine";
-import MachineCalendar from "./pages/admin/machine/MachineCalendar";
 import DocumentMaster from "./pages/admin/document/DocumentMaster";
 import VendorMaster from "./pages/admin/vendor/VendorMaster";
 import CreateVendor from "./pages/admin/vendor/CreateVendor";
@@ -38,9 +37,6 @@ import TermsAndConditionsMaster from "./pages/admin/termsAndConditions/TermsAndC
 import StockBook from "./pages/Store/StockBook";
 import RMStockStatus from "./pages/Store/RMStockStatus";
 import GeneralStockStatus from "./pages/Store/BatchwiseStockStatus";
-import WorkingHours from "./pages/Store/WorkingHours";
-import CreateWorkingHour from "./pages/Store/CreateWorkingHour";
-import EditWorkingHour from "./pages/Store/EditWorkingHour";
 import MaterialRemove from "./pages/Store/MaterialRemove";
 import MaterialAddMaster from "./pages/Store/MaterialAddMaster";
 import CreateMaterialAdd from "./pages/Store/CreateMaterialAdd";
@@ -50,7 +46,6 @@ import CreateWorkOrder from "./pages/admin/workOrder/CreateWorkOrder";
 import EditWorkOrder from "./pages/admin/workOrder/EditWorkOrder";
 import BillOfMaterial from "./pages/Production/BillOfMaterial";
 import CreateBOM from "./pages/Production/CreateBOM";
-import ProductionPlanning from "./pages/Production/ProductionPlanning";
 import PMemoPage from "./pages/Production/PMemoPage";
 import PMRmIssuePage from "./pages/Production/PMRmIssuePage";
 import PMRmReturnPage from "./pages/Production/PMRmReturnPage";
@@ -175,12 +170,7 @@ export default function AppRoutes() {
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="machine" requiredAction="read" />}>
-                <Route
-                    path="/admin/machines/:id/calendar"
-                    element={<MachineCalendar />}
-                />
-            </Route>
+
 
             {/* Vendor Master Routes */}
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="vendor" requiredAction="read" />}>
@@ -333,15 +323,7 @@ export default function AppRoutes() {
             <Route element={<ProtectedRoute allowedRole="admin" />}>
                 <Route path="/store/general-stock" element={<GeneralStockStatus />} />
             </Route>
-            <Route element={<ProtectedRoute allowedRole="admin" />}>
-                <Route path="/production/working-hours" element={<WorkingHours />} />
-            </Route>
-            <Route element={<ProtectedRoute allowedRole="admin" />}>
-                <Route path="/production/working-hours/create" element={<CreateWorkingHour />} />
-            </Route>
-            <Route element={<ProtectedRoute allowedRole="admin" />}>
-                <Route path="/production/working-hours/edit/:id" element={<EditWorkingHour />} />
-            </Route>
+
             <Route element={<ProtectedRoute allowedRole="admin" />}>
                 <Route path="/store/material-remove" element={<MaterialRemove />} />
             </Route>
@@ -370,13 +352,9 @@ export default function AppRoutes() {
                 <Route path="/production/bom" element={<BillOfMaterial />} />
             </Route>
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="bom" requiredAction="read" />}>
-                <Route path="/production/production-planning" element={<ProductionPlanning />} />
                 <Route path="/production/p-memo/:workOrderItemId" element={<PMemoPage />} />
                 <Route path="/production/p-memo/:workOrderItemId/rm-issue" element={<PMRmIssuePage />} />
                 <Route path="/production/p-memo/:workOrderItemId/rm-return" element={<PMRmReturnPage />} />
-            </Route>
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="machine" requiredAction="read" />}>
-                <Route path="/production/machine-planning" element={<MachineCalendar />} />
             </Route>
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="bom" requiredAction="write" />}>
                 <Route path="/production/bom/create" element={<CreateBOM />} />

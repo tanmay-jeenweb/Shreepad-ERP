@@ -356,10 +356,7 @@ export default function Navbar({ title }) {
     });
 
     const availableProductionLinks = [
-        { name: "Bill of Material", path: "/production/bom", icon: "fa-solid fa-file-lines", masterKey: "bom" },
-        { name: "Production Planning", path: "/production/production-planning", icon: "fa-solid fa-calendar-check", masterKey: "bom" },
-        { name: "Machine Planning", path: "/production/machine-planning", icon: "fa-solid fa-calendar-days", masterKey: "machine" },
-        { name: "Working Hours", path: "/production/working-hours", icon: "fa-solid fa-clock", masterKey: "working_hours" }
+        { name: "Bill of Material", path: "/production/bom", icon: "fa-solid fa-file-lines", masterKey: "bom" }
     ].filter(m => isAdmin || hasPermission(m.masterKey, "read"));
 
     const availableSalesLinks = [

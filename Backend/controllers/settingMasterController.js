@@ -86,31 +86,7 @@ const upsertSettingsController = async (req, res) => {
         const beforeWaitHour = beforeData ? parseInt(beforeData.wait_hour || 0, 10) : 0;
         const afterWaitHour = dataToSave.wait_hour;
 
-        if (beforeWaitHour !== afterWaitHour) {
-            try {
-                const db = require('../config/db.js');
-                const [machineRows] = await db.execute(
-                    `SELECT DISTINCT machine_id FROM work_order_items WHERE machine_id IS NOT NULL`
-                );
-                
-                const { rescheduleMachine } = require('../models/machineScheduleModel.js');
-                const connection = await db.getConnection();
-                try {
-                    await connection.beginTransaction();
-                    for (const row of machineRows) {
-                        await rescheduleMachine(row.machine_id, connection, afterWaitHour);
-                    }
-                    await connection.commit();
-                } catch (err) {
-                    await connection.rollback();
-                    throw err;
-                } finally {
-                    connection.release();
-                }
-            } catch (err) {
-                console.error("Failed to reschedule machines after settings update:", err);
-            }
-        }
+
 
         const afterData = await getSettings();
 

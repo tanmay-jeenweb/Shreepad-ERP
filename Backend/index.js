@@ -31,10 +31,8 @@ const documentMasterRoutes = require("./routes/documentRoutes.js");
 const organizationRoutes = require("./routes/organizationRoutes.js");
 const stockBookRoutes = require("./routes/stockBookRoutes.js");
 const stockStatusRoutes = require("./routes/stockStatusRoutes.js");
-const workingHourRoutes = require("./routes/workingHourRoutes.js");
 const materialAddRoutes = require("./routes/materialAddRoutes.js");
 const workOrderRoutes = require("./routes/workOrderRoutes.js");
-const machineScheduleRoutes = require("./routes/machineScheduleRoutes.js");
 const pmemoRoutes = require("./routes/pmemoRoutes.js");
 const rmReturnRoutes = require("./routes/rmReturnRoutes.js");
 
@@ -66,10 +64,8 @@ const { createOrganizationTable, ensureOrganizationColumns } = require("./models
 const { createBatchSequenceTable } = require("./models/batchSequenceModel.js");
 const { createStockIssuesTable, ensureStockIssuesColumns } = require("./models/stockBookModel.js");
 const { createStockStatusTable, ensureStockStatusColumns } = require("./models/stockStatusModel.js");
-const { createWorkingHoursTable } = require("./models/workingHourModel.js");
 const { createMaterialAddTables, ensureMaterialAddColumns } = require("./models/materialAddModel.js");
 const { createWorkOrdersTable, ensureWorkOrderColumns, ensureSortOrderColumn, ensureIsOnHoldColumn, ensurePlannedDateColumns, ensureDelayColumns, ensurePriorityColumn } = require("./models/workOrderModel.js");
-const { createMachineScheduleTable } = require("./models/machineScheduleModel.js");
 const { createPMemoTable, createPMemoRmIssuesTable, ensurePMemoColumns, ensurePMemoRmIssuesColumns } = require("./models/pmemoModel.js");
 const { createRmReturnsTable } = require("./models/rmReturnModel.js");
 
@@ -118,10 +114,8 @@ app.use(["/api/document-masters", "/document-masters"], documentMasterRoutes);
 app.use(["/api/organizations", "/organizations"], organizationRoutes);
 app.use(["/api/stock-book", "/stock-book"], stockBookRoutes);
 app.use(["/api/stock-status", "/stock-status"], stockStatusRoutes);
-app.use(["/api/working-hours", "/working-hours"], workingHourRoutes);
 app.use(["/api/material-add", "/material-add"], materialAddRoutes);
 app.use(["/api/work-orders", "/work-orders"], workOrderRoutes);
-app.use(["/api/machine-schedule", "/machine-schedule"], machineScheduleRoutes);
 app.use(["/api/p-memos", "/p-memos"], pmemoRoutes);
 app.use(["/api/rm-returns", "/rm-returns"], rmReturnRoutes);
 
@@ -183,7 +177,6 @@ const startServer = async () => {
         await ensureStockIssuesColumns();
         await createStockStatusTable();
         await ensureStockStatusColumns();
-        await createWorkingHoursTable();
         await createWorkOrdersTable();
         await ensureWorkOrderColumns();
         await ensureSortOrderColumn();
@@ -191,7 +184,6 @@ const startServer = async () => {
         await ensurePlannedDateColumns();
         await ensureDelayColumns();
         await ensurePriorityColumn();
-        await createMachineScheduleTable();
         await createPMemoTable();
         await ensurePMemoColumns();
         await createPMemoRmIssuesTable();
