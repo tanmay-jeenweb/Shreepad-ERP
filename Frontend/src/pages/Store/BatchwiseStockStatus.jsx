@@ -71,14 +71,7 @@ export default function BatchStockStatus() {
             minWidth: "150px",
             render: (row) => <span className="font-semibold text-slate-700">{row.material_name || "—"}</span>,
         },
-        {
-            key: "job_party_name",
-            label: "Job of Party",
-            minWidth: "150px",
-            render: (row) => (
-                <span className="text-slate-700 font-medium">{row.job_party_name || "—"}</span>
-            ),
-        },
+
         {
             key: "location",
             label: "Location",
@@ -142,7 +135,7 @@ export default function BatchStockStatus() {
                         <i className="fa-solid fa-filter text-indigo-600"></i>
                         Filter Stock Records
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4">
                         {/* Vendor Filter */}
                         <div className="flex flex-col gap-1.5">
                             <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Vendor</label>
@@ -154,21 +147,6 @@ export default function BatchStockStatus() {
                                 <option value="">All Vendors</option>
                                 {vendors.map(v => (
                                     <option key={v.id} value={v.id}>{v.vendor_name}</option>
-                                ))}
-                            </select>
-                        </div>
-
-                        {/* Job of Party Filter */}
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Job of Party</label>
-                            <select
-                                value={filters.job_party_id}
-                                onChange={(e) => setFilters(prev => ({ ...prev, job_party_id: e.target.value }))}
-                                className="h-10 px-3 border border-slate-300 rounded-lg text-sm bg-slate-50 text-slate-700 outline-none focus:border-indigo-600 focus:bg-white transition-colors"
-                            >
-                                <option value="">All Job Parties</option>
-                                {jobParties.map(jp => (
-                                    <option key={jp.id} value={jp.id}>{jp.party_name}</option>
                                 ))}
                             </select>
                         </div>
