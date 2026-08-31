@@ -4,13 +4,6 @@ const SYSTEM_MATERIAL_TYPES = [
     'Finished Goods',
     'Semi Finished Goods',
     'Raw Materials',
-    'Store Consumed',
-    'Packaging Material',
-    'Waste and scrap',
-    'Capital Equipment',
-    'Assembly Item',
-    'Uniform and other Item',
-    'Service',
 ];
 
 const createMaterialTypesTable = async () => {
@@ -45,7 +38,14 @@ const seedSystemMaterialTypes = async () => {
                 [typeName, adminId]
             );
         }
-        console.log('System material types seeded successfully');
+
+        const placeholders = SYSTEM_MATERIAL_TYPES.map(() => '?').join(', ');
+        await db.execute(
+            `DELETE FROM material_types WHERE is_system = 1 AND material_type_name NOT IN (${placeholders})`,
+            SYSTEM_MATERIAL_TYPES
+        );
+
+        console.log('System material types seeded and cleaned up successfully');
     } catch (error) {
         console.error('Error seeding system material types:', error);
     }

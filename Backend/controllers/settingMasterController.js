@@ -64,21 +64,21 @@ const upsertSettingsController = async (req, res) => {
 
         const beforeData = await getSettings();
 
-        // Ensure fields are properly trimmed or set to default
+        // Ensure fields are properly trimmed or set to default, preserving existing ones if not in payload
         const dataToSave = {
-            batch_year: payload.batch_year ? payload.batch_year.trim() : null,
-            prefix_finished_goods: payload.prefix_finished_goods ? payload.prefix_finished_goods.trim() : 'FG',
-            prefix_semi_finished_goods: payload.prefix_semi_finished_goods ? payload.prefix_semi_finished_goods.trim() : 'SFG',
-            prefix_raw_materials: payload.prefix_raw_materials ? payload.prefix_raw_materials.trim() : 'RM',
-            prefix_store_consumed: payload.prefix_store_consumed ? payload.prefix_store_consumed.trim() : 'SC',
-            prefix_packaging_material: payload.prefix_packaging_material ? payload.prefix_packaging_material.trim() : 'PM',
-            prefix_waste_and_scrap: payload.prefix_waste_and_scrap ? payload.prefix_waste_and_scrap.trim() : 'WS',
-            prefix_capital_equipment: payload.prefix_capital_equipment ? payload.prefix_capital_equipment.trim() : 'CE',
-            prefix_assembly_item: payload.prefix_assembly_item ? payload.prefix_assembly_item.trim() : 'AI',
-            prefix_uniform_and_other: payload.prefix_uniform_and_other ? payload.prefix_uniform_and_other.trim() : 'UI',
-            prefix_service: payload.prefix_service ? payload.prefix_service.trim() : 'SRV',
-            prefix_other: payload.prefix_other ? payload.prefix_other.trim() : 'OTH',
-            wait_hour: payload.wait_hour !== undefined && payload.wait_hour !== null && payload.wait_hour !== "" ? Number(payload.wait_hour) : 0,
+            batch_year: payload.batch_year !== undefined ? (payload.batch_year ? payload.batch_year.trim() : null) : (beforeData ? beforeData.batch_year : null),
+            prefix_finished_goods: payload.prefix_finished_goods !== undefined ? (payload.prefix_finished_goods ? payload.prefix_finished_goods.trim() : 'FG') : (beforeData ? beforeData.prefix_finished_goods : 'FG'),
+            prefix_semi_finished_goods: payload.prefix_semi_finished_goods !== undefined ? (payload.prefix_semi_finished_goods ? payload.prefix_semi_finished_goods.trim() : 'SFG') : (beforeData ? beforeData.prefix_semi_finished_goods : 'SFG'),
+            prefix_raw_materials: payload.prefix_raw_materials !== undefined ? (payload.prefix_raw_materials ? payload.prefix_raw_materials.trim() : 'RM') : (beforeData ? beforeData.prefix_raw_materials : 'RM'),
+            prefix_store_consumed: beforeData ? beforeData.prefix_store_consumed : 'SC',
+            prefix_packaging_material: beforeData ? beforeData.prefix_packaging_material : 'PM',
+            prefix_waste_and_scrap: beforeData ? beforeData.prefix_waste_and_scrap : 'WS',
+            prefix_capital_equipment: beforeData ? beforeData.prefix_capital_equipment : 'CE',
+            prefix_assembly_item: beforeData ? beforeData.prefix_assembly_item : 'AI',
+            prefix_uniform_and_other: beforeData ? beforeData.prefix_uniform_and_other : 'UI',
+            prefix_service: beforeData ? beforeData.prefix_service : 'SRV',
+            prefix_other: beforeData ? beforeData.prefix_other : 'OTH',
+            wait_hour: beforeData ? beforeData.wait_hour : 0,
         };
 
         const result = await upsertSettings(dataToSave, addedBy, deviceId);

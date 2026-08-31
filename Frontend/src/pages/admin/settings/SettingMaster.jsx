@@ -8,14 +8,6 @@ const MATERIAL_TYPES = [
   { key: "prefix_finished_goods", label: "Finished Goods" },
   { key: "prefix_semi_finished_goods", label: "Semi Finished Goods" },
   { key: "prefix_raw_materials", label: "Raw Materials" },
-  { key: "prefix_store_consumed", label: "Store Consumed" },
-  { key: "prefix_packaging_material", label: "Packaging Material" },
-  { key: "prefix_waste_and_scrap", label: "Waste and scrap" },
-  { key: "prefix_capital_equipment", label: "Capital Equipment" },
-  { key: "prefix_assembly_item", label: "Assembly Item" },
-  { key: "prefix_uniform_and_other", label: "Uniform and other Item" },
-  { key: "prefix_service", label: "Service" },
-  { key: "prefix_other", label: "Other" },
 ];
 
 export default function SettingMaster() {
@@ -27,15 +19,6 @@ export default function SettingMaster() {
     prefix_finished_goods: "FG",
     prefix_semi_finished_goods: "SFG",
     prefix_raw_materials: "RM",
-    prefix_store_consumed: "SC",
-    prefix_packaging_material: "PM",
-    prefix_waste_and_scrap: "WS",
-    prefix_capital_equipment: "CE",
-    prefix_assembly_item: "AI",
-    prefix_uniform_and_other: "UI",
-    prefix_service: "SRV",
-    prefix_other: "OTH",
-    wait_hour: "",
   });
 
   const [loading, setLoading] = useState(true);
@@ -54,15 +37,6 @@ export default function SettingMaster() {
             prefix_finished_goods: data.prefix_finished_goods || "FG",
             prefix_semi_finished_goods: data.prefix_semi_finished_goods || "SFG",
             prefix_raw_materials: data.prefix_raw_materials || "RM",
-            prefix_store_consumed: data.prefix_store_consumed || "SC",
-            prefix_packaging_material: data.prefix_packaging_material || "PM",
-            prefix_waste_and_scrap: data.prefix_waste_and_scrap || "WS",
-            prefix_capital_equipment: data.prefix_capital_equipment || "CE",
-            prefix_assembly_item: data.prefix_assembly_item || "AI",
-            prefix_uniform_and_other: data.prefix_uniform_and_other || "UI",
-            prefix_service: data.prefix_service || "SRV",
-            prefix_other: data.prefix_other || "OTH",
-            wait_hour: data.wait_hour !== null && data.wait_hour !== undefined ? data.wait_hour : "",
           });
         }
       } catch (err) {
@@ -101,15 +75,6 @@ export default function SettingMaster() {
           prefix_finished_goods: data.prefix_finished_goods || "FG",
           prefix_semi_finished_goods: data.prefix_semi_finished_goods || "SFG",
           prefix_raw_materials: data.prefix_raw_materials || "RM",
-          prefix_store_consumed: data.prefix_store_consumed || "SC",
-          prefix_packaging_material: data.prefix_packaging_material || "PM",
-          prefix_waste_and_scrap: data.prefix_waste_and_scrap || "WS",
-          prefix_capital_equipment: data.prefix_capital_equipment || "CE",
-          prefix_assembly_item: data.prefix_assembly_item || "AI",
-          prefix_uniform_and_other: data.prefix_uniform_and_other || "UI",
-          prefix_service: data.prefix_service || "SRV",
-          prefix_other: data.prefix_other || "OTH",
-          wait_hour: data.wait_hour !== null && data.wait_hour !== undefined ? data.wait_hour : "",
         });
       }
     } catch (err) {
@@ -197,28 +162,7 @@ export default function SettingMaster() {
               </div>
             </div>
 
-            {/* Section: General Settings */}
-            <div className="mt-8 pt-6 border-t border-slate-100">
-              <h2 className="text-base font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-100">
-                General Settings
-              </h2>
-              <div className="max-w-xs mb-6">
-                <label className={labelCls}>Wait Hour</label>
-                <input
-                  type="number"
-                  name="wait_hour"
-                  value={form.wait_hour}
-                  onChange={handleChange}
-                  min="0"
-                  disabled={!canWrite}
-                  placeholder="e.g. 24"
-                  className={inputCls}
-                />
-                <p className="mt-1.5 text-xs text-slate-400">
-                  Number of hours for wait.
-                </p>
-              </div>
-            </div>
+
 
             {/* Save button */}
             {canWrite && (
