@@ -37,6 +37,10 @@ import TermsAndConditionsMaster from "./pages/admin/termsAndConditions/TermsAndC
 import StockBook from "./pages/Store/StockBook";
 import RMStockStatus from "./pages/Store/RMStockStatus";
 import GeneralStockStatus from "./pages/Store/BatchwiseStockStatus";
+import StockStatus from "./pages/Store/StockStatus";
+import WorkingHours from "./pages/Store/WorkingHours";
+import CreateWorkingHour from "./pages/Store/CreateWorkingHour";
+import EditWorkingHour from "./pages/Store/EditWorkingHour";
 import MaterialRemove from "./pages/Store/MaterialRemove";
 import MaterialAddMaster from "./pages/Store/MaterialAddMaster";
 import CreateMaterialAdd from "./pages/Store/CreateMaterialAdd";
@@ -310,20 +314,29 @@ export default function AppRoutes() {
             </Route>
 
             {/* Stock Book & Status Routes */}
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="rm_stock_book" requiredAction="read" />}>
-                <Route path="/purchase/rm-stock-book" element={<StockBook type="rm" />} />
+            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="stock_book" requiredAction="read" />}>
+                <Route path="/store/stock-book" element={<StockBook />} />
             </Route>
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="general_stock_book" requiredAction="read" />}>
-                <Route path="/purchase/general-stock-book" element={<StockBook type="general" />} />
-            </Route>
-            <Route path="/purchase/stock-book" element={<Navigate to="/purchase/rm-stock-book" replace />} />
-            <Route element={<ProtectedRoute allowedRole="admin" />}>
-                <Route path="/store/rm-stock" element={<RMStockStatus />} />
-            </Route>
-            <Route element={<ProtectedRoute allowedRole="admin" />}>
-                <Route path="/store/general-stock" element={<GeneralStockStatus />} />
+            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="stock_status" requiredAction="read" />}>
+                <Route path="/store/stock-status" element={<StockStatus />} />
             </Route>
 
+            {/* Redirects for legacy routes */}
+            <Route path="/purchase/stock-book" element={<Navigate to="/store/stock-book" replace />} />
+            <Route path="/purchase/rm-stock-book" element={<Navigate to="/store/stock-book" replace />} />
+            <Route path="/purchase/general-stock-book" element={<Navigate to="/store/stock-book" replace />} />
+            <Route path="/store/rm-stock" element={<Navigate to="/store/stock-status" replace />} />
+            <Route path="/store/general-stock" element={<Navigate to="/store/stock-status" replace />} />
+
+            <Route element={<ProtectedRoute allowedRole="admin" />}>
+                <Route path="/production/working-hours" element={<WorkingHours />} />
+            </Route>
+            <Route element={<ProtectedRoute allowedRole="admin" />}>
+                <Route path="/production/working-hours/create" element={<CreateWorkingHour />} />
+            </Route>
+            <Route element={<ProtectedRoute allowedRole="admin" />}>
+                <Route path="/production/working-hours/edit/:id" element={<EditWorkingHour />} />
+            </Route>
             <Route element={<ProtectedRoute allowedRole="admin" />}>
                 <Route path="/store/material-remove" element={<MaterialRemove />} />
             </Route>
