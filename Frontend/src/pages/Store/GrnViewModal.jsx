@@ -107,10 +107,7 @@ export default function GrnViewModal({ grnId, onClose }) {
                                         <p className="text-xs text-slate-400 font-medium mb-1">GSTIN</p>
                                         <p className="text-sm text-slate-800 font-mono">{grn.gstin || "—"}</p>
                                     </div>
-                                    <div>
-                                        <p className="text-xs text-slate-400 font-medium mb-1">Job Party</p>
-                                        <p className="text-sm font-semibold text-slate-800">{grn.job_party_name || "—"}</p>
-                                    </div>
+
                                     <div>
                                         <p className="text-xs text-slate-400 font-medium mb-1">Location</p>
                                         <p className="text-sm text-slate-800 font-semibold">{grn.location_name || "—"}</p>

@@ -3,7 +3,7 @@ import Navbar from "../../components/Navbar";
 import DataTable from "../../components/DataTable";
 import toast from "react-hot-toast";
 import { getStockBook, issueStock, getStockIssueLogs } from "../../api/stockBookApi";
-import { getVendorsForGrn, getJobPartiesForGrn } from "../../api/grnApi";
+import { getVendorsForGrn } from "../../api/grnApi";
 import { getMaterials } from "../../api/materialApi";
 import { getLocations } from "../../api/locationApi";
 import DateInput from "../../components/DateInput";
@@ -14,12 +14,10 @@ export default function StockBook({ type }) {
 
     // Filter states
     const [vendors, setVendors] = useState([]);
-    const [jobParties, setJobParties] = useState([]);
     const [materials, setMaterials] = useState([]);
     const [locations, setLocations] = useState([]);
     const [filters, setFilters] = useState({
         vendor_id: "",
-        job_party_id: "",
         material_id: "",
         location_id: "",
         start_date: "",
@@ -60,14 +58,12 @@ export default function StockBook({ type }) {
 
     const loadFilterOptions = async () => {
         try {
-            const [vendorsRes, jobPartiesRes, materialsRes, locationsRes] = await Promise.all([
+            const [vendorsRes, materialsRes, locationsRes] = await Promise.all([
                 getVendorsForGrn(),
-                getJobPartiesForGrn(),
                 getMaterials(),
                 getLocations()
             ]);
             setVendors(vendorsRes.data?.data || []);
-            setJobParties(jobPartiesRes.data?.data || []);
             
             // Filter materials by type
             const allMaterials = materialsRes.data?.data || [];
@@ -89,7 +85,6 @@ export default function StockBook({ type }) {
     useEffect(() => {
         setFilters({
             vendor_id: "",
-            job_party_id: "",
             material_id: "",
             location_id: "",
             start_date: "",
@@ -363,12 +358,11 @@ export default function StockBook({ type }) {
                     </div>
 
                     {/* Reset Button */}
-                    {(filters.vendor_id || filters.job_party_id || filters.material_id || filters.location_id || filters.start_date || filters.end_date) && (
+                    {(filters.vendor_id || filters.material_id || filters.location_id || filters.start_date || filters.end_date) && (
                         <div className="mt-4 flex justify-end">
                             <button
                                 onClick={() => setFilters({
                                     vendor_id: "",
-                                    job_party_id: "",
                                     material_id: "",
                                     location_id: "",
                                     start_date: "",

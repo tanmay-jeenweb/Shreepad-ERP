@@ -28,9 +28,9 @@ export const partiallyCloseGrn = async (id) => {
     return apiClient.put(`/grns/partially-close/${id}`);
 };
 
-export const getJobPartiesForGrn = async () => {
-    return apiClient.get("/grns/job-parties");
-};
+
+
+
 
 export const getVendorsForGrn = async () => {
     return apiClient.get("/grns/vendors");

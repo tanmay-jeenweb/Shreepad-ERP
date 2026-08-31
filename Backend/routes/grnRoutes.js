@@ -6,7 +6,6 @@ const {
     getGrnByIdController,
     updateGrnController,
     deleteGrnController,
-    getJobPartiesForGrnController,
     getVendorsForGrnController,
     getNextBatchNumberController,
     partiallyCloseGrnController,
@@ -18,7 +17,7 @@ const router = express.Router();
 router.use(verifyToken);
 
 // Helper routes (no strict permission — used for dropdowns)
-router.get('/job-parties', getJobPartiesForGrnController);
+
 router.get('/vendors',     getVendorsForGrnController);
 router.get('/next-batch-number', getNextBatchNumberController);
 
