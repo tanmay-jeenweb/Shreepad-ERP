@@ -71,12 +71,6 @@ export default function MaterialAddMaster() {
             render: (row) => <span className="text-slate-600 font-medium">{formatDate(row.ma_date)}</span>,
         },
         {
-            key: "job_party_name",
-            label: "Job Party",
-            minWidth: "200px",
-            render: (row) => <span className="font-semibold text-slate-800">{row.job_party_name || "—"}</span>,
-        },
-        {
             key: "location_name",
             label: "Location",
             minWidth: "150px",
@@ -141,7 +135,7 @@ export default function MaterialAddMaster() {
                             Material Add
                         </h1>
                         <p className="text-sm text-slate-500 mt-1.5 font-medium">
-                            Manage direct material receipts from job parties.
+                            Manage direct material receipts.
                         </p>
                     </div>
                 </div>

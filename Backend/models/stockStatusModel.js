@@ -260,11 +260,6 @@ const upsertStockStatusForMa = async (connection, maId, item, maHeader) => {
     const rejectedQty = rejectedRows.length > 0 ? parseFloat(rejectedRows[0].total_rejected || 0) : 0;
     totalKg = Math.max(0, totalKg - rejectedQty);
 
-    // Compute kgs_per_bag and number_of_bags from item fields
-    const kgsPerBag  = parseFloat(item.kgs_per_bag || 0);
-    const numBags    = parseInt(item.number_of_bags || 0, 10);
-    const remaining  = totalKg - (numBags * kgsPerBag);
-
     // Fetch material_type from materials table
     let materialType = null;
     let materialId   = item.material_id || null;
@@ -276,7 +271,7 @@ const upsertStockStatusForMa = async (connection, maId, item, maHeader) => {
         if (matRows.length > 0) materialType = matRows[0].material_type;
     }
 
-    const rmGrade = (materialType === 'Raw Materials') ? (item.grade || null) : null;
+    const rmGrade = null;
 
     // Check if row already exists
     const [existing] = await connection.execute(
@@ -300,16 +295,16 @@ const upsertStockStatusForMa = async (connection, maId, item, maHeader) => {
                 ma_id           = ?
             WHERE internal_batch_number = ?`,
             [
-                maHeader.job_party_name || null,
+                null,
                 maHeader.location_name || null,
                 materialId,
                 item.material_name || null,
                 materialType,
                 rmGrade,
-                numBags,
-                kgsPerBag,
+                0,
+                0,
                 totalKg,
-                remaining,
+                0,
                 maId,
                 internalBatchNumber
             ]
@@ -322,16 +317,16 @@ const upsertStockStatusForMa = async (connection, maId, item, maHeader) => {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 internalBatchNumber,
-                maHeader.job_party_name || null,
+                null,
                 maHeader.location_name || null,
                 materialId,
                 item.material_name || null,
                 materialType,
                 rmGrade,
-                numBags,
-                kgsPerBag,
+                0,
+                0,
                 totalKg,
-                remaining,
+                0,
                 maId
             ]
         );

@@ -6,11 +6,9 @@ import {
     updateMaterialAdd,
     getMaterialAddById
 } from "../../api/materialAddApi";
-import { getJobParties } from "../../api/jobPartyApi";
 import { getLocations } from "../../api/locationApi";
 import { getMaterialTypes, getMaterialsByType } from "../../api/purchaseOrderApi";
 import { getNextBatchNumber } from "../../api/grnApi";
-import { getRawMaterials } from "../../api/rawMaterialApi";
 import toast from "react-hot-toast";
 import DateInput from "../../components/DateInput";
 
@@ -20,20 +18,13 @@ const EMPTY_ITEM = {
     material_id: "",
     material_name: "",
     material_type: "",
-    grade: "",
     unit: "",
     quantity: "",
-    number_of_bags: "",
-    kgs_per_bag_option: "",
-    kgs_per_bag: "",
-    remaining_kg: "",
     internal_batch_number: ""
 };
 
 const EMPTY_HEADER = {
     ma_date: new Date().toISOString().split("T")[0],
-    job_party_id: "",
-    job_party_name: "",
     location_id: "",
     location_name: "",
     remark: "",
@@ -53,10 +44,8 @@ export default function CreateMaterialAdd() {
     const [items, setItems] = useState([EMPTY_ITEM]);
 
     // Masters
-    const [jobParties, setJobParties] = useState([]);
     const [locations, setLocations] = useState([]);
     const [materialTypes, setMaterialTypes] = useState([]);
-    const [rawMaterialsList, setRawMaterialsList] = useState([]);
     const [materialsByType, setMaterialsByType] = useState({});
 
     const [loading, setLoading] = useState(false);
@@ -66,17 +55,13 @@ export default function CreateMaterialAdd() {
     useEffect(() => {
         const fetchMasters = async () => {
             try {
-                const [partiesRes, locsRes, typesRes, rmRes] = await Promise.all([
-                    getJobParties(),
+                const [locsRes, typesRes] = await Promise.all([
                     getLocations(),
-                    getMaterialTypes(),
-                    getRawMaterials()
+                    getMaterialTypes()
                 ]);
 
-                setJobParties(partiesRes.data?.data || []);
                 setLocations(locsRes.data?.data || []);
                 setMaterialTypes(typesRes.data?.data || []);
-                setRawMaterialsList(rmRes.data?.data || []);
             } catch (error) {
                 console.error("Failed to fetch masters", error);
                 toast.error("Failed to load initial data.");
@@ -98,8 +83,6 @@ export default function CreateMaterialAdd() {
 
                 setHeaderData({
                     ma_date: data.ma_date ? new Date(data.ma_date).toISOString().split("T")[0] : "",
-                    job_party_id: data.job_party_id || "",
-                    job_party_name: data.job_party_name || "",
                     location_id: data.location_id || "",
                     location_name: data.location_name || "",
                     remark: data.remark || "",
@@ -109,14 +92,6 @@ export default function CreateMaterialAdd() {
 
                 if (data.items && data.items.length > 0) {
                     const formattedItems = data.items.map(it => {
-                        let kpbOption = "Other";
-                        const kpb = n(it.kgs_per_bag);
-                        if ([15, 20, 25, 30].includes(kpb)) {
-                            kpbOption = String(kpb);
-                        } else if (kpb === 0) {
-                            kpbOption = "";
-                        }
-
                         // Pre-fetch materials for this type if needed
                         if (it.material_type && !materialsByType[it.material_type]) {
                             fetchMaterialsForType(it.material_type);
@@ -124,11 +99,7 @@ export default function CreateMaterialAdd() {
 
                         return {
                             ...it,
-                            quantity: it.quantity,
-                            number_of_bags: it.number_of_bags,
-                            kgs_per_bag: it.kgs_per_bag,
-                            kgs_per_bag_option: kpbOption,
-                            remaining_kg: it.remaining_kg
+                            quantity: it.quantity
                         };
                     });
                     setItems(formattedItems);
@@ -176,10 +147,6 @@ export default function CreateMaterialAdd() {
         const { name, value } = e.target;
         const newData = { ...headerData, [name]: value };
 
-        if (name === "job_party_id") {
-            const party = jobParties.find(p => p.id === parseInt(value));
-            newData.job_party_name = party ? party.party_name : "";
-        }
         if (name === "location_id") {
             const loc = locations.find(l => l.id === parseInt(value));
             newData.location_name = loc ? loc.location_name : "";
@@ -197,7 +164,6 @@ export default function CreateMaterialAdd() {
                 item.material_id = "";
                 item.material_name = "";
                 item.unit = "";
-                item.grade = "";
                 item.internal_batch_number = "";
                 fetchMaterialsForType(value);
             } else if (field === "material_id") {
@@ -213,32 +179,9 @@ export default function CreateMaterialAdd() {
                     item.unit = "";
                     item.internal_batch_number = "";
                 }
-            } else if (field === "kgs_per_bag_option") {
-                item.kgs_per_bag_option = value;
-                if (value !== "Other" && value !== "") {
-                    item.kgs_per_bag = value;
-                } else {
-                    item.kgs_per_bag = "";
-                }
-                const qty = n(item.quantity);
-                const bagSize = n(item.kgs_per_bag);
-                if (qty > 0 && bagSize > 0) {
-                    item.number_of_bags = Math.floor(qty / bagSize);
-                }
-            } else if (field === "quantity" || field === "number_of_bags" || field === "kgs_per_bag") {
-                item[field] = value;
-                if (field === "quantity" && n(item.kgs_per_bag) > 0) {
-                    item.number_of_bags = Math.floor(n(value) / n(item.kgs_per_bag));
-                }
             } else {
                 item[field] = value;
             }
-
-            // Calc remaining kg
-            const qty = n(item.quantity);
-            const bags = n(item.number_of_bags);
-            const kpb = n(item.kgs_per_bag);
-            item.remaining_kg = (qty - (bags * kpb)).toFixed(2);
 
             updated[index] = item;
             return updated;
@@ -252,7 +195,6 @@ export default function CreateMaterialAdd() {
         e.preventDefault();
         
         // Basic Validation
-        if (!headerData.job_party_id) return toast.error("Please select a Job Party.");
         if (!headerData.location_id) return toast.error("Please select a Location.");
         
         const validItems = items.filter(i => i.material_id);
@@ -348,7 +290,7 @@ export default function CreateMaterialAdd() {
                             </div>
                             
                             <div className="p-6 space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>
                                         <label className={labelCls}>Date <span className="text-rose-500">*</span></label>
                                         <DateInput
@@ -357,21 +299,6 @@ export default function CreateMaterialAdd() {
                                             value={headerData.ma_date}
                                             onChange={handleHeaderChange}
                                         />
-                                    </div>
-                                    <div>
-                                        <label className={labelCls}>Job Party <span className="text-rose-500">*</span></label>
-                                        <select
-                                            name="job_party_id"
-                                            required
-                                            value={headerData.job_party_id}
-                                            onChange={handleHeaderChange}
-                                            className={inputCls}
-                                        >
-                                            <option value="">Select Job Party</option>
-                                            {jobParties.map(p => (
-                                                <option key={p.id} value={p.id}>{p.party_name}</option>
-                                            ))}
-                                        </select>
                                     </div>
                                     <div>
                                         <label className={labelCls}>Location <span className="text-rose-500">*</span></label>
@@ -449,7 +376,7 @@ export default function CreateMaterialAdd() {
                                             </button>
                                         )}
 
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
                                             <div>
                                                 <label className={itemLabelCls}>Material Type <span className="text-rose-500">*</span></label>
                                                 <select
@@ -482,37 +409,6 @@ export default function CreateMaterialAdd() {
                                                 {item.unit && <p className="text-[10px] text-slate-400 mt-1.5">Unit: <span className="font-bold text-[#369ACF]">{item.unit}</span></p>}
                                             </div>
 
-                                            {item.material_type === "Raw Materials" && (
-                                                <div>
-                                                    <label className={itemLabelCls}>RM Grade</label>
-                                                    <select
-                                                        value={item.grade}
-                                                        onChange={(e) => handleItemChange(idx, "grade", e.target.value)}
-                                                        className={itemInputCls}
-                                                    >
-                                                    {(() => {
-                                                        if (!item.material_id) {
-                                                            return (
-                                                                <option value="" disabled>Select Material First</option>
-                                                            );
-                                                        }
-                                                        const availableGrades = rawMaterialsList.filter(rm => String(rm.material_id) === String(item.material_id));
-                                                        if (availableGrades.length === 0) {
-                                                            return <option value="" disabled>No grades available</option>;
-                                                        }
-                                                        return (
-                                                            <>
-                                                                <option value="">Select Grade</option>
-                                                                {[...new Set(availableGrades.map(rm => rm.grade).filter(Boolean))].map(g => (
-                                                                    <option key={g} value={g}>{g}</option>
-                                                                ))}
-                                                            </>
-                                                        );
-                                                    })()}
-                                                    </select>
-                                                </div>
-                                            )}
-
                                             <div>
                                                 <label className={itemLabelCls}>Batch #</label>
                                                 <input
@@ -536,58 +432,6 @@ export default function CreateMaterialAdd() {
                                                     className={`${itemInputCls} font-bold text-[#369ACF] bg-indigo-50/30 border-indigo-100`}
                                                 />
                                             </div>
-
-                                            {/* Packaging Details Row */}
-                                            {item.material_type === "Raw Materials" && (
-                                                <div className="col-span-full grid grid-cols-1 sm:grid-cols-4 gap-6 mt-2 pt-4 border-t border-slate-200/60">
-                                                    <div>
-                                                        <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">No. of Bags</label>
-                                                        <input
-                                                            type="number"
-                                                            min="0"
-                                                            value={item.number_of_bags}
-                                                            onChange={(e) => handleItemChange(idx, "number_of_bags", e.target.value)}
-                                                            className={itemInputCls}
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">Kgs per Bag Option</label>
-                                                        <select
-                                                            value={item.kgs_per_bag_option}
-                                                            onChange={(e) => handleItemChange(idx, "kgs_per_bag_option", e.target.value)}
-                                                            className={itemInputCls}
-                                                        >
-                                                            <option value="">Select...</option>
-                                                            <option value="15">15 Kg</option>
-                                                            <option value="20">20 Kg</option>
-                                                            <option value="25">25 Kg</option>
-                                                            <option value="30">30 Kg</option>
-                                                            <option value="Other">Other (Custom)</option>
-                                                        </select>
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">Kgs per Bag</label>
-                                                        <input
-                                                            type="number"
-                                                            step="0.01"
-                                                            min="0"
-                                                            value={item.kgs_per_bag}
-                                                            onChange={(e) => handleItemChange(idx, "kgs_per_bag", e.target.value)}
-                                                            disabled={item.kgs_per_bag_option !== "Other"}
-                                                            className={itemInputCls}
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">Remaining Qty (Kg)</label>
-                                                        <input
-                                                            type="text"
-                                                            value={item.remaining_kg}
-                                                            disabled
-                                                            className={itemReadonlyInputCls}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            )}
                                         </div>
                                     </div>
                                 ))}

@@ -300,7 +300,7 @@ export default function CreateQc() {
                         <p className="text-sm text-slate-500 mt-1 font-medium">
                             {sourceType === "ma" ? "MA" : "GRN"}: <span className="font-mono font-bold text-slate-700">{sourceType === "ma" ? sourceData.ma_number : sourceData.grn_number}</span>
                             <span className="mx-2">•</span>
-                            {sourceType === "ma" ? "Job Party" : "Vendor"}: <span className="font-bold text-slate-700">{sourceType === "ma" ? sourceData.job_party_name : sourceData.vendor_name}</span>
+                            {sourceType === "ma" ? "Location" : "Vendor"}: <span className="font-bold text-slate-700">{sourceType === "ma" ? (sourceData.location_name || "—") : (sourceData.vendor_name || "—")}</span>
                         </p>
                     </div>
                     <button
