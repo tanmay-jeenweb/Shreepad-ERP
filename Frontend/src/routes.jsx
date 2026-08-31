@@ -35,12 +35,7 @@ import Reports from "./pages/Reports";
 import ProcessMaster from "./pages/admin/process/ProcessMaster";
 import TermsAndConditionsMaster from "./pages/admin/termsAndConditions/TermsAndConditionsMaster";
 import StockBook from "./pages/Store/StockBook";
-import RMStockStatus from "./pages/Store/RMStockStatus";
-import GeneralStockStatus from "./pages/Store/BatchwiseStockStatus";
 import StockStatus from "./pages/Store/StockStatus";
-import WorkingHours from "./pages/Store/WorkingHours";
-import CreateWorkingHour from "./pages/Store/CreateWorkingHour";
-import EditWorkingHour from "./pages/Store/EditWorkingHour";
 import MaterialRemove from "./pages/Store/MaterialRemove";
 import MaterialAddMaster from "./pages/Store/MaterialAddMaster";
 import CreateMaterialAdd from "./pages/Store/CreateMaterialAdd";
@@ -328,15 +323,7 @@ export default function AppRoutes() {
             <Route path="/store/rm-stock" element={<Navigate to="/store/stock-status" replace />} />
             <Route path="/store/general-stock" element={<Navigate to="/store/stock-status" replace />} />
 
-            <Route element={<ProtectedRoute allowedRole="admin" />}>
-                <Route path="/production/working-hours" element={<WorkingHours />} />
-            </Route>
-            <Route element={<ProtectedRoute allowedRole="admin" />}>
-                <Route path="/production/working-hours/create" element={<CreateWorkingHour />} />
-            </Route>
-            <Route element={<ProtectedRoute allowedRole="admin" />}>
-                <Route path="/production/working-hours/edit/:id" element={<EditWorkingHour />} />
-            </Route>
+
             <Route element={<ProtectedRoute allowedRole="admin" />}>
                 <Route path="/store/material-remove" element={<MaterialRemove />} />
             </Route>
