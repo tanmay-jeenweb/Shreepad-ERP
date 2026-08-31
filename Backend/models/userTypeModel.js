@@ -15,7 +15,6 @@
         { key: 'bom', label: 'Bill of Material' },
         { key: 'vendor', label: 'Vendor Master' },
         { key: 'material_add', label: 'Material Add' },
-        { key: 'sales_order', label: 'Sales Order' },
         { key: 'work_order', label: 'Work Order' },
         { key: 'activity_report', label: 'User Activity Records' },
     ];

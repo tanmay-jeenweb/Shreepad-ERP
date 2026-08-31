@@ -216,8 +216,7 @@ const getMachineSchedule = async (machineId, fromDate, toDate) => {
         FROM machine_schedule ms
         JOIN work_order_items woi ON ms.work_order_item_id = woi.id
         JOIN work_orders wo ON woi.work_order_id = wo.id
-        JOIN sales_order_items soi ON woi.sales_order_item_id = soi.id
-        JOIN materials m ON soi.material_id = m.id
+        JOIN materials m ON woi.material_id = m.id
         WHERE ms.machine_id = ? AND ms.schedule_date >= ? AND ms.schedule_date <= ?
         ORDER BY ms.schedule_date ASC, ms.start_hour ASC
     `;
@@ -471,8 +470,7 @@ const getMachineQueue = async (machineId) => {
           MAX(ms.schedule_date)  AS running_end_date
         FROM work_order_items woi
         JOIN work_orders wo ON woi.work_order_id = wo.id
-        JOIN sales_order_items soi ON woi.sales_order_item_id = soi.id
-        JOIN materials m ON soi.material_id = m.id
+        JOIN materials m ON woi.material_id = m.id
         JOIN machines mac ON woi.machine_id = mac.id
         LEFT JOIN machine_schedule ms ON ms.work_order_item_id = woi.id
         WHERE woi.machine_id = ? AND COALESCE(woi.is_on_hold, 0) = 0

@@ -99,12 +99,6 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                         </p>
                                     </div>
                                     <div>
-                                        <p className="text-xs text-slate-400 font-medium mb-1">Sales Order Code</p>
-                                        <p className="text-sm font-semibold text-[#369ACF] font-mono">
-                                            {workOrder.sales_order_code || "N/A"}
-                                        </p>
-                                    </div>
-                                    <div>
                                         <p className="text-xs text-slate-400 font-medium mb-1">Added By</p>
                                         <p className="text-sm text-slate-800">{workOrder.added_by_name || "N/A"}</p>
                                     </div>
@@ -132,9 +126,8 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                             <tr>
                                                 <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase whitespace-nowrap">Material</th>
                                                 <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase whitespace-nowrap">Job of Party</th>
-                                                <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 uppercase whitespace-nowrap">Order Qty</th>
+                                                <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 uppercase whitespace-nowrap">Quantity</th>
                                                 <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 uppercase whitespace-nowrap">Prod Qty</th>
-                                                <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase whitespace-nowrap">Mould</th>
                                                 <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase whitespace-nowrap">Machine</th>
                                                 <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase whitespace-nowrap">Exp. Delivery</th>
                                                 <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase whitespace-nowrap">Actual Delivery</th>
@@ -154,7 +147,6 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                                     </td>
                                                     <td className="px-3 py-2 text-sm text-slate-800 text-right font-medium">{item.quantity}</td>
                                                     <td className="px-3 py-2 text-sm font-semibold text-[#369ACF] text-right">{item.production_quantity}</td>
-                                                    <td className="px-3 py-2 text-sm text-slate-800">{item.mould_name || "N/A"}</td>
                                                     <td className="px-3 py-2 text-sm text-slate-800">{item.machine_name || "N/A"}</td>
                                                     <td className="px-3 py-2 text-sm text-slate-800 whitespace-nowrap">
                                                         {formatDate(item.exp_delivery_date)}

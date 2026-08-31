@@ -44,10 +44,7 @@ import EditWorkingHour from "./pages/Store/EditWorkingHour";
 import MaterialRemove from "./pages/Store/MaterialRemove";
 import MaterialAddMaster from "./pages/Store/MaterialAddMaster";
 import CreateMaterialAdd from "./pages/Store/CreateMaterialAdd";
-import SalesOrderMaster from "./pages/admin/salesOrder/SalesOrderMaster";
-import CreateSalesOrder from "./pages/admin/salesOrder/CreateSalesOrder";
-import EditSalesOrder from "./pages/admin/salesOrder/EditSalesOrder";
-import SOApproval from "./pages/admin/salesOrder/SOApproval";
+
 import WorkOrderMaster from "./pages/admin/workOrder/WorkOrderMaster";
 import CreateWorkOrder from "./pages/admin/workOrder/CreateWorkOrder";
 import EditWorkOrder from "./pages/admin/workOrder/EditWorkOrder";
@@ -358,15 +355,6 @@ export default function AppRoutes() {
                 <Route path="/store/material-add/edit/:id" element={<CreateMaterialAdd />} />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" />}>
-                <Route path="/sales/sales-orders" element={<SalesOrderMaster />} />
-            </Route>
-            <Route element={<ProtectedRoute allowedRole="admin" />}>
-                <Route path="/sales/sales-orders/create" element={<CreateSalesOrder />} />
-            </Route>
-            <Route element={<ProtectedRoute allowedRole="admin" />}>
-                <Route path="/sales/sales-orders/edit/:id" element={<EditSalesOrder />} />
-            </Route>
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="work_order" requiredAction="read" />}>
                 <Route path="/sales/work-orders" element={<WorkOrderMaster />} />
             </Route>
@@ -375,9 +363,6 @@ export default function AppRoutes() {
             </Route>
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="work_order" requiredAction="update" />}>
                 <Route path="/sales/work-orders/edit/:id" element={<EditWorkOrder />} />
-            </Route>
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="so_approval" requiredAction="read" />}>
-                <Route path="/sales/so-approval" element={<SOApproval />} />
             </Route>
 
             {/* BOM Routes */}

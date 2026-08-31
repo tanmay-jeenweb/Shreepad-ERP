@@ -2,21 +2,21 @@ const workOrderModel = require('../models/workOrderModel.js');
 
 const addWorkOrder = async (req, res) => {
     try {
-        const { sales_order_id, work_order_date, item, items } = req.body;
+        const { customer_id, work_order_date, item, items } = req.body;
         const addedBy = req.user.id;
         const deviceId = req.headers['device-id'] || null;
 
         const workOrderItems = items || (item ? [item] : []);
 
-        if (!sales_order_id || !work_order_date || workOrderItems.length === 0) {
+        if (!customer_id || !work_order_date || workOrderItems.length === 0) {
             return res.status(400).json({
                 success: false,
-                message: "Missing required fields: sales_order_id, work_order_date, and item details are required."
+                message: "Missing required fields: customer_id, work_order_date, and item details are required."
             });
         }
 
         const result = await workOrderModel.createWorkOrder(
-            sales_order_id,
+            customer_id,
             work_order_date,
             addedBy,
             deviceId,

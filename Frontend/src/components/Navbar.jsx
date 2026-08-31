@@ -363,13 +363,10 @@ export default function Navbar({ title }) {
     ].filter(m => isAdmin || hasPermission(m.masterKey, "read"));
 
     const availableSalesLinks = [
-        { name: "Sales Order", path: "/sales/sales-orders", icon: "fa-solid fa-file-invoice-dollar", masterKey: "sales_order" },
         { name: "Work Order", path: "/sales/work-orders", icon: "fa-solid fa-file-signature", masterKey: "work_order" }
     ].filter(m => isAdmin || hasPermission(m.masterKey, "read"));
 
-    const availableApprovalLinks = [
-        { name: "Sales Approval", path: "/sales/so-approval", icon: "fa-solid fa-file-signature", masterKey: "so_approval" }
-    ].filter(m => isAdmin || hasPermission(m.masterKey, "read"));
+    const availableApprovalLinks = [];
 
     const availableReportsLinks = [
         { name: "Activity Report", path: "/reports", icon: "fa-solid fa-list-check", masterKey: "activity_report" },
