@@ -3,7 +3,7 @@ import Navbar from "../../components/Navbar";
 import DataTable from "../../components/DataTable";
 import toast from "react-hot-toast";
 import { getStockStatus } from "../../api/stockStatusApi";
-import { getVendorsForGrn, getJobPartiesForGrn } from "../../api/grnApi";
+import { getVendorsForGrn } from "../../api/grnApi";
 import { getMaterials } from "../../api/materialApi";
 import { getLocations } from "../../api/locationApi";
 import { useSearchParams } from "react-router-dom";
@@ -15,12 +15,10 @@ export default function BatchStockStatus() {
 
     // Filter states
     const [vendors, setVendors] = useState([]);
-    const [jobParties, setJobParties] = useState([]);
     const [materials, setMaterials] = useState([]);
     const [locations, setLocations] = useState([]);
     const [filters, setFilters] = useState({
         vendor_id: searchParams.get("vendor_id") || "",
-        job_party_id: searchParams.get("job_party_id") || "",
         material_id: searchParams.get("material_id") || "",
         location_id: ""
     });
@@ -40,14 +38,12 @@ export default function BatchStockStatus() {
 
     const loadFilterOptions = async () => {
         try {
-            const [vendorsRes, jobPartiesRes, materialsRes, locationsRes] = await Promise.all([
+            const [vendorsRes, materialsRes, locationsRes] = await Promise.all([
                 getVendorsForGrn(),
-                getJobPartiesForGrn(),
                 getMaterials(),
                 getLocations()
             ]);
             setVendors(vendorsRes.data?.data || []);
-            setJobParties(jobPartiesRes.data?.data || []);
             setMaterials(materialsRes.data?.data || []);
             setLocations(locationsRes.data?.data || []);
         } catch (error) {
@@ -183,12 +179,11 @@ export default function BatchStockStatus() {
                     </div>
 
                     {/* Reset Button */}
-                    {(filters.vendor_id || filters.job_party_id || filters.material_id || filters.location_id) && (
+                    {(filters.vendor_id || filters.material_id || filters.location_id) && (
                         <div className="mt-4 flex justify-end">
                             <button
                                 onClick={() => setFilters({
                                     vendor_id: "",
-                                    job_party_id: "",
                                     material_id: "",
                                     location_id: ""
                                 })}

@@ -7,7 +7,6 @@ import {
     createGrn,
     updateGrn,
     getGrnById,
-    getJobPartiesForGrn,
     getVendorsForGrn,
     getMaterialTypes,
     getMaterialsByType,
@@ -60,8 +59,6 @@ const EMPTY_HEADER = {
     purchase_type: "",
     state: "",
     state_code: "",
-    job_party_id: "",
-    job_party_name: "",
     transportation_mode: "",
     vehicle_number: "",
     invoice_number: "",
@@ -157,7 +154,6 @@ export default function CreateGrn() {
     const [materialsMap, setMaterialsMap] = useState({});
     const [rawMaterialsList, setRawMaterialsList] = useState([]);
     const [vendorsList, setVendorsList] = useState([]);
-    const [jobPartiesList, setJobPartiesList] = useState([]);
     const [tcList, setTcList] = useState([]);
     const [locationsList, setLocationsList] = useState([]);
     const [orgStateCode, setOrgStateCode] = useState("");
@@ -201,13 +197,12 @@ export default function CreateGrn() {
         const init = async () => {
             setLoading(true);
             try {
-                const [typesRes, orgRes, tcRes, rawMatRes, vendorsRes, jobPartiesRes, locationsRes, batchRes] = await Promise.all([
+                const [typesRes, orgRes, tcRes, rawMatRes, vendorsRes, locationsRes, batchRes] = await Promise.all([
                     getMaterialTypes(),
                     getOrganizationDetails(),
                     getTermsAndConditions(),
                     getRawMaterials(),
                     getVendorsForGrn(),
-                    getJobPartiesForGrn(),
                     getLocations(),
                     getBatchConfig()
                 ]);
@@ -216,7 +211,6 @@ export default function CreateGrn() {
                 setTcList(tcRes.data?.data || []);
                 setRawMaterialsList(rawMatRes.data?.data || []);
                 setVendorsList(vendorsRes.data?.data || []);
-                setJobPartiesList(jobPartiesRes.data?.data || []);
                 setLocationsList(locationsRes.data?.data || []);
                 setBatchSettings(batchRes.data?.data || null);
 
@@ -235,8 +229,6 @@ export default function CreateGrn() {
                             purchase_type: grn.purchase_type || "",
                             state: grn.state || "",
                             state_code: grn.state_code || "",
-                            job_party_id: grn.job_party_id || "",
-                            job_party_name: grn.job_party_name || "",
                             transportation_mode: grn.transportation_mode || "",
                             vehicle_number: grn.vehicle_number || "",
                             invoice_number: grn.invoice_number || "",
@@ -462,14 +454,7 @@ export default function CreateGrn() {
                 updateItemsGstSplit("");
             }
         }
-        if (field === "job_party_id") {
-            const party = jobPartiesList.find(p => String(p.id) === String(value));
-            setHeader(prev => ({
-                ...prev,
-                job_party_id: value,
-                job_party_name: party ? (party.party_name || "") : "",
-            }));
-        }
+
         if (field === "location_id") {
             const loc = locationsList.find(l => String(l.id) === String(value));
             setHeader(prev => ({
@@ -562,7 +547,6 @@ export default function CreateGrn() {
         const e = {};
         if (!header.vendor_id) e.vendor_id = "Vendor Name is required";
         if (!header.grn_date) e.grn_date = "GRN Date is required";
-        if (!header.job_party_id) e.job_party_id = "Job Party is required";
 
         items.forEach((item, idx) => {
             const received = n(item.received_quantity);
@@ -599,7 +583,6 @@ export default function CreateGrn() {
                     tc_id: header.tc_id || null,
                     tc_description: header.tc_description || null,
                     po_id: header.po_id || null,
-                    job_party_id: header.job_party_id || null,
                     invoice_date: header.invoice_date || null,
                     challan_date: header.challan_date || null,
                     location_id: header.location_id || null,
@@ -835,21 +818,7 @@ export default function CreateGrn() {
                                 className={`${inputCls} border-slate-300`} />
                         </div>
 
-                        {/* Job Party Name */}
-                        <div>
-                            <label className={labelCls}>Job Party Name <span className="text-red-500">*</span></label>
-                            <select
-                                value={header.job_party_id}
-                                onChange={e => handleHeaderChange("job_party_id", e.target.value)}
-                                className={`${inputCls} ${errors.job_party_id ? "border-red-400 bg-red-50" : "border-slate-300"} cursor-pointer`}
-                            >
-                                <option value="">— Select Job Party —</option>
-                                {jobPartiesList.map(p => (
-                                    <option key={p.id} value={p.id}>{p.party_name}</option>
-                                ))}
-                            </select>
-                            {errors.job_party_id && <p className="text-red-500 text-xs flex items-center gap-1 mt-1"><i className="fa-solid fa-circle-exclamation text-[10px]"></i> {errors.job_party_id}</p>}
-                        </div>
+
 
                         {/* Location Dropdown */}
                         <div>

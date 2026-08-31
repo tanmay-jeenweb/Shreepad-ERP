@@ -26,9 +26,6 @@ const addGrnController = async (req, res) => {
         if (!header.grn_date) {
             return res.status(400).json({ success: false, message: 'GRN date is required' });
         }
-        if (!header.job_party_id) {
-            return res.status(400).json({ success: false, message: 'Job Party Name is required' });
-        }
 
         const { grnId, grnNumber } = await createGrn(header, items || [], addedBy, deviceId);
 
@@ -104,9 +101,6 @@ const updateGrnController = async (req, res) => {
 
         if (!header || !header.name || !header.name.trim()) {
             return res.status(400).json({ success: false, message: 'Vendor name is required' });
-        }
-        if (!header.job_party_id) {
-            return res.status(400).json({ success: false, message: 'Job Party Name is required' });
         }
 
         const existing = await getGrnById(id);
@@ -209,18 +203,6 @@ const partiallyCloseGrnController = async (req, res) => {
     }
 };
 
-// ─── Get Job Parties (dropdown helper) ───────────────────────────────────────
-
-const getJobPartiesForGrnController = async (req, res) => {
-    try {
-        const data = [];
-        return res.json({ success: true, data });
-    } catch (err) {
-        console.error('getJobPartiesForGrnController error:', err);
-        return res.status(500).json({ success: false, message: 'Failed to fetch job parties' });
-    }
-};
-
 // ─── Get Vendors (dropdown helper) ───────────────────────────────────────────
 
 const getVendorsForGrnController = async (req, res) => {
@@ -255,7 +237,6 @@ module.exports = {
     updateGrnController,
     deleteGrnController,
     partiallyCloseGrnController,
-    getJobPartiesForGrnController,
     getVendorsForGrnController,
     getNextBatchNumberController,
 };
