@@ -49,10 +49,9 @@ const MODULE_GROUPS = [
   {
     groupName: "Store & Inventory",
     icon: "fa-solid fa-warehouse",
-    description: "Goods receipt, quality control, and stock views.",
+    description: "Store material add, removal, and stock views.",
     masters: [
-      { key: "grn_master",              label: "GRN Master" },
-      { key: "qc_master",               label: "QC Master", allowedPerms: ["canRead", "canApprove"] },
+      { key: "material_add",            label: "Material Add" },
       { key: "rm_stock_status",         label: "RM Stock Status", allowedPerms: ["canRead"] },
       { key: "batchwise_stock_status",  label: "Batchwise Stock Status", allowedPerms: ["canRead"] },
       { key: "rm_stock_book",           label: "Raw Material Stock Book", allowedPerms: ["canRead"] },
@@ -68,15 +67,6 @@ const MODULE_GROUPS = [
       { key: "operator",            label: "Operator Master" },
       { key: "vendor",              label: "Vendor Master" },
       { key: "customer",            label: "Customer Master" },
-    ]
-  },
-  {
-    groupName: "Procurement",
-    icon: "fa-solid fa-cart-shopping",
-    description: "Purchasing workflow and approvals.",
-    masters: [
-      { key: "purchase_order",      label: "Purchase Order" },
-      { key: "po_approval",         label: "PO Approval", allowedPerms: ["canRead", "canApprove"] },
     ]
   },
   {

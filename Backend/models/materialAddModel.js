@@ -15,7 +15,7 @@ const createMaterialAddTables = async () => {
             location_name       VARCHAR(255),
             remark              TEXT DEFAULT NULL,
             particular          TEXT DEFAULT NULL,
-            status              VARCHAR(20) DEFAULT 'received',
+            status              VARCHAR(20) DEFAULT 'completed',
             added_by            INT NOT NULL,
             created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -131,6 +131,49 @@ const generateInternalBatchNumber = async (connection, materialId, settings) => 
     return `${prefix}${mat.code}${year}${String(seq).padStart(4, '0')}`;
 };
 
+const previewNextBatchNumber = async (materialId) => {
+    if (!materialId) return null;
+    const [matRows] = await db.execute('SELECT code, material_type FROM materials WHERE id = ?', [materialId]);
+    if (matRows.length === 0) return null;
+    const mat = matRows[0];
+    if (!mat.code) return null;
+
+    const settings = await getSettings();
+    const prefixKey = mapMaterialTypeToPrefixKey(mat.material_type);
+    const prefix = settings ? (settings[prefixKey] || 'OTH') : 'OTH';
+    const year = (settings && settings.batch_year) ? settings.batch_year : new Date().getFullYear().toString().slice(-2);
+
+    const [seqRows] = await db.execute(
+        `SELECT last_sequence FROM batch_number_sequences WHERE material_code = ? AND batch_year = ?`,
+        [mat.code, year]
+    );
+    const lastSeq = seqRows.length > 0 ? seqRows[0].last_sequence : 0;
+    const nextSeq = lastSeq + 1;
+
+    return `${prefix}${mat.code}${year}${String(nextSeq).padStart(4, '0')}`;
+};
+
+// ─── Material Lookups ─────────────────────────────────────────────────────────
+
+const getDistinctMaterialTypes = async () => {
+    const [rows] = await db.execute(
+        `SELECT DISTINCT material_type FROM materials WHERE material_type IS NOT NULL AND material_type != '' ORDER BY material_type ASC`
+    );
+    return rows.map(r => r.material_type);
+};
+
+const getMaterialsByType = async (materialType) => {
+    const [rows] = await db.execute(
+        `SELECT m.id, m.material_name, m.material_code, m.hsn_code, u.unit_name, m.gst_percent
+         FROM materials m
+         LEFT JOIN units u ON m.unit_id = u.id
+         WHERE m.material_type = ? AND (m.active = 1 OR m.active IS NULL)
+         ORDER BY m.material_name ASC`,
+        [materialType]
+    );
+    return rows;
+};
+
 // ─── Create ───────────────────────────────────────────────────────────────────
 
 const createMaterialAdd = async (headerData, itemsData, addedBy) => {
@@ -153,7 +196,7 @@ const createMaterialAdd = async (headerData, itemsData, addedBy) => {
             headerData.location_name || null,
             headerData.remark || null,
             headerData.particular || null,
-            headerData.status || 'received',
+            headerData.status || 'completed',
             addedBy
         ]);
 
@@ -191,7 +234,7 @@ const createMaterialAdd = async (headerData, itemsData, addedBy) => {
                     internalBatchNumber
                 ]);
 
-                // Upsert stock status
+                // Upsert stock status immediately into inventory
                 await upsertStockStatusForMa(connection, maId, {
                     ...item,
                     internal_batch_number: internalBatchNumber,
@@ -279,7 +322,7 @@ const updateMaterialAdd = async (id, headerData, itemsData) => {
             headerData.location_name || null,
             headerData.remark || null,
             headerData.particular || null,
-            headerData.status || 'received',
+            headerData.status || 'completed',
             id,
         ]);
 
@@ -390,11 +433,6 @@ const deleteMaterialAdd = async (id) => {
         // Delete from stock_status
         await connection.execute(`DELETE FROM stock_status WHERE ma_id = ?`, [id]);
 
-        // Delete from qc_master (which cascades to qc_items and stock_book)
-        // Wait, qc_master doesn't have ON DELETE CASCADE for ma_id? 
-        // It's safer to delete explicitly
-        await connection.execute(`DELETE FROM qc_master WHERE ma_id = ? AND source = 'material_add'`, [id]);
-
         const [result] = await connection.execute(`DELETE FROM material_add_master WHERE id = ?`, [id]);
 
         await connection.commit();
@@ -414,5 +452,8 @@ module.exports = {
     getAllMaterialAdds,
     getMaterialAddById,
     updateMaterialAdd,
-    deleteMaterialAdd
+    deleteMaterialAdd,
+    previewNextBatchNumber,
+    getDistinctMaterialTypes,
+    getMaterialsByType,
 };

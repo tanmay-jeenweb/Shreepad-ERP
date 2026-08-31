@@ -193,53 +193,42 @@ const createWorkOrder = async (salesOrderId, workOrderDate, addedBy, deviceId, i
                 if (soiRows.length > 0) {
                     const materialId = soiRows[0].material_id;
 
-                    // Query approved batches (FIFO)
+                    // Query available batches (FIFO)
                     const queryBatches = `
-                        SELECT 
-                            gi.id AS grn_item_id,
-                            NULL AS ma_item_id,
-                            gi.internal_batch_number,
-                            COALESCE(qc_agg.approved_qty, 0) AS approved_qty,
-                            COALESCE(issue_agg.issued_qty, 0) AS issued_qty,
-                            g.grn_date AS receipt_date,
-                            gi.id AS item_id
-                        FROM grn_items gi
-                        JOIN grn_master g ON gi.grn_id = g.id
-                        JOIN (
-                            SELECT grn_item_id, SUM(approved_quantity) AS approved_qty
-                            FROM qc_items WHERE grn_item_id IS NOT NULL
-                            GROUP BY grn_item_id
-                        ) qc_agg ON gi.id = qc_agg.grn_item_id
-                        LEFT JOIN (
-                            SELECT grn_item_id, SUM(issue_quantity) AS issued_qty
-                            FROM stock_issues WHERE grn_item_id IS NOT NULL
-                            GROUP BY grn_item_id
-                        ) issue_agg ON gi.id = issue_agg.grn_item_id
-                        WHERE gi.material_id = ?
-
-                        UNION ALL
-
                         SELECT 
                             NULL AS grn_item_id,
                             mai.id AS ma_item_id,
                             mai.internal_batch_number,
-                            COALESCE(qc_agg.approved_qty, 0) AS approved_qty,
+                            mai.quantity AS approved_qty,
                             COALESCE(issue_agg.issued_qty, 0) AS issued_qty,
                             ma.ma_date AS receipt_date,
                             mai.id AS item_id
                         FROM material_add_items mai
                         JOIN material_add_master ma ON mai.ma_id = ma.id
-                        JOIN (
-                            SELECT ma_item_id, SUM(approved_quantity) AS approved_qty
-                            FROM qc_items WHERE ma_item_id IS NOT NULL
-                            GROUP BY ma_item_id
-                        ) qc_agg ON mai.id = qc_agg.ma_item_id
                         LEFT JOIN (
                             SELECT ma_item_id, SUM(issue_quantity) AS issued_qty
                             FROM stock_issues WHERE ma_item_id IS NOT NULL
                             GROUP BY ma_item_id
                         ) issue_agg ON mai.id = issue_agg.ma_item_id
                         WHERE mai.material_id = ?
+
+                        UNION ALL
+
+                        SELECT 
+                            NULL AS grn_item_id,
+                            NULL AS ma_item_id,
+                            r.internal_batch_number,
+                            r.quantity AS approved_qty,
+                            COALESCE(issue_agg.issued_qty, 0) AS issued_qty,
+                            r.return_date AS receipt_date,
+                            r.id AS item_id
+                        FROM rm_returns r
+                        LEFT JOIN (
+                            SELECT rm_return_id, SUM(issue_quantity) AS issued_qty
+                            FROM stock_issues WHERE rm_return_id IS NOT NULL
+                            GROUP BY rm_return_id
+                        ) issue_agg ON r.id = issue_agg.rm_return_id
+                        WHERE r.material_id = ?
 
                         ORDER BY receipt_date ASC, item_id ASC
                     `;
@@ -467,26 +456,17 @@ const deleteWorkOrder = async (id) => {
 const getMaterialStock = async (materialId) => {
     const query = `
         SELECT 
-            SUM(COALESCE(qc_agg.approved_qty, ss.total_kg) - COALESCE(issue_agg.issued_qty, 0)) AS available_stock
+            SUM(COALESCE(r.quantity, ss.total_kg) - COALESCE(issue_agg.issued_qty, 0)) AS available_stock
         FROM stock_status ss
+        LEFT JOIN rm_returns r ON ss.rm_return_id = r.id
         LEFT JOIN (
             SELECT 
-                COALESCE(gi_sub.internal_batch_number, mai_sub.internal_batch_number) AS internal_batch_number,
-                SUM(qi.approved_quantity) AS approved_qty
-            FROM qc_items qi
-            LEFT JOIN grn_items gi_sub ON qi.grn_item_id = gi_sub.id
-            LEFT JOIN material_add_items mai_sub ON qi.ma_item_id = mai_sub.id
-            GROUP BY COALESCE(gi_sub.internal_batch_number, mai_sub.internal_batch_number)
-        ) qc_agg ON ss.internal_batch_number = qc_agg.internal_batch_number
-        LEFT JOIN (
-            SELECT 
-                COALESCE(gi_sub2.internal_batch_number, mai_sub2.internal_batch_number, r_sub.internal_batch_number) AS internal_batch_number,
+                COALESCE(mai_sub2.internal_batch_number, r_sub.internal_batch_number) AS internal_batch_number,
                 SUM(si.issue_quantity) AS issued_qty
             FROM stock_issues si
-            LEFT JOIN grn_items gi_sub2 ON si.grn_item_id = gi_sub2.id
             LEFT JOIN material_add_items mai_sub2 ON si.ma_item_id = mai_sub2.id
             LEFT JOIN rm_returns r_sub ON si.rm_return_id = r_sub.id
-            GROUP BY COALESCE(gi_sub2.internal_batch_number, mai_sub2.internal_batch_number, r_sub.internal_batch_number)
+            GROUP BY COALESCE(mai_sub2.internal_batch_number, r_sub.internal_batch_number)
         ) issue_agg ON ss.internal_batch_number = issue_agg.internal_batch_number
         WHERE ss.material_id = ?
     `;

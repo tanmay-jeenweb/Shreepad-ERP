@@ -35,14 +35,6 @@ import CreateOperator from "./pages/Operator/CreateOperator";
 import Reports from "./pages/Reports";
 import ProcessMaster from "./pages/admin/process/ProcessMaster";
 import TermsAndConditionsMaster from "./pages/admin/termsAndConditions/TermsAndConditionsMaster";
-import PurchaseOrderMaster from "./pages/Purchase/PurchaseOrderMaster";
-import CreatePurchaseOrder from "./pages/Purchase/CreatePurchaseOrder";
-import PrintPurchaseOrder from "./pages/Purchase/PrintPurchaseOrder";
-import POApproval from "./pages/Purchase/POApproval";
-import GrnMaster from "./pages/Store/GrnMaster";
-import CreateGrn from "./pages/Store/CreateGrn";
-import QcMaster from "./pages/Store/QcMaster";
-import CreateQc from "./pages/Store/CreateQc";
 import StockBook from "./pages/Store/StockBook";
 import RMStockStatus from "./pages/Store/RMStockStatus";
 import GeneralStockStatus from "./pages/Store/BatchwiseStockStatus";
@@ -330,38 +322,7 @@ export default function AppRoutes() {
                 />
             </Route>
 
-            {/* Purchase Order Routes */}
-            <Route element={<ProtectedRoute allowedRole="admin" />}>
-                <Route path="/purchase/purchase-orders" element={<PurchaseOrderMaster />} />
-            </Route>
-            <Route element={<ProtectedRoute allowedRole="admin" />}>
-                <Route path="/purchase/purchase-orders/create" element={<CreatePurchaseOrder />} />
-            </Route>
-            <Route element={<ProtectedRoute allowedRole="admin" />}>
-                <Route path="/purchase/purchase-orders/edit/:id" element={<CreatePurchaseOrder />} />
-            </Route>
-            <Route element={<ProtectedRoute allowedRole="admin" />}>
-                <Route path="/purchase/purchase-orders/print/:id" element={<PrintPurchaseOrder />} />
-            </Route>
-            <Route element={<ProtectedRoute allowedRole="admin" />}>
-                <Route path="/purchase/grn" element={<GrnMaster />} />
-            </Route>
-            <Route element={<ProtectedRoute allowedRole="admin" />}>
-                <Route path="/purchase/grn/create" element={<CreateGrn />} />
-            </Route>
-            <Route element={<ProtectedRoute allowedRole="admin" />}>
-                <Route path="/purchase/grn/edit/:id" element={<CreateGrn />} />
-            </Route>
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="po_approval" requiredAction="read" />}>
-                <Route path="/purchase/po-approval" element={<POApproval />} />
-            </Route>
-            <Route element={<ProtectedRoute allowedRole="admin" />}>
-                <Route path="/purchase/qc" element={<QcMaster />} />
-            </Route>
-            <Route element={<ProtectedRoute allowedRole="admin" />}>
-                <Route path="/purchase/qc/create/:grnId" element={<CreateQc />} />
-                <Route path="/store/qc/create/:sourceType/:sourceId" element={<CreateQc />} />
-            </Route>
+            {/* Stock Book & Status Routes */}
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="rm_stock_book" requiredAction="read" />}>
                 <Route path="/purchase/rm-stock-book" element={<StockBook type="rm" />} />
             </Route>

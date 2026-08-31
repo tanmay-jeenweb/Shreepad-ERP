@@ -14,7 +14,6 @@ const createStockIssuesTable = async () => {
             remarks TEXT DEFAULT NULL,
             added_by INT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (grn_item_id) REFERENCES grn_items(id) ON DELETE CASCADE,
             FOREIGN KEY (ma_item_id) REFERENCES material_add_items(id) ON DELETE CASCADE,
             FOREIGN KEY (rm_return_id) REFERENCES rm_returns(id) ON DELETE CASCADE,
             FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE CASCADE
@@ -35,39 +34,6 @@ const getStockBookRecords = async (filters = {}) => {
                 ) AS balance_quantity
             FROM (
             SELECT 
-                CONCAT('grn_', gi.id) AS id,
-                1 AS is_receipt,
-                gi.id AS grn_item_id,
-                gi.material_id AS material_id,
-                g.grn_date AS date,
-                'GRN Received' AS particular,
-                gi.material_name AS product,
-                gi.internal_batch_number AS internal_batch_number,
-                gi.supplier_batch_number AS supplier_batch_number,
-                gi.grade AS grade,
-                g.name AS vendor_name,
-                NULL AS job_party_name,
-                g.invoice_number AS invoice_number,
-                g.grn_number AS grn_number,
-                '' AS p_memo_number,
-                COALESCE(qc_agg.approved_qty, 0) AS approved_quantity,
-                0 AS issued_quantity,
-                g.vendor_id,
-                NULL AS job_party_id,
-                g.location_id,
-                g.created_at AS created_at
-            FROM grn_items gi
-            JOIN grn_master g ON gi.grn_id = g.id
-            JOIN (
-                SELECT grn_item_id, SUM(approved_quantity) AS approved_qty
-                FROM qc_items
-                GROUP BY grn_item_id
-            ) qc_agg ON gi.id = qc_agg.grn_item_id
-            WHERE qc_agg.approved_qty > 0
-
-            UNION ALL
-
-            SELECT 
                 CONCAT('ma_', mai.id) AS id,
                 1 AS is_receipt,
                 NULL AS grn_item_id,
@@ -77,13 +43,13 @@ const getStockBookRecords = async (filters = {}) => {
                 mai.material_name AS product,
                 mai.internal_batch_number AS internal_batch_number,
                 '' AS supplier_batch_number,
-                mai.grade AS grade,
+                '' AS grade,
                 '' AS vendor_name,
                 NULL AS job_party_name,
                 '' AS invoice_number,
                 ma.ma_number AS grn_number,
                 '' AS p_memo_number,
-                COALESCE(qc_agg.approved_qty, 0) AS approved_quantity,
+                mai.quantity AS approved_quantity,
                 0 AS issued_quantity,
                 NULL AS vendor_id,
                 NULL AS job_party_id,
@@ -91,12 +57,7 @@ const getStockBookRecords = async (filters = {}) => {
                 ma.created_at AS created_at
             FROM material_add_items mai
             JOIN material_add_master ma ON mai.ma_id = ma.id
-            JOIN (
-                SELECT ma_item_id, SUM(approved_quantity) AS approved_qty
-                FROM qc_items WHERE ma_item_id IS NOT NULL
-                GROUP BY ma_item_id
-            ) qc_agg ON mai.id = qc_agg.ma_item_id
-            WHERE qc_agg.approved_qty > 0
+            WHERE mai.quantity > 0
 
             UNION ALL
 
@@ -127,38 +88,6 @@ const getStockBookRecords = async (filters = {}) => {
             UNION ALL
 
             SELECT 
-                CONCAT('si_grn_', si.id) AS id,
-                0 AS is_receipt,
-                si.grn_item_id AS grn_item_id,
-                gi.material_id AS material_id,
-                si.issue_date AS date,
-                CASE 
-                    WHEN si.removal_type = 'issue' THEN 'Stock Issued'
-                    ELSE CONCAT('Removal (', si.removal_type, ')')
-                END AS particular,
-                gi.material_name AS product,
-                gi.internal_batch_number AS internal_batch_number,
-                gi.supplier_batch_number AS supplier_batch_number,
-                gi.grade AS grade,
-                g.name AS vendor_name,
-                NULL AS job_party_name,
-                g.invoice_number AS invoice_number,
-                g.grn_number AS grn_number,
-                COALESCE(si.p_memo_number, '') AS p_memo_number,
-                0 AS approved_quantity,
-                si.issue_quantity AS issued_quantity,
-                g.vendor_id,
-                NULL AS job_party_id,
-                g.location_id,
-                si.created_at AS created_at
-            FROM stock_issues si
-            JOIN grn_items gi ON si.grn_item_id = gi.id
-            JOIN grn_master g ON gi.grn_id = g.id
-            WHERE si.grn_item_id IS NOT NULL
-
-            UNION ALL
-
-            SELECT 
                 CONCAT('si_ma_', si.id) AS id,
                 0 AS is_receipt,
                 NULL AS grn_item_id,
@@ -171,7 +100,7 @@ const getStockBookRecords = async (filters = {}) => {
                 mai.material_name AS product,
                 mai.internal_batch_number AS internal_batch_number,
                 '' AS supplier_batch_number,
-                mai.grade AS grade,
+                '' AS grade,
                 '' AS vendor_name,
                 NULL AS job_party_name,
                 '' AS invoice_number,
@@ -225,11 +154,6 @@ const getStockBookRecords = async (filters = {}) => {
 
     const queryParams = [];
 
-    if (filters.vendor_id && filters.vendor_id !== 'all' && filters.vendor_id !== '') {
-        query += ` AND t.vendor_id = ?`;
-        queryParams.push(filters.vendor_id);
-    }
-    // job_party_id filter removed
     if (filters.material_id && filters.material_id !== 'all' && filters.material_id !== '') {
         query += ` AND t.material_id = ?`;
         queryParams.push(filters.material_id);
@@ -277,56 +201,25 @@ const createStockIssue = async (data, addedBy) => {
             throw new Error('Issue quantity must be greater than zero');
         }
 
-        // 1. Fetch all batches of this material + grade that have been approved in QC or returned from RM,
-        // and fetch their total approved quantity.
+        // Fetch all batches of this material (from Material Add and RM Returns)
         const queryBatches = `
-            SELECT 
-                gi.id AS grn_item_id,
-                NULL AS ma_item_id,
-                NULL AS rm_return_id,
-                gi.internal_batch_number,
-                COALESCE(qc_agg.approved_qty, 0) AS approved_qty,
-                COALESCE(issue_agg.issued_qty, 0) AS issued_qty,
-                g.grn_date AS receipt_date,
-                gi.id AS item_id
-            FROM grn_items gi
-            JOIN grn_master g ON gi.grn_id = g.id
-            JOIN (
-                SELECT grn_item_id, SUM(approved_quantity) AS approved_qty
-                FROM qc_items WHERE grn_item_id IS NOT NULL
-                GROUP BY grn_item_id
-            ) qc_agg ON gi.id = qc_agg.grn_item_id
-            LEFT JOIN (
-                SELECT grn_item_id, SUM(issue_quantity) AS issued_qty
-                FROM stock_issues WHERE grn_item_id IS NOT NULL
-                GROUP BY grn_item_id
-            ) issue_agg ON gi.id = issue_agg.grn_item_id
-            WHERE gi.material_id = ? AND COALESCE(gi.grade, '') = ?
-
-            UNION ALL
-
             SELECT 
                 NULL AS grn_item_id,
                 mai.id AS ma_item_id,
                 NULL AS rm_return_id,
                 mai.internal_batch_number,
-                COALESCE(qc_agg.approved_qty, 0) AS approved_qty,
+                mai.quantity AS approved_qty,
                 COALESCE(issue_agg.issued_qty, 0) AS issued_qty,
                 ma.ma_date AS receipt_date,
                 mai.id AS item_id
             FROM material_add_items mai
             JOIN material_add_master ma ON mai.ma_id = ma.id
-            JOIN (
-                SELECT ma_item_id, SUM(approved_quantity) AS approved_qty
-                FROM qc_items WHERE ma_item_id IS NOT NULL
-                GROUP BY ma_item_id
-            ) qc_agg ON mai.id = qc_agg.ma_item_id
             LEFT JOIN (
                 SELECT ma_item_id, SUM(issue_quantity) AS issued_qty
                 FROM stock_issues WHERE ma_item_id IS NOT NULL
                 GROUP BY ma_item_id
             ) issue_agg ON mai.id = issue_agg.ma_item_id
-            WHERE mai.material_id = ? AND COALESCE(mai.grade, '') = ?
+            WHERE mai.material_id = ?
 
             UNION ALL
 
@@ -345,14 +238,13 @@ const createStockIssue = async (data, addedBy) => {
                 FROM stock_issues WHERE rm_return_id IS NOT NULL
                 GROUP BY rm_return_id
             ) issue_agg ON r.id = issue_agg.rm_return_id
-            WHERE r.material_id = ? AND COALESCE(r.grade, '') = ?
+            WHERE r.material_id = ? AND (r.grade = ? OR ? = '')
 
             ORDER BY receipt_date ASC, item_id ASC
         `;
 
-        const [batches] = await connection.execute(queryBatches, [materialId, grade, materialId, grade, materialId, grade]);
+        const [batches] = await connection.execute(queryBatches, [materialId, materialId, grade, grade]);
 
-        // 2. Calculate total available balance and prepare list of batches with positive balance
         let totalAvailable = 0;
         const activeBatches = [];
 
@@ -363,7 +255,6 @@ const createStockIssue = async (data, addedBy) => {
             if (available > 0) {
                 totalAvailable += available;
                 activeBatches.push({
-                    grn_item_id: batch.grn_item_id,
                     ma_item_id: batch.ma_item_id,
                     rm_return_id: batch.rm_return_id,
                     internal_batch_number: batch.internal_batch_number,
@@ -372,16 +263,14 @@ const createStockIssue = async (data, addedBy) => {
             }
         }
 
-        // 3. Validate if total available balance is sufficient
         if (requestedQuantity > totalAvailable) {
             throw new Error(`Insufficient stock. Total available balance across all batches is ${totalAvailable}`);
         }
 
-        // 4. Deduct quantity from batches using FIFO
         let remainingToIssue = requestedQuantity;
         const insertQuery = `
-            INSERT INTO stock_issues (grn_item_id, ma_item_id, rm_return_id, issue_quantity, p_memo_number, issue_date, remarks, added_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO stock_issues (ma_item_id, rm_return_id, issue_quantity, p_memo_number, issue_date, remarks, added_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         `;
 
         let firstInsertId = null;
@@ -391,7 +280,6 @@ const createStockIssue = async (data, addedBy) => {
 
             const deductQty = Math.min(remainingToIssue, batch.available);
             const [result] = await connection.execute(insertQuery, [
-                batch.grn_item_id || null,
                 batch.ma_item_id || null,
                 batch.rm_return_id || null,
                 deductQty,
@@ -428,19 +316,16 @@ const getStockIssueLogs = async (materialId, grade) => {
             si.remarks,
             si.created_at,
             COALESCE(u.name, 'Unknown') AS added_by_name,
-            COALESCE(gi.internal_batch_number, mai.internal_batch_number, r.internal_batch_number) AS internal_batch_number,
-            COALESCE(gi.supplier_batch_number, '') AS supplier_batch_number
+            COALESCE(mai.internal_batch_number, r.internal_batch_number) AS internal_batch_number,
+            '' AS supplier_batch_number
         FROM stock_issues si
-        LEFT JOIN grn_items gi ON si.grn_item_id = gi.id
         LEFT JOIN material_add_items mai ON si.ma_item_id = mai.id
         LEFT JOIN rm_returns r ON si.rm_return_id = r.id
         LEFT JOIN users u ON si.added_by = u.id
-        WHERE (gi.material_id = ? AND COALESCE(gi.grade, '') = ?) 
-           OR (mai.material_id = ? AND COALESCE(mai.grade, '') = ?)
-           OR (r.material_id = ? AND COALESCE(r.grade, '') = ?)
+        WHERE mai.material_id = ? OR (r.material_id = ? AND (r.grade = ? OR ? = ''))
         ORDER BY si.issue_date DESC, si.id DESC
     `;
-    const [rows] = await db.execute(query, [materialId, grade || '', materialId, grade || '', materialId, grade || '']);
+    const [rows] = await db.execute(query, [materialId, materialId, grade || '', grade || '']);
     return rows;
 };
 
@@ -464,8 +349,16 @@ const ensureStockIssuesColumns = async () => {
             }
         }
         
-        // Ensure grn_item_id is nullable
-        await db.execute("ALTER TABLE stock_issues MODIFY grn_item_id INT DEFAULT NULL");
+        // Ensure grn_item_id is nullable if column exists
+        const [grnCol] = await db.execute(
+            `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS 
+             WHERE TABLE_SCHEMA = DATABASE() 
+               AND TABLE_NAME = 'stock_issues' 
+               AND COLUMN_NAME = 'grn_item_id'`
+        );
+        if (grnCol.length > 0) {
+            await db.execute("ALTER TABLE stock_issues MODIFY grn_item_id INT DEFAULT NULL").catch(() => {});
+        }
     } catch (err) {
         console.error("Error ensuring stock_issues columns:", err.message || err);
     }
@@ -474,39 +367,27 @@ const ensureStockIssuesColumns = async () => {
 const getActiveBatches = async () => {
     const query = `
         SELECT 
-            gi.id AS grn_item_id,
+            NULL AS grn_item_id,
             mai.id AS ma_item_id,
             r.id AS rm_return_id,
-            COALESCE(gi.internal_batch_number, mai.internal_batch_number, r.internal_batch_number) AS internal_batch_number,
-            COALESCE(gi.material_name, mai.material_name, r.material_name) AS product,
+            COALESCE(mai.internal_batch_number, r.internal_batch_number) AS internal_batch_number,
+            COALESCE(mai.material_name, r.material_name) AS product,
             NULL AS job_party_name,
             ss.material_type,
-            COALESCE(gi.grade, mai.grade, r.grade) AS grade,
-            (COALESCE(qc_agg.approved_qty, r.quantity, 0) - COALESCE(issue_agg.issued_qty, 0)) AS balance_quantity
+            COALESCE(r.grade, '') AS grade,
+            (COALESCE(r.quantity, ss.total_kg, 0) - COALESCE(issue_agg.issued_qty, 0)) AS balance_quantity
         FROM stock_status ss
-        LEFT JOIN grn_items gi ON ss.internal_batch_number = gi.internal_batch_number AND ss.grn_id IS NOT NULL
-        LEFT JOIN grn_master g ON gi.grn_id = g.id
         LEFT JOIN material_add_items mai ON ss.internal_batch_number = mai.internal_batch_number AND ss.ma_id IS NOT NULL
         LEFT JOIN material_add_master ma ON mai.ma_id = ma.id
         LEFT JOIN rm_returns r ON ss.internal_batch_number = r.internal_batch_number AND ss.rm_return_id IS NOT NULL
         LEFT JOIN (
             SELECT 
-                COALESCE(gi_sub.internal_batch_number, mai_sub.internal_batch_number) AS internal_batch_number,
-                SUM(qi.approved_quantity) AS approved_qty
-            FROM qc_items qi
-            LEFT JOIN grn_items gi_sub ON qi.grn_item_id = gi_sub.id
-            LEFT JOIN material_add_items mai_sub ON qi.ma_item_id = mai_sub.id
-            GROUP BY COALESCE(gi_sub.internal_batch_number, mai_sub.internal_batch_number)
-        ) qc_agg ON ss.internal_batch_number = qc_agg.internal_batch_number
-        LEFT JOIN (
-            SELECT 
-                COALESCE(gi_sub2.internal_batch_number, mai_sub2.internal_batch_number, r_sub.internal_batch_number) AS internal_batch_number,
+                COALESCE(mai_sub2.internal_batch_number, r_sub.internal_batch_number) AS internal_batch_number,
                 SUM(si.issue_quantity) AS issued_qty
             FROM stock_issues si
-            LEFT JOIN grn_items gi_sub2 ON si.grn_item_id = gi_sub2.id
             LEFT JOIN material_add_items mai_sub2 ON si.ma_item_id = mai_sub2.id
             LEFT JOIN rm_returns r_sub ON si.rm_return_id = r_sub.id
-            GROUP BY COALESCE(gi_sub2.internal_batch_number, mai_sub2.internal_batch_number, r_sub.internal_batch_number)
+            GROUP BY COALESCE(mai_sub2.internal_batch_number, r_sub.internal_batch_number)
         ) issue_agg ON ss.internal_batch_number = issue_agg.internal_batch_number
         HAVING balance_quantity > 0
         ORDER BY internal_batch_number ASC
@@ -517,11 +398,10 @@ const getActiveBatches = async () => {
 
 const removeMaterialStock = async (data, addedBy) => {
     const query = `
-        INSERT INTO stock_issues (grn_item_id, ma_item_id, rm_return_id, issue_quantity, removal_type, issue_date, remarks, added_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO stock_issues (ma_item_id, rm_return_id, issue_quantity, removal_type, issue_date, remarks, added_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
     const [result] = await db.execute(query, [
-        data.grn_item_id || null,
         data.ma_item_id || null,
         data.rm_return_id || null,
         data.removal_quantity,

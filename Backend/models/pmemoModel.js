@@ -47,7 +47,6 @@ const createPMemoRmIssuesTable = async () => {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (pmemo_id) REFERENCES production_memos(id) ON DELETE CASCADE,
             FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE CASCADE,
-            FOREIGN KEY (grn_item_id) REFERENCES grn_items(id) ON DELETE SET NULL,
             FOREIGN KEY (ma_item_id) REFERENCES material_add_items(id) ON DELETE SET NULL,
             FOREIGN KEY (rm_return_id) REFERENCES rm_returns(id) ON DELETE SET NULL,
             FOREIGN KEY (stock_issue_id) REFERENCES stock_issues(id) ON DELETE SET NULL
@@ -156,11 +155,10 @@ const getPMemoRmIssues = async (pmemoId) => {
             pri.qty,
             pri.total_quantity,
             COALESCE(ss.mfi, '') AS mfi,
-            COALESCE(gi.supplier_batch_number, '') AS supplier_batch_number
+            '' AS supplier_batch_number
         FROM pmemo_rm_issues pri
         JOIN materials m ON pri.material_id = m.id
         LEFT JOIN stock_status ss ON pri.internal_batch_number = ss.internal_batch_number
-        LEFT JOIN grn_items gi ON pri.grn_item_id = gi.id
         WHERE pri.pmemo_id = ?
         ORDER BY pri.id ASC
     `;
@@ -172,31 +170,15 @@ const getAvailableBatches = async (materialId, grade) => {
     const query = `
         SELECT 
             ss.internal_batch_number,
-            gi.id AS grn_item_id,
+            NULL AS grn_item_id,
             mai.id AS ma_item_id,
             r.id AS rm_return_id,
-            COALESCE(gi.supplier_batch_number, '') AS supplier_batch_number,
+            '' AS supplier_batch_number,
             COALESCE(ss.mfi, '') AS mfi,
-            (COALESCE(qc_agg.approved_qty, qc_ma_agg.approved_qty, r.quantity, ss.total_kg) - COALESCE(issue_agg.issued_qty, issue_ma_agg.issued_qty, issue_rtr_agg.issued_qty, 0)) AS available_qty
+            (COALESCE(r.quantity, ss.total_kg) - COALESCE(issue_ma_agg.issued_qty, issue_rtr_agg.issued_qty, 0)) AS available_qty
         FROM stock_status ss
-        LEFT JOIN grn_items gi ON ss.internal_batch_number = gi.internal_batch_number AND ss.grn_id IS NOT NULL
         LEFT JOIN material_add_items mai ON ss.internal_batch_number = mai.internal_batch_number AND ss.ma_id IS NOT NULL
         LEFT JOIN rm_returns r ON ss.internal_batch_number = r.internal_batch_number AND ss.rm_return_id IS NOT NULL
-        LEFT JOIN (
-            SELECT grn_item_id, SUM(approved_quantity) AS approved_qty
-            FROM qc_items WHERE grn_item_id IS NOT NULL
-            GROUP BY grn_item_id
-        ) qc_agg ON gi.id = qc_agg.grn_item_id
-        LEFT JOIN (
-            SELECT ma_item_id, SUM(approved_quantity) AS approved_qty
-            FROM qc_items WHERE ma_item_id IS NOT NULL
-            GROUP BY ma_item_id
-        ) qc_ma_agg ON mai.id = qc_ma_agg.ma_item_id
-        LEFT JOIN (
-            SELECT grn_item_id, SUM(issue_quantity) AS issued_qty
-            FROM stock_issues WHERE grn_item_id IS NOT NULL
-            GROUP BY grn_item_id
-        ) issue_agg ON gi.id = issue_agg.grn_item_id
         LEFT JOIN (
             SELECT ma_item_id, SUM(issue_quantity) AS issued_qty
             FROM stock_issues WHERE ma_item_id IS NOT NULL
@@ -207,10 +189,10 @@ const getAvailableBatches = async (materialId, grade) => {
             FROM stock_issues WHERE rm_return_id IS NOT NULL
             GROUP BY rm_return_id
         ) issue_rtr_agg ON r.id = issue_rtr_agg.rm_return_id
-        WHERE ss.material_id = ? AND COALESCE(ss.rm_grade, '') = ?
+        WHERE ss.material_id = ? AND (ss.rm_grade = ? OR ? = '')
         HAVING available_qty > 0
     `;
-    const [rows] = await db.execute(query, [materialId, grade || '']);
+    const [rows] = await db.execute(query, [materialId, grade || '', grade || '']);
     return rows;
 };
 
@@ -225,18 +207,12 @@ const createPMemo = async (workOrderItemId, date, rmDetails = {}, rmIssues = [],
             [workOrderItemId]
         );
 
-        // Commented out to allow editing/issuing raw materials again and again as per new requirement
-        // if (existing.length > 0 && existing[0].is_final_submitted === 1) {
-        //     throw new Error('This Production Memo has been finally submitted and cannot be modified.');
-        // }
-
         let pmemoId;
         let memoNo;
         if (existing.length > 0) {
             pmemoId = existing[0].id;
             memoNo = existing[0].p_memo_no;
         } else {
-            // Get next memo number inside the transaction for safety
             const [maxNoRows] = await connection.execute(
                 `SELECT MAX(p_memo_no) AS maxNo FROM production_memos`
             );
@@ -289,13 +265,11 @@ const createPMemo = async (workOrderItemId, date, rmDetails = {}, rmIssues = [],
         }
 
         // --- Process RM Issues ---
-        // 1. Fetch any existing issue items for this production memo
         const [oldIssues] = await connection.execute(
             `SELECT id, stock_issue_id FROM pmemo_rm_issues WHERE pmemo_id = ?`,
             [pmemoId]
         );
 
-        // 2. Delete old stock issues from stock_issues table (automatically reverting stock status balance)
         const oldStockIssueIds = oldIssues.map(oi => oi.stock_issue_id).filter(Boolean);
         if (oldStockIssueIds.length > 0) {
             const placeholders = oldStockIssueIds.map(() => '?').join(',');
@@ -305,34 +279,29 @@ const createPMemo = async (workOrderItemId, date, rmDetails = {}, rmIssues = [],
             );
         }
 
-        // 3. Delete old pmemo_rm_issues records
         await connection.execute(
             `DELETE FROM pmemo_rm_issues WHERE pmemo_id = ?`,
             [pmemoId]
         );
 
-        // 4. Save new issues
         const formattedMemoNo = `PM-${String(memoNo).padStart(4, '0')}`;
         for (const issue of rmIssues) {
-            // First, create the stock_issue record
             const insertStockIssueQuery = `
                 INSERT INTO stock_issues (
-                    grn_item_id, ma_item_id, rm_return_id, issue_quantity, p_memo_number, issue_date, remarks, removal_type, added_by
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'issue', ?)
+                    ma_item_id, rm_return_id, issue_quantity, p_memo_number, issue_date, remarks, removal_type, added_by
+                ) VALUES (?, ?, ?, ?, ?, ?, 'issue', ?)
             `;
             const [stockIssueResult] = await connection.execute(insertStockIssueQuery, [
-                issue.grn_item_id || null,
                 issue.ma_item_id || null,
                 issue.rm_return_id || null,
                 Math.floor(Number(issue.lot) || 0) * (Number(issue.qty) || 0),
                 formattedMemoNo,
-                issue.date || date, // default to P Memo date if issue date not supplied
+                issue.date || date,
                 issue.remark || null,
                 addedBy
             ]);
             const stockIssueId = stockIssueResult.insertId;
 
-            // Second, create the pmemo_rm_issue record
             const insertPmRmIssueQuery = `
                 INSERT INTO pmemo_rm_issues (
                     pmemo_id, lot, date, remark, material_id, grade, internal_batch_number, grn_item_id, ma_item_id, rm_return_id, stock_issue_id, qty, total_quantity
@@ -340,13 +309,13 @@ const createPMemo = async (workOrderItemId, date, rmDetails = {}, rmIssues = [],
             `;
             await connection.execute(insertPmRmIssueQuery, [
                 pmemoId,
-                Number(issue.lot) || 0, // Store full decimal suffix lot
+                Number(issue.lot) || 0,
                 issue.date || date,
                 issue.remark || null,
                 Number(issue.material_id),
                 issue.grade,
                 issue.internal_batch_number,
-                issue.grn_item_id || null,
+                null,
                 issue.ma_item_id || null,
                 issue.rm_return_id || null,
                 stockIssueId,

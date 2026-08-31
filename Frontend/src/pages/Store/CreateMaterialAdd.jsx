@@ -4,11 +4,12 @@ import Navbar from "../../components/Navbar";
 import {
     createMaterialAdd,
     updateMaterialAdd,
-    getMaterialAddById
+    getMaterialAddById,
+    getMaterialTypes,
+    getMaterialsByType,
+    getNextBatchNumber
 } from "../../api/materialAddApi";
 import { getLocations } from "../../api/locationApi";
-import { getMaterialTypes, getMaterialsByType } from "../../api/purchaseOrderApi";
-import { getNextBatchNumber } from "../../api/grnApi";
 import toast from "react-hot-toast";
 import DateInput from "../../components/DateInput";
 
