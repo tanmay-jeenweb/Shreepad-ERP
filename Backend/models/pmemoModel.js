@@ -120,8 +120,6 @@ const getPMemoByWorkOrderItemId = async (workOrderItemId) => {
             m.material_name,
             m.material_code AS item_code,
             bom.product_weight AS unit_weight,
-            bom.color,
-            bom.rm_formulation,
             woi.batch_no AS batch,
             woi.quantity AS production_quantity,
             wo.id AS work_order_id,

@@ -60,7 +60,7 @@ const addMaterial = async (req, res) => {
             remarks: remarks ? remarks.trim() : null
         };
 
-        const material = await createMaterial(data, mouldIds || [], addedBy, deviceId);
+        const material = await createMaterial(data, addedBy, deviceId);
 
         await createAuditLog(
             addedBy,
@@ -179,7 +179,7 @@ const updateMaterialController = async (req, res) => {
             remarks: remarks ? remarks.trim() : null
         };
 
-        await updateMaterial(id, data, mouldIds || []);
+        await updateMaterial(id, data);
 
         await createAuditLog(
             req.user?.id,

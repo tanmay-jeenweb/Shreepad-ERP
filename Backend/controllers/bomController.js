@@ -2,6 +2,7 @@ const {
     createBOM,
     getAllBOMs,
     getBOMById,
+    getBOMByMaterialId,
     updateBOM,
     deleteBOM,
     getFinishedAndSemiFinishedMaterials,
@@ -120,10 +121,25 @@ const deleteBOMController = async (req, res) => {
     }
 };
 
+const getBOMByMaterialIdController = async (req, res) => {
+    try {
+        const { materialId } = req.params;
+        const bom = await getBOMByMaterialId(materialId);
+        if (!bom) {
+            return res.status(404).json({ success: false, message: 'BOM not found for this product' });
+        }
+        res.status(200).json({ success: true, data: bom });
+    } catch (error) {
+        console.error('Error fetching BOM by material:', error);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+};
+
 module.exports = {
     getProductsController,
     addBOM,
     getAllBOMsController,
     updateBOMController,
     deleteBOMController,
+    getBOMByMaterialIdController,
 };

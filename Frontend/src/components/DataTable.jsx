@@ -505,7 +505,7 @@ export default function DataTable({
                   const isDragOver = rowIndex === dragOverRowIndex;
                   return (
                     <tr
-                      key={row.id || rowIndex}
+                      key={row.id !== undefined && row.id !== null ? `id-${row.id}` : `idx-${rowIndex}`}
                       draggable={onRowReorder && !row.is_on_hold}
                       onDragStart={(e) => handleRowDragStart(e, rowIndex)}
                       onDragEnter={(e) => handleRowDragEnter(e, rowIndex)}

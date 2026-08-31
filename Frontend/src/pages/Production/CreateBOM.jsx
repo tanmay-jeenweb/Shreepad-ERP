@@ -1,29 +1,23 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Navbar from "../../components/Navbar";
-import { getBOMProducts, createBOM, updateBOM } from "../../api/bomApi";
+import { getBOMProducts, createBOM, updateBOM, getBOMByMaterialId } from "../../api/bomApi";
 import { getRawMaterials } from "../../api/rawMaterialApi";
 import { getAllMoulds } from "../../api/mouldApi";
 import { getProcesses } from "../../api/processMasterApi";
-import { getBOMs } from "../../api/bomApi";
+import { getMaterials } from "../../api/materialApi";
 import toast from "react-hot-toast";
 
 const emptyForm = {
     materialId: "",
-    productInsert: "",
     rawMaterialId: "",
-    productCountingType: "",
     unitWeightTolerance: "",
     mouldId: "",
     mouldIds: [],
-    color: "",
     processId: "",
     productWeight: "",
-    rmFormulation: "",
-    price: "",
     productWeightForSale: "",
-    packingMethod: "",
-    difference: ""
+    bomMaterials: [{ materialId: "", quantity: "", unitName: "" }]
 };
 
 export default function CreateBOM() {
@@ -40,7 +34,7 @@ export default function CreateBOM() {
 
     // Dropdown data
     const [products, setProducts] = useState([]);
-    const [rawMaterials, setRawMaterials] = useState([]);
+    const [rawAndSemiMaterials, setRawAndSemiMaterials] = useState([]);
     const [moulds, setMoulds] = useState([]);
     const [processes, setProcesses] = useState([]);
 
@@ -62,51 +56,61 @@ export default function CreateBOM() {
         const fetchInitialData = async () => {
             try {
                 setLoading(true);
-                const [prodRes, rmRes, mouldRes, processRes] = await Promise.all([
+                const [prodRes, mouldRes, processRes, materialsRes] = await Promise.all([
                     getBOMProducts(),
-                    getRawMaterials(),
                     getAllMoulds(),
-                    getProcesses()
+                    getProcesses(),
+                    getMaterials()
                 ]);
 
                 setProducts(prodRes.data?.data || []);
-                setRawMaterials(rmRes.data?.data || []);
                 setMoulds(mouldRes.data?.data || []);
                 setProcesses(processRes.data?.data || []);
 
+                const allMats = materialsRes.data?.data || [];
+                const filteredMats = allMats.filter(m => ['Raw Materials', 'Semi Finished Goods'].includes(m.material_type));
+                setRawAndSemiMaterials(filteredMats);
+
                 if (materialIdParam) {
-                    const bomRes = await getBOMs();
-                    const boms = bomRes.data?.data || [];
-                    const bomToEdit = boms.find(b => b.material_id === Number(materialIdParam));
+                    try {
+                        const bomRes = await getBOMByMaterialId(Number(materialIdParam));
+                        const bomToEdit = bomRes.data?.data;
 
-                    if (bomToEdit) {
-                        setBomDetails(bomToEdit);
-                        if (bomToEdit.id) {
-                            setEditId(bomToEdit.id);
+                        if (bomToEdit) {
+                            setBomDetails(bomToEdit);
+                            if (bomToEdit.id) {
+                                setEditId(bomToEdit.id);
+                            }
+
+                            const parsedMouldIds = bomToEdit.mould_ids
+                                ? bomToEdit.mould_ids.split(',').map(Number)
+                                : (bomToEdit.mould_id ? [Number(bomToEdit.mould_id)] : []);
+
+                            const parsedMaterials = bomToEdit.bomMaterials && bomToEdit.bomMaterials.length > 0
+                                ? bomToEdit.bomMaterials.map(m => ({
+                                    materialId: m.materialId || "",
+                                    quantity: m.quantity || "",
+                                    unitName: m.unitName || ""
+                                }))
+                                : [{ materialId: "", quantity: "", unitName: "" }];
+
+                            setForm({
+                                materialId: bomToEdit.material_id || "",
+                                rawMaterialId: bomToEdit.raw_material_id || "",
+                                unitWeightTolerance: bomToEdit.unit_weight_tolerance || "",
+                                mouldId: bomToEdit.mould_id || "",
+                                mouldIds: parsedMouldIds,
+                                processId: bomToEdit.process_id || "",
+                                productWeight: bomToEdit.product_weight || "",
+                                productWeightForSale: bomToEdit.product_weight_for_sale || "",
+                                bomMaterials: parsedMaterials
+                            });
+                        } else {
+                            toast.error("BOM config not found for this material");
+                            navigate("/production/bom");
                         }
-
-                        const parsedMouldIds = bomToEdit.mould_ids
-                            ? bomToEdit.mould_ids.split(',').map(Number)
-                            : (bomToEdit.mould_id ? [Number(bomToEdit.mould_id)] : []);
-
-                        setForm({
-                            materialId: bomToEdit.material_id || "",
-                            productInsert: bomToEdit.product_insert || "",
-                            rawMaterialId: bomToEdit.raw_material_id || "",
-                            productCountingType: bomToEdit.product_counting_type || "",
-                            unitWeightTolerance: bomToEdit.unit_weight_tolerance || "",
-                            mouldId: bomToEdit.mould_id || "",
-                            mouldIds: parsedMouldIds,
-                            color: bomToEdit.color || "",
-                            processId: bomToEdit.process_id || "",
-                            productWeight: bomToEdit.product_weight || "",
-                            rmFormulation: bomToEdit.rm_formulation || "",
-                            price: bomToEdit.price || "",
-                            productWeightForSale: bomToEdit.product_weight_for_sale || "",
-                            packingMethod: bomToEdit.packing_method || "",
-                            difference: bomToEdit.difference || ""
-                        });
-                    } else {
+                    } catch (err) {
+                        console.error("Failed to load edit BOM:", err);
                         toast.error("BOM config not found for this material");
                         navigate("/production/bom");
                     }
@@ -143,11 +147,59 @@ export default function CreateBOM() {
         });
     };
 
+    const handleBOMMaterialChange = (index, val) => {
+        const selectedMat = rawAndSemiMaterials.find(m => String(m.id) === String(val));
+        const unitName = selectedMat ? selectedMat.unit_name : "";
+
+        setForm(prev => {
+            const newList = [...(prev.bomMaterials || [])];
+            newList[index] = {
+                ...newList[index],
+                materialId: val,
+                unitName: unitName
+            };
+            return { ...prev, bomMaterials: newList };
+        });
+    };
+
+    const handleBOMQuantityChange = (index, val) => {
+        setForm(prev => {
+            const newList = [...(prev.bomMaterials || [])];
+            newList[index] = {
+                ...newList[index],
+                quantity: val
+            };
+            return { ...prev, bomMaterials: newList };
+        });
+    };
+
+    const addBOMMaterialRow = () => {
+        setForm(prev => ({
+            ...prev,
+            bomMaterials: [...(prev.bomMaterials || []), { materialId: "", quantity: "", unitName: "" }]
+        }));
+    };
+
+    const removeBOMMaterialRow = (index) => {
+        setForm(prev => {
+            const newList = (prev.bomMaterials || []).filter((_, idx) => idx !== index);
+            return {
+                ...prev,
+                bomMaterials: newList.length > 0 ? newList : [{ materialId: "", quantity: "", unitName: "" }]
+            };
+        });
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
         if (!form.materialId) {
             return toast.error("Please select a Product (Finished / Semi-Finished Good).");
+        }
+
+        const hasValidMaterial = form.bomMaterials && form.bomMaterials.some(m => m.materialId && m.quantity);
+        if (!hasValidMaterial) {
+            return toast.error("Please add at least one valid Raw/Semi-Finished material with quantity.");
         }
 
         try {
@@ -225,30 +277,76 @@ export default function CreateBOM() {
                                 </div>
                             </div>
 
-                            <div>
-                                <label className={labelCls}>Product Insert</label>
-                                <input
-                                    type="text"
-                                    name="productInsert"
-                                    value={form.productInsert}
-                                    onChange={handleChange}
-                                    className={inputCls}
-                                    placeholder="e.g. Brass Insert"
-                                />
-                            </div>
+                            <div className="md:col-span-2 space-y-4">
+                                <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                                    <label className="text-sm font-semibold text-slate-700">Raw / Semi-Finished Materials</label>
+                                    <button
+                                        type="button"
+                                        onClick={addBOMMaterialRow}
+                                        className="px-3 py-1.5 bg-[#369ACF]/10 hover:bg-[#369ACF]/20 text-[#369ACF] rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                                    >
+                                        <i className="fa-solid fa-plus"></i>
+                                        Add Material
+                                    </button>
+                                </div>
 
-                            {/* Raw Material removed */}
+                                <div className="space-y-3">
+                                    {(form.bomMaterials || []).map((row, idx) => (
+                                        <div key={idx} className="flex flex-col sm:flex-row items-end sm:items-center gap-3 bg-slate-50/50 p-3 rounded-xl border border-slate-150">
+                                            <div className="flex-1 w-full">
+                                                <label className="block text-xs font-semibold text-slate-500 mb-1 sm:hidden">Material</label>
+                                                <select
+                                                    value={row.materialId}
+                                                    onChange={(e) => handleBOMMaterialChange(idx, e.target.value)}
+                                                    className={inputCls}
+                                                    required
+                                                >
+                                                    <option value="">-- Select Material --</option>
+                                                    {rawAndSemiMaterials.map(m => (
+                                                        <option key={m.id} value={m.id}>
+                                                            {m.material_name} {m.material_code ? `(${m.material_code})` : ''} - {m.material_type}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
 
-                            <div>
-                                <label className={labelCls}>Product Counting Type</label>
-                                <input
-                                    type="text"
-                                    name="productCountingType"
-                                    value={form.productCountingType}
-                                    onChange={handleChange}
-                                    className={inputCls}
-                                    placeholder="e.g. Pcs, Kg, Set, Nos"
-                                />
+                                            <div className="w-full sm:w-44">
+                                                <label className="block text-xs font-semibold text-slate-500 mb-1 sm:hidden">Quantity</label>
+                                                <input
+                                                    type="number"
+                                                    step="0.0001"
+                                                    placeholder="Quantity"
+                                                    value={row.quantity}
+                                                    onChange={(e) => handleBOMQuantityChange(idx, e.target.value)}
+                                                    className={inputCls}
+                                                    required
+                                                />
+                                            </div>
+
+                                            <div className="w-24">
+                                                <label className="block text-xs font-semibold text-slate-500 mb-1 sm:hidden">Unit</label>
+                                                <input
+                                                    type="text"
+                                                    readOnly
+                                                    placeholder="Unit"
+                                                    value={row.unitName || "—"}
+                                                    className="w-full border border-slate-200 rounded-lg px-4 py-2.5 bg-slate-100 text-slate-500 text-sm font-semibold select-none"
+                                                />
+                                            </div>
+
+                                            {(form.bomMaterials || []).length > 1 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeBOMMaterialRow(idx)}
+                                                    className="h-10 w-10 flex items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 hover:text-rose-700 transition-colors cursor-pointer"
+                                                    title="Remove Row"
+                                                >
+                                                    <i className="fa-solid fa-trash-can"></i>
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
 
                             <div className="md:col-span-2 pt-4 pb-4 border-b border-slate-100 mt-2">
@@ -275,30 +373,6 @@ export default function CreateBOM() {
                                         </option>
                                     ))}
                                 </select>
-                            </div>
-
-                            <div>
-                                <label className={labelCls}>Color</label>
-                                <input
-                                    type="text"
-                                    name="color"
-                                    value={form.color}
-                                    onChange={handleChange}
-                                    className={inputCls}
-                                    placeholder="e.g. Red, Blue, Clear"
-                                />
-                            </div>
-
-                            <div>
-                                <label className={labelCls}>Packing Method</label>
-                                <input
-                                    type="text"
-                                    name="packingMethod"
-                                    value={form.packingMethod}
-                                    onChange={handleChange}
-                                    className={inputCls}
-                                    placeholder="e.g. Box, Shrink Wrap"
-                                />
                             </div>
 
                             <div className="md:col-span-2 pt-4 pb-4 border-b border-slate-100 mt-2">
@@ -333,53 +407,12 @@ export default function CreateBOM() {
                             </div>
 
                             <div>
-                                <label className={labelCls}>RM Formulation</label>
-                                <input
-                                    type="text"
-                                    name="rmFormulation"
-                                    value={form.rmFormulation}
-                                    onChange={handleChange}
-                                    className={inputCls}
-                                    placeholder="e.g. 100% Raw Material"
-                                />
-                            </div>
-
-                            <div>
                                 <label className={labelCls}>Product Weight For Sale</label>
                                 <input
                                     type="number"
                                     step="0.0001"
                                     name="productWeightForSale"
                                     value={form.productWeightForSale}
-                                    onChange={handleChange}
-                                    className={inputCls}
-                                />
-                            </div>
-
-                            <div>
-                                <label className={labelCls}>Price</label>
-                                <div className="relative">
-                                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                        <span className="text-slate-400">₹</span>
-                                    </div>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        name="price"
-                                        value={form.price}
-                                        onChange={handleChange}
-                                        className={`${inputCls} pl-8`}
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className={labelCls}>Difference</label>
-                                <input
-                                    type="number"
-                                    step="0.0001"
-                                    name="difference"
-                                    value={form.difference}
                                     onChange={handleChange}
                                     className={inputCls}
                                 />

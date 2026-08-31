@@ -53,7 +53,6 @@ export default function MachineMaster() {
       capacity: m.capacity || "",
       locationId: m.location_id || "",
       companyName: m.company_name || "",
-      maxPowerConsumption: m.max_power_consumption || "",
       outgoingJobWork: !!m.outgoing_job_work,
       machineShift: m.machine_shift || "day shift",
       maintenance: !!m.maintenance,
@@ -258,33 +257,6 @@ export default function MachineMaster() {
             />
           ) : (
             row.company_name || "N/A"
-          )
-      },
-      {
-        key: "max_power_consumption",
-        label: "Max Power",
-        minWidth: "150px",
-        render: (row) =>
-          editingId === row.id ? (
-            <div className="relative">
-              <input
-                value={editingData?.maxPowerConsumption || ""}
-                onChange={(e) =>
-                  setEditingData({
-                    ...editingData,
-                    maxPowerConsumption: e.target.value
-                  })
-                }
-                className="border border-slate-300 rounded-lg pl-2 pr-14 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full text-sm font-normal text-slate-800"
-              />
-              <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none text-slate-400 text-xs">
-                Unit/Hr.
-              </div>
-            </div>
-          ) : row.max_power_consumption ? (
-            <span>{row.max_power_consumption} Unit/Hr.</span>
-          ) : (
-            "N/A"
           )
       },
       {
