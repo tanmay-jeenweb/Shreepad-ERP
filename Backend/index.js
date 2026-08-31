@@ -58,7 +58,7 @@ const { createMaterialGroupsTable } = require("./models/materialGroupModel.js");
 const { createMaterialTypesTable, seedSystemMaterialTypes } = require("./models/materialTypeModel.js");
 const { createUnitsTable } = require("./models/unitModel.js");
 const { createMaterialsTable, ensureMaterialColumns } = require("./models/materialModel.js");
-const { createBOMTable, ensureBOMColumns } = require("./models/bomModel.js");
+const { createBOMTable } = require("./models/bomModel.js");
 const { createTermsAndConditionsTable } = require("./models/termsAndConditionsModel.js");
 const { createOperatorTypesTable } = require("./models/operatorTypeModel.js");
 const { createOperatorsTable, ensureOperatorColumns } = require("./models/operatorModel.js");
@@ -179,7 +179,6 @@ const startServer = async () => {
         await createMaterialsTable();
         await ensureMaterialColumns();
         await createBOMTable();
-        await ensureBOMColumns();
         await createTermsAndConditionsTable();
         await createOperatorTypesTable();
         await createOperatorsTable();

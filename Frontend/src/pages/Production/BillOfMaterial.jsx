@@ -72,10 +72,6 @@ export default function BillOfMaterial() {
                 )
             },
             {
-                label: "Product Insert",
-                key: "product_insert",
-            },
-            {
                 label: "Raw Material",
                 key: "raw_material_label",
                 render: (row) => {
@@ -98,14 +94,6 @@ export default function BillOfMaterial() {
                 label: "Process",
                 key: "process_name",
                 render: (row) => row.process_name || "-"
-            },
-            {
-                label: "Price",
-                key: "price",
-                render: (row) => {
-                    const val = row.price;
-                    return val ? `₹${Number(val).toFixed(2)}` : "-";
-                }
             }
         ];
 
@@ -217,16 +205,8 @@ export default function BillOfMaterial() {
                                         <p className="text-sm font-medium text-slate-800">{viewData.material_type}</p>
                                     </div>
                                     <div className="space-y-1">
-                                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Product Insert</p>
-                                        <p className="text-sm font-medium text-slate-800">{viewData.product_insert || "-"}</p>
-                                    </div>
-                                    <div className="space-y-1">
                                         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Raw Material</p>
                                         <p className="text-sm font-medium text-slate-800">{viewData.raw_material_label || "-"}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Counting Type</p>
-                                        <p className="text-sm font-medium text-slate-800">{viewData.product_counting_type || "-"}</p>
                                     </div>
                                 </div>
                             </div>
@@ -241,14 +221,6 @@ export default function BillOfMaterial() {
                                     <div className="space-y-1">
                                         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Process</p>
                                         <p className="text-sm font-medium text-slate-800">{viewData.process_name || "-"}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Color</p>
-                                        <p className="text-sm font-medium text-slate-800">{viewData.color || "-"}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Packing Method</p>
-                                        <p className="text-sm font-medium text-slate-800">{viewData.packing_method || "-"}</p>
                                     </div>
                                 </div>
                             </div>
@@ -265,20 +237,8 @@ export default function BillOfMaterial() {
                                         <p className="text-sm font-medium text-slate-800">{viewData.unit_weight_tolerance || "-"}</p>
                                     </div>
                                     <div className="space-y-1">
-                                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">RM Formulation</p>
-                                        <p className="text-sm font-medium text-slate-800">{viewData.rm_formulation || "-"}</p>
-                                    </div>
-                                    <div className="space-y-1">
                                         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Product Wt. For Sale</p>
                                         <p className="text-sm font-medium text-slate-800">{viewData.product_weight_for_sale || "-"}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Difference</p>
-                                        <p className="text-sm font-medium text-slate-800">{viewData.difference || "-"}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Price</p>
-                                        <p className="text-sm font-medium text-slate-800">{viewData.price ? `₹${Number(viewData.price).toFixed(2)}` : "-"}</p>
                                     </div>
                                 </div>
                             </div>
