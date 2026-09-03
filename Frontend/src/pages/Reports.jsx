@@ -138,6 +138,8 @@ function DetailModal({ isOpen, row, onClose }) {
               <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Action Type</span>
               <p className="mt-0.5">
                 <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
+                  row.change_type === 'login' ? 'bg-emerald-100 text-emerald-800' :
+                  row.change_type === 'logout' ? 'bg-cyan-100 text-cyan-800' :
                   row.change_type === 'created' || row.change_type === 'approved' ? 'bg-green-100 text-green-800' :
                   row.change_type === 'updated' ? 'bg-amber-100 text-amber-800' :
                   row.change_type === 'deleted' || row.change_type === 'rejected' ? 'bg-rose-100 text-rose-800' :
@@ -243,6 +245,8 @@ export default function Reports() {
       label: "Action",
       render: (row) => (
         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold tracking-wide ${
+          row.change_type === 'login' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+          row.change_type === 'logout' ? 'bg-cyan-50 text-cyan-700 border border-cyan-200' :
           row.change_type === 'created' || row.change_type === 'approved' ? 'bg-green-50 text-green-700 border border-green-200' :
           row.change_type === 'updated' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
           row.change_type === 'deleted' || row.change_type === 'rejected' ? 'bg-rose-50 text-rose-700 border border-rose-200' :

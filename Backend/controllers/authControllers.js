@@ -15,6 +15,33 @@ const {
     createPendingDevice
 } = require("../models/deviceModel.js");
 
+// ================= HELPER: LOG AUTH ACTIVITY =================
+
+const logAuthActivity = async (userId, username, deviceId, action, req, extraData = {}) => {
+    try {
+        const ipAddress = req.ip || req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "Unknown";
+        const userAgent = req.headers["user-agent"] || "Unknown";
+
+        await createAuditLog(
+            userId,
+            username,
+            deviceId,
+            "Authentication",
+            action,
+            null,
+            {
+                action: action === "login" ? "User Login" : "User Logout",
+                ...extraData,
+                ip_address: ipAddress,
+                user_agent: userAgent
+            }
+        );
+        console.log(`[AUTH] ${action.toUpperCase()} - User: ${username} (ID: ${userId}), Device: ${deviceId}, IP: ${ipAddress}`);
+    } catch (error) {
+        console.error(`Failed to record ${action} audit log:`, error);
+    }
+};
+
 // ================= LOGIN =================
 
 const login = async (req, res) => {
@@ -66,6 +93,18 @@ const login = async (req, res) => {
                 { expiresIn: "1d" }
             );
 
+            await logAuthActivity(
+                user.id,
+                user.name || user.username || "Unknown",
+                deviceId,
+                "login",
+                req,
+                {
+                    username: user.username,
+                    role: user.role
+                }
+            );
+
             return res.status(200).json({
                 success: true,
                 message: "Admin login successful",
@@ -88,6 +127,18 @@ const login = async (req, res) => {
                 { id: user.id, role: user.role, name: user.name, username: user.username, mob_no: user.mob_no },
                 process.env.JWT_SECRET,
                 { expiresIn: "1d" }
+            );
+
+            await logAuthActivity(
+                user.id,
+                user.name || user.username || "Unknown",
+                deviceId,
+                "login",
+                req,
+                {
+                    username: user.username,
+                    role: user.role
+                }
             );
 
             return res.status(200).json({
@@ -115,6 +166,18 @@ const login = async (req, res) => {
                     { id: user.id, role: user.role, name: user.name, username: user.username, mob_no: user.mob_no },
                     process.env.JWT_SECRET,
                     { expiresIn: "1d" }
+                );
+
+                await logAuthActivity(
+                    user.id,
+                    user.name || user.username || "Unknown",
+                    deviceId,
+                    "login",
+                    req,
+                    {
+                        username: user.username,
+                        role: user.role
+                    }
                 );
 
                 return res.status(200).json({
@@ -239,6 +302,34 @@ const requestDeviceRegistration = async (req, res) => {
 
 const logout = async (req, res) => {
     try {
+        let user = req.user;
+        const authHeader = req.headers.authorization;
+        const deviceId = req.headers["x-device-id"] || req.headers["device-id"] || req.body?.deviceId || "Unknown";
+
+        if (!user && authHeader && authHeader.startsWith("Bearer ")) {
+            const token = authHeader.split(" ")[1];
+            try {
+                user = jwt.verify(token, process.env.JWT_SECRET);
+            } catch (err) {
+                // If token is expired, decode payload so we still know who logged out
+                user = jwt.decode(token);
+            }
+        }
+
+        if (user && user.id) {
+            await logAuthActivity(
+                user.id,
+                user.name || user.username || "Unknown",
+                deviceId,
+                "logout",
+                req,
+                {
+                    username: user.username,
+                    role: user.role
+                }
+            );
+        }
+
         return res.status(200).json({
             success: true,
             message: "Logged out successfully"
