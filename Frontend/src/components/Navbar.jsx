@@ -586,8 +586,8 @@ export default function Navbar({ title }) {
                                 </button>
 
                                 {isStoreOpen && (
-                                    <div className="absolute left-0 top-full mt-1.5 w-[520px] bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200">
-                                        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                                    <div className="absolute left-0 top-full mt-1.5 w-72 bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200">
+                                        <div className="flex flex-col gap-1.5">
                                             {availableStoreLinks.map((m, idx) => {
                                                 const isActive = location.pathname.startsWith(m.path);
                                                 return (
