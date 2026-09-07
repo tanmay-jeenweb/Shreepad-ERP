@@ -72,13 +72,21 @@ const { createRmReturnsTable } = require("./models/rmReturnModel.js");
 
 const app = express();
 
+const envFrontendUrls = process.env.FRONTEND_URL
+    ? process.env.FRONTEND_URL.split(",").map(url => url.trim().replace(/\/$/, ""))
+    : [];
+
 const allowedOrigins = [
     "http://localhost:5173",
     "https://spind.co.in",
     "http://spind.co.in",
     "https://www.spind.co.in",
     "http://www.spind.co.in",
-    process.env.FRONTEND_URL
+    "https://erp.shreepad.com",
+    "http://erp.shreepad.com",
+    "https://www.erp.shreepad.com",
+    "http://www.erp.shreepad.com",
+    ...envFrontendUrls
 ].filter(Boolean);
 
 app.use(cors({

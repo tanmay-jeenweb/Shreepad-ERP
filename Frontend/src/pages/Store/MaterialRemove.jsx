@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import DateInput from "../../components/DateInput";
 
 export default function MaterialRemove() {
-    const navigate = useNavigate();
+    const navigate = useNavigate();                 
 
     // Data fetching states
     const [batches, setBatches] = useState([]);
