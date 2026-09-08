@@ -47,10 +47,7 @@ export default function MachineMaster() {
       name: m.name,
       capacity: m.capacity || "",
       locationId: m.location_id || "",
-      companyName: m.company_name || "",
       outgoingJobWork: !!m.outgoing_job_work,
-      machineShift: m.machine_shift || "day shift",
-      maintenance: !!m.maintenance,
       active: !!m.active
     });
   };
@@ -214,23 +211,6 @@ export default function MachineMaster() {
       //   )
       // },
       {
-        key: "company_name",
-        label: "Company",
-        minWidth: "140px",
-        render: (row) =>
-          editingId === row.id ? (
-            <input
-              value={editingData?.companyName || ""}
-              onChange={(e) =>
-                setEditingData({ ...editingData, companyName: e.target.value })
-              }
-              className="border border-slate-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full text-sm"
-            />
-          ) : (
-            row.company_name || "N/A"
-          )
-      },
-      {
         key: "outgoing_job_work",
         label: "Outgoing",
         minWidth: "120px",
@@ -263,104 +243,6 @@ export default function MachineMaster() {
               </label>
             </div>
           ) : row.outgoing_job_work ? (
-            "Yes"
-          ) : (
-            "No"
-          )
-      },
-      {
-        key: "machine_shift",
-        label: "Shift",
-        minWidth: "180px",
-        render: (row) =>
-          editingId === row.id ? (
-            <div className="flex gap-2 text-xs font-medium">
-              <label className="inline-flex items-center cursor-pointer">
-                <input
-                  type="radio"
-                  name={"shift-" + row.id}
-                  value="day shift"
-                  checked={editingData?.machineShift === "day shift"}
-                  onChange={(e) =>
-                    setEditingData({
-                      ...editingData,
-                      machineShift: e.target.value
-                    })
-                  }
-                  className="mr-1 h-3.5 w-3.5 text-indigo-600 focus:ring-indigo-500"
-                />
-                Day
-              </label>
-              <label className="inline-flex items-center cursor-pointer">
-                <input
-                  type="radio"
-                  name={"shift-" + row.id}
-                  value="day-night shift"
-                  checked={editingData?.machineShift === "day-night shift"}
-                  onChange={(e) =>
-                    setEditingData({
-                      ...editingData,
-                      machineShift: e.target.value
-                    })
-                  }
-                  className="mr-1 h-3.5 w-3.5 text-indigo-600 focus:ring-indigo-500"
-                />
-                D-N
-              </label>
-              <label className="inline-flex items-center cursor-pointer">
-                <input
-                  type="radio"
-                  name={"shift-" + row.id}
-                  value="3shift"
-                  checked={editingData?.machineShift === "3shift"}
-                  onChange={(e) =>
-                    setEditingData({
-                      ...editingData,
-                      machineShift: e.target.value
-                    })
-                  }
-                  className="mr-1 h-3.5 w-3.5 text-indigo-600 focus:ring-indigo-500"
-                />
-                3S
-              </label>
-            </div>
-          ) : (
-            row.machine_shift || "N/A"
-          )
-      },
-      {
-        key: "maintenance",
-        label: "Maintenance",
-        minWidth: "120px",
-        render: (row) =>
-          editingId === row.id ? (
-            <div className="flex gap-2">
-              <label className="inline-flex items-center text-xs font-medium cursor-pointer">
-                <input
-                  type="radio"
-                  name={"main-" + row.id}
-                  checked={editingData?.maintenance === true}
-                  onChange={() =>
-                    setEditingData({ ...editingData, maintenance: true })
-                  }
-                  className="mr-1 h-3.5 w-3.5 text-indigo-600 focus:ring-indigo-500"
-                />
-                Yes
-              </label>
-              <label className="inline-flex items-center text-xs font-medium cursor-pointer">
-                <input
-                  type="radio"
-                  name={"main-" + row.id}
-                  checked={editingData?.maintenance === false}
-                  onChange={() =>
-                    setEditingData({ ...editingData, maintenance: false })
-                  }
-                  className="mr-1 h-3.5 w-3.5 text-indigo-600 focus:ring-indigo-500"
-                />
-                No
-              </label>
-            </div>
-          ) : row.maintenance ? (
             "Yes"
           ) : (
             "No"

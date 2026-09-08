@@ -12,10 +12,7 @@ export default function CreateMachine() {
     name: "",
     capacity: "",
     locationId: "",
-    companyName: "",
-    outgoingJobWork: false,
-    machineShift: "day shift",
-    maintenance: false
+    outgoingJobWork: false
   });
   const [saving, setSaving] = useState(false);
   // const [message, setMessage] = useState("");
@@ -56,10 +53,7 @@ export default function CreateMachine() {
         name: "",
         capacity: "",
         locationId: "",
-        companyName: "",
-        outgoingJobWork: false,
-        machineShift: "day shift",
-        maintenance: false
+        outgoingJobWork: false
       });
       setTimeout(() => {
         navigate("/admin/machines");
@@ -157,18 +151,7 @@ export default function CreateMachine() {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Company Name</label>
-                <input
-                  type="text"
-                  placeholder="Manufacturer / Company"
-                  value={newMachine.companyName}
-                  onChange={(e) => setNewMachine({ ...newMachine, companyName: e.target.value })}
-                  className="w-full border border-slate-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#369ACF] focus:border-[#369ACF] transition-colors"
-                />
-              </div>
-
-              <div>
+              <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-slate-700 mb-2">Outgoing Job Work</label>
                 <div className="flex gap-6 items-center h-10">
                   <label className="inline-flex items-center text-sm font-medium text-slate-700 cursor-pointer">
@@ -190,71 +173,6 @@ export default function CreateMachine() {
                       className="mr-2 h-4 w-4 text-[#369ACF] border-slate-300 focus:ring-[#369ACF]"
                     />
                     No
-                  </label>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Maintenance</label>
-                <div className="flex gap-6 items-center h-10">
-                  <label className="inline-flex items-center text-sm font-medium text-slate-700 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="maintenance"
-                      checked={newMachine.maintenance === true}
-                      onChange={() => setNewMachine({ ...newMachine, maintenance: true })}
-                      className="mr-2 h-4 w-4 text-[#369ACF] border-slate-300 focus:ring-[#369ACF]"
-                    />
-                    Yes
-                  </label>
-                  <label className="inline-flex items-center text-sm font-medium text-slate-700 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="maintenance"
-                      checked={newMachine.maintenance === false}
-                      onChange={() => setNewMachine({ ...newMachine, maintenance: false })}
-                      className="mr-2 h-4 w-4 text-[#369ACF] border-slate-300 focus:ring-[#369ACF]"
-                    />
-                    No
-                  </label>
-                </div>
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-slate-700 mb-2">Machine Shift</label>
-                <div className="flex gap-6 items-center h-10">
-                  <label className="inline-flex items-center text-sm font-medium text-slate-700 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="shift"
-                      value="day shift"
-                      checked={newMachine.machineShift === "day shift"}
-                      onChange={(e) => setNewMachine({ ...newMachine, machineShift: e.target.value })}
-                      className="mr-2 h-4 w-4 text-[#369ACF] border-slate-300 focus:ring-[#369ACF]"
-                    />
-                    Day shift
-                  </label>
-                  <label className="inline-flex items-center text-sm font-medium text-slate-700 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="shift"
-                      value="day-night shift"
-                      checked={newMachine.machineShift === "day-night shift"}
-                      onChange={(e) => setNewMachine({ ...newMachine, machineShift: e.target.value })}
-                      className="mr-2 h-4 w-4 text-[#369ACF] border-slate-300 focus:ring-[#369ACF]"
-                    />
-                    Day-Night
-                  </label>
-                  <label className="inline-flex items-center text-sm font-medium text-slate-700 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="shift"
-                      value="3shift"
-                      checked={newMachine.machineShift === "3shift"}
-                      onChange={(e) => setNewMachine({ ...newMachine, machineShift: e.target.value })}
-                      className="mr-2 h-4 w-4 text-[#369ACF] border-slate-300 focus:ring-[#369ACF]"
-                    />
-                    3 Shift
                   </label>
                 </div>
               </div>

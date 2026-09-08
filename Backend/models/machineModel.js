@@ -8,10 +8,7 @@ const createMachinesTable = async () => {
             name VARCHAR(150) NOT NULL,
             capacity VARCHAR(100) DEFAULT NULL,
             location_id INT DEFAULT NULL,
-            company_name VARCHAR(150) DEFAULT NULL,
             outgoing_job_work BOOLEAN DEFAULT FALSE,
-            machine_shift VARCHAR(50) DEFAULT NULL,
-            maintenance BOOLEAN DEFAULT FALSE,
             added_by INT NOT NULL,
             device_id VARCHAR(255) DEFAULT NULL,
             active BOOLEAN DEFAULT TRUE,
@@ -27,7 +24,7 @@ const createMachinesTable = async () => {
 
 const ensureMachineColumns = async () => {
     try {
-        const [rows] = await db.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'machines' AND COLUMN_NAME IN ('added_by','device_id','active', 'maintenance')");
+        const [rows] = await db.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'machines'");
         const existing = rows.map(r => r.COLUMN_NAME);
 
         if (!existing.includes('added_by')) {
@@ -45,9 +42,13 @@ const ensureMachineColumns = async () => {
             console.log('Added column active to machines');
         }
 
-        if (!existing.includes('maintenance')) {
-            await db.execute("ALTER TABLE machines ADD COLUMN maintenance BOOLEAN DEFAULT FALSE");
-            console.log('Added column maintenance to machines');
+        // Clean up removed columns if they exist
+        const columnsToDrop = ['company_name', 'machine_shift', 'maintenance'];
+        for (const col of columnsToDrop) {
+            if (existing.includes(col)) {
+                await db.execute(`ALTER TABLE machines DROP COLUMN ${col}`);
+                console.log(`Dropped column ${col} from machines`);
+            }
         }
     } catch (err) {
         console.error('Error ensuring machine columns:', err.message || err);
@@ -59,18 +60,15 @@ const createMachine = async (
     name,
     capacity = null,
     locationId = null,
-    companyName = null,
     outgoingJobWork = false,
-    machineShift = null,
-    maintenance = false,
     addedBy,
     deviceId = null,
     active = true
 ) => {
     const query = `
         INSERT INTO machines
-        (machine_number, name, capacity, location_id, company_name, outgoing_job_work, machine_shift, maintenance, added_by, device_id, active)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (machine_number, name, capacity, location_id, outgoing_job_work, added_by, device_id, active)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const [result] = await db.execute(query, [
@@ -78,10 +76,7 @@ const createMachine = async (
         name,
         capacity,
         locationId,
-        companyName,
         outgoingJobWork ? 1 : 0,
-        machineShift,
-        maintenance ? 1 : 0,
         addedBy,
         deviceId,
         active ? 1 : 0
@@ -118,10 +113,7 @@ const updateMachine = async (
     name,
     capacity = null,
     locationId = null,
-    companyName = null,
     outgoingJobWork = false,
-    machineShift = null,
-    maintenance = false,
     active = true
 ) => {
     const query = `
@@ -130,10 +122,7 @@ const updateMachine = async (
             name = ?,
             capacity = ?,
             location_id = ?,
-            company_name = ?,
             outgoing_job_work = ?,
-            machine_shift = ?,
-            maintenance = ?,
             active = ?
         WHERE id = ?
     `;
@@ -143,10 +132,7 @@ const updateMachine = async (
         name,
         capacity,
         locationId,
-        companyName,
         outgoingJobWork ? 1 : 0,
-        machineShift,
-        maintenance ? 1 : 0,
         active ? 1 : 0,
         id
     ]);
