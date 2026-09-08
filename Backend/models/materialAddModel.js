@@ -12,6 +12,10 @@ const createMaterialAddTables = async () => {
             ma_date             DATE NOT NULL,
             location_id         INT DEFAULT NULL,
             location_name       VARCHAR(255),
+            vendor_id           INT DEFAULT NULL,
+            vendor_name         VARCHAR(255) DEFAULT NULL,
+            challan_number      VARCHAR(100) DEFAULT NULL,
+            invoice_number      VARCHAR(100) DEFAULT NULL,
             remark              TEXT DEFAULT NULL,
             particular          TEXT DEFAULT NULL,
             status              VARCHAR(20) DEFAULT 'completed',
@@ -19,6 +23,7 @@ const createMaterialAddTables = async () => {
             created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (location_id)   REFERENCES locations(id)    ON DELETE SET NULL,
+            FOREIGN KEY (vendor_id)     REFERENCES vendor_master(id) ON DELETE SET NULL,
             FOREIGN KEY (added_by)      REFERENCES users(id)        ON DELETE CASCADE
         )
     `;
@@ -33,6 +38,7 @@ const createMaterialAddTables = async () => {
             unit                  VARCHAR(50),
             quantity              DECIMAL(15,4) DEFAULT 0,
             internal_batch_number VARCHAR(100) DEFAULT NULL,
+            supplier_batch_number VARCHAR(100) DEFAULT NULL,
             created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (ma_id)        REFERENCES material_add_master(id) ON DELETE CASCADE,
             FOREIGN KEY (material_id)  REFERENCES materials(id)            ON DELETE SET NULL
@@ -70,6 +76,31 @@ const ensureMaterialAddColumns = async () => {
         const [remCols] = await db.execute(`SHOW COLUMNS FROM material_add_items LIKE 'remaining_kg'`);
         if (remCols.length > 0) {
             await db.execute(`ALTER TABLE material_add_items DROP COLUMN remaining_kg`).catch(() => {});
+        }
+
+        // Ensure new columns in material_add_master
+        const [vendorIdCols] = await db.execute(`SHOW COLUMNS FROM material_add_master LIKE 'vendor_id'`);
+        if (vendorIdCols.length === 0) {
+            await db.execute(`ALTER TABLE material_add_master ADD COLUMN vendor_id INT DEFAULT NULL`);
+            await db.execute(`ALTER TABLE material_add_master ADD CONSTRAINT fk_ma_vendor FOREIGN KEY (vendor_id) REFERENCES vendor_master(id) ON DELETE SET NULL`).catch(() => {});
+        }
+        const [vendorNameCols] = await db.execute(`SHOW COLUMNS FROM material_add_master LIKE 'vendor_name'`);
+        if (vendorNameCols.length === 0) {
+            await db.execute(`ALTER TABLE material_add_master ADD COLUMN vendor_name VARCHAR(255) DEFAULT NULL`);
+        }
+        const [challanCols] = await db.execute(`SHOW COLUMNS FROM material_add_master LIKE 'challan_number'`);
+        if (challanCols.length === 0) {
+            await db.execute(`ALTER TABLE material_add_master ADD COLUMN challan_number VARCHAR(100) DEFAULT NULL`);
+        }
+        const [invoiceCols] = await db.execute(`SHOW COLUMNS FROM material_add_master LIKE 'invoice_number'`);
+        if (invoiceCols.length === 0) {
+            await db.execute(`ALTER TABLE material_add_master ADD COLUMN invoice_number VARCHAR(100) DEFAULT NULL`);
+        }
+
+        // Ensure new column in material_add_items
+        const [supBatchCols] = await db.execute(`SHOW COLUMNS FROM material_add_items LIKE 'supplier_batch_number'`);
+        if (supBatchCols.length === 0) {
+            await db.execute(`ALTER TABLE material_add_items ADD COLUMN supplier_batch_number VARCHAR(100) DEFAULT NULL`);
         }
     } catch (err) {
         console.log('ensureMaterialAddColumns cleanup notice:', err.message);
@@ -194,8 +225,8 @@ const createMaterialAdd = async (headerData, itemsData, addedBy) => {
 
         const insertMasterQuery = `
             INSERT INTO material_add_master
-                (ma_number, ma_date, location_id, location_name, remark, particular, status, added_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (ma_number, ma_date, location_id, location_name, vendor_id, vendor_name, challan_number, invoice_number, remark, particular, status, added_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
         const [maResult] = await connection.execute(insertMasterQuery, [
@@ -203,6 +234,10 @@ const createMaterialAdd = async (headerData, itemsData, addedBy) => {
             headerData.ma_date,
             toIntOrNull(headerData.location_id),
             headerData.location_name || null,
+            toIntOrNull(headerData.vendor_id),
+            headerData.vendor_name || null,
+            headerData.challan_number || null,
+            headerData.invoice_number || null,
             headerData.remark || null,
             headerData.particular || null,
             headerData.status || 'completed',
@@ -215,8 +250,8 @@ const createMaterialAdd = async (headerData, itemsData, addedBy) => {
             const insertItemQuery = `
                 INSERT INTO material_add_items
                     (ma_id, material_id, material_name, material_type, unit,
-                     quantity, internal_batch_number)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                     quantity, internal_batch_number, supplier_batch_number)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             `;
 
             for (const item of itemsData) {
@@ -238,7 +273,8 @@ const createMaterialAdd = async (headerData, itemsData, addedBy) => {
                     item.material_type || null,
                     item.unit || null,
                     parseFloat(item.quantity) || 0,
-                    internalBatchNumber
+                    internalBatchNumber,
+                    item.supplier_batch_number || null
                 ]);
 
                 // Upsert stock status immediately into inventory
@@ -270,6 +306,10 @@ const getAllMaterialAdds = async () => {
             m.ma_date,
             m.location_id,
             m.location_name,
+            m.vendor_id,
+            m.vendor_name,
+            m.challan_number,
+            m.invoice_number,
             m.remark,
             m.particular,
             m.status,
@@ -317,6 +357,10 @@ const updateMaterialAdd = async (id, headerData, itemsData) => {
                 ma_date             = ?,
                 location_id         = ?,
                 location_name       = ?,
+                vendor_id           = ?,
+                vendor_name         = ?,
+                challan_number      = ?,
+                invoice_number      = ?,
                 remark              = ?,
                 particular          = ?,
                 status              = ?
@@ -327,6 +371,10 @@ const updateMaterialAdd = async (id, headerData, itemsData) => {
             headerData.ma_date,
             toIntOrNull(headerData.location_id),
             headerData.location_name || null,
+            toIntOrNull(headerData.vendor_id),
+            headerData.vendor_name || null,
+            headerData.challan_number || null,
+            headerData.invoice_number || null,
             headerData.remark || null,
             headerData.particular || null,
             headerData.status || 'completed',
@@ -356,13 +404,13 @@ const updateMaterialAdd = async (id, headerData, itemsData) => {
             const insertItemQuery = `
                 INSERT INTO material_add_items
                     (ma_id, material_id, material_name, material_type, unit,
-                     quantity, internal_batch_number)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                     quantity, internal_batch_number, supplier_batch_number)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             `;
             const updateItemQuery = `
                 UPDATE material_add_items SET
                     material_id = ?, material_name = ?, material_type = ?, unit = ?,
-                    quantity = ?, internal_batch_number = ?
+                    quantity = ?, internal_batch_number = ?, supplier_batch_number = ?
                 WHERE id = ?
             `;
 
@@ -387,6 +435,7 @@ const updateMaterialAdd = async (id, headerData, itemsData) => {
                         item.unit || null,
                         parseFloat(item.quantity) || 0,
                         internalBatchNumber,
+                        item.supplier_batch_number || null,
                         item.id
                     ]);
 
@@ -405,7 +454,8 @@ const updateMaterialAdd = async (id, headerData, itemsData) => {
                         item.material_type || null,
                         item.unit || null,
                         parseFloat(item.quantity) || 0,
-                        internalBatchNumber
+                        internalBatchNumber,
+                        item.supplier_batch_number || null
                     ]);
 
                     // Upsert stock status record

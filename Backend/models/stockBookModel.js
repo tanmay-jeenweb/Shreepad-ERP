@@ -42,15 +42,15 @@ const getStockBookRecords = async (filters = {}) => {
                 'MA Received' AS particular,
                 mai.material_name AS product,
                 mai.internal_batch_number AS internal_batch_number,
-                '' AS supplier_batch_number,
-                '' AS vendor_name,
+                COALESCE(mai.supplier_batch_number, '') AS supplier_batch_number,
+                COALESCE(ma.vendor_name, '') AS vendor_name,
                 NULL AS job_party_name,
-                '' AS invoice_number,
+                COALESCE(ma.invoice_number, '') AS invoice_number,
                 ma.ma_number AS grn_number,
                 '' AS p_memo_number,
                 mai.quantity AS approved_quantity,
                 0 AS issued_quantity,
-                NULL AS vendor_id,
+                ma.vendor_id AS vendor_id,
                 NULL AS job_party_id,
                 ma.location_id,
                 ma.created_at AS created_at
@@ -97,15 +97,15 @@ const getStockBookRecords = async (filters = {}) => {
                 END AS particular,
                 mai.material_name AS product,
                 mai.internal_batch_number AS internal_batch_number,
-                '' AS supplier_batch_number,
-                '' AS vendor_name,
+                COALESCE(mai.supplier_batch_number, '') AS supplier_batch_number,
+                COALESCE(ma.vendor_name, '') AS vendor_name,
                 NULL AS job_party_name,
-                '' AS invoice_number,
+                COALESCE(ma.invoice_number, '') AS invoice_number,
                 ma.ma_number AS grn_number,
                 COALESCE(si.p_memo_number, '') AS p_memo_number,
                 0 AS approved_quantity,
                 si.issue_quantity AS issued_quantity,
-                NULL AS vendor_id,
+                ma.vendor_id AS vendor_id,
                 NULL AS job_party_id,
                 ma.location_id,
                 si.created_at AS created_at
@@ -317,7 +317,7 @@ const getStockIssueLogs = async (materialId) => {
             si.created_at,
             COALESCE(u.name, 'Unknown') AS added_by_name,
             COALESCE(mai.internal_batch_number, r.internal_batch_number) AS internal_batch_number,
-            '' AS supplier_batch_number
+            COALESCE(mai.supplier_batch_number, '') AS supplier_batch_number
         FROM stock_issues si
         LEFT JOIN material_add_items mai ON si.ma_item_id = mai.id
         LEFT JOIN rm_returns r ON si.rm_return_id = r.id

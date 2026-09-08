@@ -10,6 +10,7 @@ import {
     getNextBatchNumber
 } from "../../api/materialAddApi";
 import { getLocations } from "../../api/locationApi";
+import { getAllVendors } from "../../api/vendorApi";
 import toast from "react-hot-toast";
 import DateInput from "../../components/DateInput";
 
@@ -21,13 +22,18 @@ const EMPTY_ITEM = {
     material_type: "",
     unit: "",
     quantity: "",
-    internal_batch_number: ""
+    internal_batch_number: "",
+    supplier_batch_number: ""
 };
 
 const EMPTY_HEADER = {
     ma_date: new Date().toISOString().split("T")[0],
     location_id: "",
     location_name: "",
+    vendor_id: "",
+    vendor_name: "",
+    challan_number: "",
+    invoice_number: "",
     remark: "",
     particular: "",
     status: "received"
@@ -46,6 +52,7 @@ export default function CreateMaterialAdd() {
 
     // Masters
     const [locations, setLocations] = useState([]);
+    const [vendors, setVendors] = useState([]);
     const [materialTypes, setMaterialTypes] = useState([]);
     const [materialsByType, setMaterialsByType] = useState({});
 
@@ -56,13 +63,15 @@ export default function CreateMaterialAdd() {
     useEffect(() => {
         const fetchMasters = async () => {
             try {
-                const [locsRes, typesRes] = await Promise.all([
+                const [locsRes, typesRes, vendorsRes] = await Promise.all([
                     getLocations(),
-                    getMaterialTypes()
+                    getMaterialTypes(),
+                    getAllVendors()
                 ]);
 
                 setLocations(locsRes.data?.data || []);
                 setMaterialTypes(typesRes.data?.data || []);
+                setVendors(vendorsRes.data?.data || []);
             } catch (error) {
                 console.error("Failed to fetch masters", error);
                 toast.error("Failed to load initial data.");
@@ -86,6 +95,10 @@ export default function CreateMaterialAdd() {
                     ma_date: data.ma_date ? new Date(data.ma_date).toISOString().split("T")[0] : "",
                     location_id: data.location_id || "",
                     location_name: data.location_name || "",
+                    vendor_id: data.vendor_id || "",
+                    vendor_name: data.vendor_name || "",
+                    challan_number: data.challan_number || "",
+                    invoice_number: data.invoice_number || "",
                     remark: data.remark || "",
                     particular: data.particular || "",
                     status: data.status || "received"
@@ -100,7 +113,8 @@ export default function CreateMaterialAdd() {
 
                         return {
                             ...it,
-                            quantity: it.quantity
+                            quantity: it.quantity,
+                            supplier_batch_number: it.supplier_batch_number || ""
                         };
                     });
                     setItems(formattedItems);
@@ -151,6 +165,9 @@ export default function CreateMaterialAdd() {
         if (name === "location_id") {
             const loc = locations.find(l => l.id === parseInt(value));
             newData.location_name = loc ? loc.location_name : "";
+        } else if (name === "vendor_id") {
+            const v = vendors.find(item => item.id === parseInt(value));
+            newData.vendor_name = v ? v.vendor_name : "";
         }
         setHeaderData(newData);
     };
@@ -291,7 +308,7 @@ export default function CreateMaterialAdd() {
                             </div>
                             
                             <div className="p-6 space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                     <div>
                                         <label className={labelCls}>Date <span className="text-rose-500">*</span></label>
                                         <DateInput
@@ -315,6 +332,45 @@ export default function CreateMaterialAdd() {
                                                 <option key={l.id} value={l.id}>{l.location_name}</option>
                                             ))}
                                         </select>
+                                    </div>
+                                    <div>
+                                        <label className={labelCls}>Vendor Name</label>
+                                        <select
+                                            name="vendor_id"
+                                            value={headerData.vendor_id}
+                                            onChange={handleHeaderChange}
+                                            className={inputCls}
+                                        >
+                                            <option value="">Select Vendor</option>
+                                            {vendors.map(v => (
+                                                <option key={v.id} value={v.id}>{v.vendor_name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label className={labelCls}>Challan Number</label>
+                                        <input
+                                            type="text"
+                                            name="challan_number"
+                                            value={headerData.challan_number}
+                                            onChange={handleHeaderChange}
+                                            placeholder="Enter challan number..."
+                                            className={inputCls}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className={labelCls}>Invoice Number</label>
+                                        <input
+                                            type="text"
+                                            name="invoice_number"
+                                            value={headerData.invoice_number}
+                                            onChange={handleHeaderChange}
+                                            placeholder="Enter invoice number..."
+                                            className={inputCls}
+                                        />
                                     </div>
                                 </div>
 
@@ -347,18 +403,8 @@ export default function CreateMaterialAdd() {
 
                         {/* Items */}
                         <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-                            <div className="border-b border-slate-100 bg-slate-50/50 px-6 py-4 flex justify-between items-center">
+                            <div className="border-b border-slate-100 bg-slate-50/50 px-6 py-4">
                                 <h2 className="text-lg font-semibold text-slate-800">Material Details</h2>
-                                <button
-                                    type="button"
-                                    onClick={addItem}
-                                    className="px-4 py-2 bg-[#369ACF]/10 hover:bg-[#369ACF]/20 text-[#369ACF] text-xs font-bold rounded-xl border border-[#369ACF]/20 transition-colors flex items-center gap-1.5 cursor-pointer"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                                    </svg>
-                                    Add Row
-                                </button>
                             </div>
 
                             <div className="p-6 space-y-6">
@@ -377,7 +423,7 @@ export default function CreateMaterialAdd() {
                                             </button>
                                         )}
 
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
                                             <div>
                                                 <label className={itemLabelCls}>Material Type <span className="text-rose-500">*</span></label>
                                                 <select
@@ -422,6 +468,17 @@ export default function CreateMaterialAdd() {
                                             </div>
 
                                             <div>
+                                                <label className={itemLabelCls}>Supplier Batch #</label>
+                                                <input
+                                                    type="text"
+                                                    value={item.supplier_batch_number || ""}
+                                                    placeholder="Supplier Batch #"
+                                                    onChange={(e) => handleItemChange(idx, "supplier_batch_number", e.target.value)}
+                                                    className={itemInputCls}
+                                                />
+                                            </div>
+
+                                            <div>
                                                 <label className={itemLabelCls}>Total Qty <span className="text-rose-500">*</span></label>
                                                 <input
                                                     type="number"
@@ -436,6 +493,19 @@ export default function CreateMaterialAdd() {
                                         </div>
                                     </div>
                                 ))}
+
+                                <div className="pt-2 flex justify-start">
+                                    <button
+                                        type="button"
+                                        onClick={addItem}
+                                        className="px-4 py-2.5 bg-[#369ACF]/10 hover:bg-[#369ACF]/20 text-[#369ACF] text-sm font-semibold rounded-xl border border-[#369ACF]/20 transition-colors flex items-center gap-2 cursor-pointer shadow-sm hover:shadow"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                                        </svg>
+                                        Add Row
+                                    </button>
+                                </div>
                             </div>
                         </div>
 

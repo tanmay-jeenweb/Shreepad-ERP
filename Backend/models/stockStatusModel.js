@@ -163,7 +163,7 @@ const upsertStockStatusForMa = async (connection, maId, item, maHeader) => {
                 ma_id           = ?
             WHERE internal_batch_number = ?`,
             [
-                maHeader.particular || null,
+                maHeader.vendor_name || maHeader.particular || null,
                 maHeader.location_name || null,
                 materialId,
                 item.material_name || null,
@@ -182,7 +182,7 @@ const upsertStockStatusForMa = async (connection, maId, item, maHeader) => {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 internalBatchNumber,
-                maHeader.particular || null,
+                maHeader.vendor_name || maHeader.particular || null,
                 maHeader.location_name || null,
                 materialId,
                 item.material_name || null,
@@ -234,7 +234,7 @@ const getAllStockStatus = async (typeFilter, filters = {}) => {
         SELECT
             ss.id,
             ss.internal_batch_number,
-            '' AS supplier_batch_number,
+            COALESCE(mai.supplier_batch_number, '') AS supplier_batch_number,
             ss.party,
             ss.location,
             ss.material_name,

@@ -319,11 +319,11 @@ export default function Navbar({ title }) {
     });
 
     const availableProductionLinks = [
+        { name: "Work Order", path: "/sales/work-orders", icon: "fa-solid fa-file-signature", masterKey: "work_order" },
         { name: "Bill of Material", path: "/production/bom", icon: "fa-solid fa-file-lines", masterKey: "bom" }
     ].filter(m => isAdmin || hasPermission(m.masterKey, "read"));
 
     const availableSalesLinks = [
-        { name: "Work Order", path: "/sales/work-orders", icon: "fa-solid fa-file-signature", masterKey: "work_order" }
     ].filter(m => isAdmin || hasPermission(m.masterKey, "read"));
 
     const availableApprovalLinks = [];
@@ -594,7 +594,7 @@ export default function Navbar({ title }) {
                             <div className="relative w-full" id="production-dropdown">
                                 <button
                                     onClick={toggleProduction}
-                                    className={`flex items-center justify-between w-full px-3.5 py-2.5 text-xs sm:text-sm border border-white/10 rounded-none hover:bg-white/5 focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer whitespace-nowrap ${location.pathname.startsWith("/production/") ? "bg-white/10" : "bg-[#369ACF]"}`}
+                                    className={`flex items-center justify-between w-full px-3.5 py-2.5 text-xs sm:text-sm border border-white/10 rounded-none hover:bg-white/5 focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer whitespace-nowrap ${location.pathname.startsWith("/production/") || availableProductionLinks.some(m => location.pathname.startsWith(m.path)) ? "bg-white/10" : "bg-[#369ACF]"}`}
                                 >
                                     <span className="font-semibold text-white truncate">Production</span>
                                     <svg
