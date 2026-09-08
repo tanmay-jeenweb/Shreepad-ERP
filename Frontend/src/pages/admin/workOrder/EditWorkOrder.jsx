@@ -843,9 +843,15 @@ export default function EditWorkOrder() {
                                       value={rm.minSupplyNeeded}
                                       onChange={(e) => handleRMMinSupplyChange(rm.itemIdx, rm.rmIdx, e.target.value)}
                                       onBlur={() => handleRMMinSupplyBlur(rm.itemIdx, rm.rmIdx, rm.calculatedMinSupply)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          e.preventDefault();
+                                          handleRMMinSupplyBlur(rm.itemIdx, rm.rmIdx, rm.calculatedMinSupply);
+                                        }
+                                      }}
                                       placeholder={String(rm.calculatedMinSupply)}
                                       className={`w-28 px-2.5 py-1 text-right text-xs font-mono font-semibold border rounded-lg focus:outline-none transition-colors bg-white ${
-                                        Number(rm.minSupplyNeeded) < rm.calculatedMinSupply
+                                        (rm.minSupplyNeeded === "" || Number(rm.minSupplyNeeded) < rm.calculatedMinSupply)
                                           ? "border-rose-400 text-rose-600 focus:border-rose-500"
                                           : "border-slate-200 text-slate-800 focus:border-indigo-500"
                                       }`}
@@ -854,7 +860,7 @@ export default function EditWorkOrder() {
                                       {rm.unitName}
                                     </span>
                                   </div>
-                                  {Number(rm.minSupplyNeeded) < rm.calculatedMinSupply && (
+                                  {(rm.minSupplyNeeded === "" || Number(rm.minSupplyNeeded) < rm.calculatedMinSupply) && (
                                     <span className="text-[10px] text-rose-500 font-medium">
                                       Min: {rm.calculatedMinSupply} {rm.unitName}
                                     </span>
