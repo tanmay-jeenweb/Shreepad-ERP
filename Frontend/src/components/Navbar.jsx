@@ -297,15 +297,6 @@ export default function Navbar({ title }) {
             color: "bg-emerald-50 text-emerald-600 border border-emerald-100/50",
             activeColor: "bg-emerald-100 text-emerald-700",
             desc: "Manage organization details and settings"
-        },
-        {
-            name: "Setting Master",
-            path: "/admin/settings",
-            masterKey: "setting_master",
-            icon: "fa-solid fa-sliders",
-            color: "bg-indigo-50 text-indigo-600 border border-indigo-100/50",
-            activeColor: "bg-indigo-100 text-indigo-700",
-            desc: "Configure system-wide settings like batch year override"
         }
     ];
 

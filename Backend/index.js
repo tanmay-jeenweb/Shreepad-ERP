@@ -22,7 +22,6 @@ const operatorRoutes = require("./routes/operatorRoutes.js");
 const vendorRoutes = require("./routes/vendorRoutes.js");
 const customerRoutes = require("./routes/customerRoutes.js");
 const processMasterRoutes = require("./routes/processMasterRoutes.js");
-const settingMasterRoutes = require("./routes/settingMasterRoutes.js");
 
 const documentMasterRoutes = require("./routes/documentRoutes.js");
 const organizationRoutes = require("./routes/organizationRoutes.js");
@@ -52,7 +51,6 @@ const { createOperatorsTable, ensureOperatorColumns } = require("./models/operat
 const { createVendorTables, ensureVendorColumns } = require("./models/vendorModel.js");
 const { createCustomerTables, ensureCustomerColumns } = require("./models/customerModel.js");
 const { createProcessMastersTable } = require("./models/processMasterModel.js");
-const { createSettingMasterTable, ensureSettingsMasterColumns } = require("./models/settingMasterModel.js");
 const { createDocumentMasterTable } = require("./models/documentMaster.js");
 const { createOrganizationTable, ensureOrganizationColumns } = require("./models/organizationModel.js");
 const { createBatchSequenceTable } = require("./models/batchSequenceModel.js");
@@ -108,7 +106,6 @@ app.use(["/api/operators", "/operators"], operatorRoutes);
 app.use(["/api/vendors", "/vendors"], vendorRoutes);
 app.use(["/api/customers", "/customers"], customerRoutes);
 app.use(["/api/process-masters", "/process-masters"], processMasterRoutes);
-app.use(["/api/settings", "/settings"], settingMasterRoutes);
 app.use(["/api/document-masters", "/document-masters"], documentMasterRoutes);
 app.use(["/api/organizations", "/organizations"], organizationRoutes);
 app.use(["/api/stock-book", "/stock-book"], stockBookRoutes);
@@ -171,8 +168,17 @@ const startServer = async () => {
         await ensureVendorColumns();
         await createCustomerTables();
         await ensureCustomerColumns();
-        await createSettingMasterTable();
-        await ensureSettingsMasterColumns();
+
+        // Cleanup settings_master table and permissions if exist
+        try {
+            const db = require("./config/db.js");
+            await db.execute("DROP TABLE IF EXISTS settings_master");
+            await db.execute("DELETE FROM user_type_permissions WHERE master_name = 'setting_master'");
+            console.log("Cleaned up settings_master table and permissions");
+        } catch (dropErr) {
+            console.error("Error dropping settings_master table:", dropErr.message);
+        }
+
         await createBatchSequenceTable();
         await createOrganizationTable();
         await ensureOrganizationColumns();

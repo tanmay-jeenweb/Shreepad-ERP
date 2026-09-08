@@ -48,7 +48,6 @@ import PMRmReturnPage from "./pages/Production/PMRmReturnPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 import OrganizationDetails from "./pages/admin/organization/OrganizationDetails";
-import SettingMaster from "./pages/admin/settings/SettingMaster";
 import Navbar from "./components/Navbar";
 
 export default function AppRoutes() {
@@ -268,16 +267,6 @@ export default function AppRoutes() {
                     element={<TermsAndConditionsMaster />}
                 />
             </Route>
-
-            {/* Setting Master */}
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="setting_master" requiredAction="read" />}>
-                <Route
-                    path="/admin/settings"
-                    element={<SettingMaster />}
-                />
-            </Route>
-
-
 
             <Route element={<ProtectedRoute allowedModule="manufacturing" />}>
                 <Route
