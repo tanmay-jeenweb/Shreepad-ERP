@@ -1,17 +1,14 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Navbar from "../../../components/Navbar";
 import { createLocation } from "../../../api/locationApi.js";
-import { getLocationTypes } from "../../../api/locationTypeApi.js";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
 export default function CreateLocation() {
-  const [locationTypes, setLocationTypes] = useState([]);
   const [newLocation, setNewLocation] = useState({
     locationName: "",
     address: "",
     locationPlantNo: "",
-    plantTypeId: "",
     plantAddress: ""
   });
   const [saving, setSaving] = useState(false);
@@ -19,23 +16,10 @@ export default function CreateLocation() {
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
-  const loadLocationTypes = async () => {
-    try {
-      const response = await getLocationTypes();
-      setLocationTypes(response.data.data || []);
-    } catch (err) {
-      console.error("Failed to load location types", err);
-    }
-  };
-
-  useEffect(() => {
-    loadLocationTypes();
-  }, []);
-
   const handleAddLocation = async (event) => {
     event.preventDefault();
-    if (!newLocation.locationName.trim() || !newLocation.plantTypeId) {
-      setError("Location name and plant type are required.");
+    if (!newLocation.locationName.trim()) {
+      setError("Location name is required.");
       return;
     }
 
@@ -50,7 +34,6 @@ export default function CreateLocation() {
         locationName: "",
         address: "",
         locationPlantNo: "",
-        plantTypeId: "",
         plantAddress: ""
       });
       setTimeout(() => {
@@ -104,22 +87,6 @@ export default function CreateLocation() {
                   onChange={(e) => setNewLocation({ ...newLocation, locationName: e.target.value })}
                   className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#369ACF] focus:border-[#369ACF] transition-colors"
                 />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Plant Type <span className="text-rose-500">*</span></label>
-                <select
-                  value={newLocation.plantTypeId}
-                  onChange={(e) => setNewLocation({ ...newLocation, plantTypeId: e.target.value })}
-                  className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#369ACF] focus:border-[#369ACF] bg-white transition-colors"
-                >
-                  <option value="">Select plant type</option>
-                  {locationTypes.map((type) => (
-                    <option key={type.id} value={type.id}>
-                      {type.location_type_name}
-                    </option>
-                  ))}
-                </select>
               </div>
 
               <div>

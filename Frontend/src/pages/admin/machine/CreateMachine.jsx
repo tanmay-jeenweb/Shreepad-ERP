@@ -1,18 +1,15 @@
 import { useEffect, useState } from "react";
 import Navbar from "../../../components/Navbar";
 import { createMachine } from "../../../api/machineApi";
-import { getMachineTypes } from "../../../api/machineTypeApi";
 import { getLocations } from "../../../api/locationApi";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
 export default function CreateMachine() {
-  const [machineTypes, setMachineTypes] = useState([]);
   const [locations, setLocations] = useState([]);
   const [newMachine, setNewMachine] = useState({
     machineNumber: "",
     name: "",
-    machineTypeId: "",
     capacity: "",
     locationId: "",
     companyName: "",
@@ -27,11 +24,10 @@ export default function CreateMachine() {
 
   const loadData = async () => {
     try {
-      const [typesRes, locRes] = await Promise.all([getMachineTypes(), getLocations()]);
-      setMachineTypes(typesRes.data.data || []);
+      const locRes = await getLocations();
       setLocations(locRes.data.data || []);
     } catch (err) {
-      console.error("Failed to load machine dropdown data", err);
+      console.error("Failed to load locations dropdown data", err);
     }
   };
 
@@ -58,7 +54,6 @@ export default function CreateMachine() {
       setNewMachine({
         machineNumber: "",
         name: "",
-        machineTypeId: "",
         capacity: "",
         locationId: "",
         companyName: "",
@@ -130,20 +125,6 @@ export default function CreateMachine() {
                   className="w-full border border-slate-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#369ACF] focus:border-[#369ACF] transition-colors"
                   required
                 />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Machine Type</label>
-                <select
-                  value={newMachine.machineTypeId}
-                  onChange={(e) => setNewMachine({ ...newMachine, machineTypeId: e.target.value })}
-                  className="w-full border border-slate-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#369ACF] focus:border-[#369ACF] bg-white transition-colors text-slate-700"
-                >
-                  <option value="">Select type</option>
-                  {machineTypes.map((t) => (
-                    <option key={t.id} value={t.id}>{t.machine_type_name}</option>
-                  ))}
-                </select>
               </div>
 
               <div>

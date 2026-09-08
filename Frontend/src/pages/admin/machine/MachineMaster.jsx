@@ -1,7 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import Navbar from "../../../components/Navbar";
 import { getAllMachines, updateMachine, deleteMachine, toggleMachineActive } from "../../../api/machineApi";
-import { getMachineTypes } from "../../../api/machineTypeApi";
 import { getLocations } from "../../../api/locationApi";
 import DataTable from "../../../components/DataTable";
 import toast from "react-hot-toast";
@@ -11,7 +10,6 @@ import { usePermission } from "../../../context/PermissionContext";
 export default function MachineMaster() {
   const [loading, setLoading] = useState(false);
   const [machines, setMachines] = useState([]);
-  const [machineTypes, setMachineTypes] = useState([]);
   const [locations, setLocations] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -24,13 +22,11 @@ export default function MachineMaster() {
     setLoading(true);
     setError("");
     try {
-      const [mRes, typesRes, locRes] = await Promise.all([
+      const [mRes, locRes] = await Promise.all([
         getAllMachines(showInactive),
-        getMachineTypes(),
         getLocations()
       ]);
       setMachines(mRes.data.data || []);
-      setMachineTypes(typesRes.data.data || []);
       setLocations(locRes.data.data || []);
     } catch (err) {
       console.error("Failed to load machine data", err);
@@ -49,7 +45,6 @@ export default function MachineMaster() {
     setEditingData({
       machineNumber: m.machine_number,
       name: m.name,
-      machineTypeId: m.machine_type_id || "",
       capacity: m.capacity || "",
       locationId: m.location_id || "",
       companyName: m.company_name || "",
@@ -152,30 +147,6 @@ export default function MachineMaster() {
             />
           ) : (
             <span className="font-semibold text-slate-900">{row.name}</span>
-          )
-      },
-      {
-        key: "machine_type_name",
-        label: "Type",
-        minWidth: "140px",
-        render: (row) =>
-          editingId === row.id ? (
-            <select
-              value={editingData?.machineTypeId || ""}
-              onChange={(e) =>
-                setEditingData({ ...editingData, machineTypeId: e.target.value })
-              }
-              className="border border-slate-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full text-sm bg-white"
-            >
-              <option value="">Select type</option>
-              {machineTypes.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.machine_type_name}
-                </option>
-              ))}
-            </select>
-          ) : (
-            row.machine_type_name || "N/A"
           )
       },
       {
@@ -537,7 +508,7 @@ export default function MachineMaster() {
     }
 
     return cols;
-  }, [editingId, editingData, machineTypes, locations, saving, hasPermission, showInactive]);
+  }, [editingId, editingData, locations, saving, hasPermission, showInactive]);
 
   return (
     <div className="flex-1 flex flex-col bg-slate-50 font-sans text-slate-900">

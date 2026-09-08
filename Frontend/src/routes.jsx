@@ -7,10 +7,8 @@ import PendingApproval from "./pages/PendingApproval";
 import UserHome from "./pages/user/UserHome";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import UserGroupMaster from "./pages/admin/user/UserGroupMaster";
-import LocationTypeMaster from "./pages/admin/location/LocationTypeMaster";
 import LocationMaster from "./pages/admin/location/LocationMaster";
 import CreateLocation from "./pages/admin/location/CreateLocation";
-import MachineTypeMaster from "./pages/admin/machine/MachineTypeMaster";
 import CreateUser from "./pages/admin/user/CreateUser";
 import MachineMaster from "./pages/admin/machine/MachineMaster";
 import CreateMachine from "./pages/admin/machine/CreateMachine";
@@ -127,13 +125,6 @@ export default function AppRoutes() {
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="location_type" requiredAction="read" />}>
-                <Route
-                    path="/admin/location-types"
-                    element={<LocationTypeMaster />}
-                />
-            </Route>
-
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="location" requiredAction="read" />}>
                 <Route
                     path="/admin/locations"
@@ -145,13 +136,6 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/locations/create"
                     element={<CreateLocation />}
-                />
-            </Route>
-
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="machine_type" requiredAction="read" />}>
-                <Route
-                    path="/admin/machine-types"
-                    element={<MachineTypeMaster />}
                 />
             </Route>
 

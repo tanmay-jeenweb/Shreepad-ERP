@@ -13,7 +13,6 @@ const addMachine = async (req, res) => {
         const {
             machineNumber,
             name,
-            machineTypeId,
             capacity,
             locationId,
             companyName,
@@ -33,7 +32,6 @@ const addMachine = async (req, res) => {
         const result = await createMachine(
             machineNumber,
             name,
-            machineTypeId || null,
             capacity || null,
             locationId || null,
             companyName || null,
@@ -56,7 +54,6 @@ const addMachine = async (req, res) => {
                 id: result.insertId,
                 machine_number: machineNumber,
                 name,
-                machine_type_id: machineTypeId || null,
                 capacity: capacity || null,
                 location_id: locationId || null,
                 company_name: companyName || null,
@@ -106,7 +103,6 @@ const updateMachineController = async (req, res) => {
         const {
             machineNumber,
             name,
-            machineTypeId,
             capacity,
             locationId,
             companyName,
@@ -126,7 +122,6 @@ const updateMachineController = async (req, res) => {
             id,
             machineNumber,
             name,
-            machineTypeId || null,
             capacity || null,
             locationId || null,
             companyName || null,
@@ -147,7 +142,6 @@ const updateMachineController = async (req, res) => {
                 ...beforeData,
                 machine_number: machineNumber,
                 name,
-                machine_type_id: machineTypeId || null,
                 capacity: capacity || null,
                 location_id: locationId || null,
                 company_name: companyName || null,

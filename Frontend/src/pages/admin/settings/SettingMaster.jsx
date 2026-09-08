@@ -4,21 +4,12 @@ import { getSettings, saveSettings } from "../../../api/settingMasterApi";
 import toast from "react-hot-toast";
 import { usePermission } from "../../../context/PermissionContext";
 
-const MATERIAL_TYPES = [
-  { key: "prefix_finished_goods", label: "Finished Goods" },
-  { key: "prefix_semi_finished_goods", label: "Semi Finished Goods" },
-  { key: "prefix_raw_materials", label: "Raw Materials" },
-];
-
 export default function SettingMaster() {
   const { hasPermission } = usePermission();
   const canWrite = hasPermission("setting_master", "write");
 
   const [form, setForm] = useState({
     batch_year: "",
-    prefix_finished_goods: "FG",
-    prefix_semi_finished_goods: "SFG",
-    prefix_raw_materials: "RM",
   });
 
   const [loading, setLoading] = useState(true);
@@ -34,9 +25,6 @@ export default function SettingMaster() {
         if (data) {
           setForm({
             batch_year: data.batch_year || "",
-            prefix_finished_goods: data.prefix_finished_goods || "FG",
-            prefix_semi_finished_goods: data.prefix_semi_finished_goods || "SFG",
-            prefix_raw_materials: data.prefix_raw_materials || "RM",
           });
         }
       } catch (err) {
@@ -72,9 +60,6 @@ export default function SettingMaster() {
         const data = res.data.data;
         setForm({
           batch_year: data.batch_year || "",
-          prefix_finished_goods: data.prefix_finished_goods || "FG",
-          prefix_semi_finished_goods: data.prefix_semi_finished_goods || "SFG",
-          prefix_raw_materials: data.prefix_raw_materials || "RM",
         });
       }
     } catch (err) {
@@ -112,7 +97,7 @@ export default function SettingMaster() {
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-slate-900">Setting Master</h1>
           <p className="text-slate-500 mt-1 text-sm">
-            Configure system-wide settings like internal batch number prefixes.
+            Configure system-wide settings like internal batch number year override.
           </p>
         </div>
 
@@ -140,25 +125,6 @@ export default function SettingMaster() {
                 <p className="mt-1.5 text-xs text-slate-400">
                   Leave blank to auto-use current year (<span className="font-mono">{currentYear}</span>).
                 </p>
-              </div>
-
-              {/* Grid of Prefixes */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {MATERIAL_TYPES.map((type) => (
-                  <div key={type.key}>
-                    <label className={labelCls}>{type.label} Prefix</label>
-                    <input
-                      type="text"
-                      name={type.key}
-                      value={form[type.key]}
-                      onChange={handleChange}
-                      maxLength={5}
-                      disabled={!canWrite}
-                      className={inputCls}
-                      required
-                    />
-                  </div>
-                ))}
               </div>
             </div>
 

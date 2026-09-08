@@ -8,13 +8,11 @@ const createLocationsTable = async () => {
         location_name VARCHAR(255) NOT NULL UNIQUE,
         address TEXT,
         location_plant_no VARCHAR(255),
-        plant_type_id INT,
         plant_address TEXT,
         added_by INT,
         device_id VARCHAR(255),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        FOREIGN KEY (plant_type_id) REFERENCES location_types(id) ON DELETE SET NULL,
         FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE SET NULL
       )
     `;
@@ -34,13 +32,13 @@ const createLocationsTable = async () => {
   }
 };
 
-const createLocation = async (locationName, address, locationPlantNo, plantTypeId, plantAddress, addedBy, deviceId) => {
+const createLocation = async (locationName, address, locationPlantNo, plantAddress, addedBy, deviceId) => {
   try {
     const query = `
-      INSERT INTO locations (location_name, address, location_plant_no, plant_type_id, plant_address, added_by, device_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO locations (location_name, address, location_plant_no, plant_address, added_by, device_id)
+      VALUES (?, ?, ?, ?, ?, ?)
     `;
-    const [result] = await db.query(query, [locationName, address, locationPlantNo, plantTypeId, plantAddress, addedBy, deviceId]);
+    const [result] = await db.query(query, [locationName, address, locationPlantNo, plantAddress, addedBy, deviceId]);
     return result;
   } catch (error) {
     throw error;
@@ -55,8 +53,6 @@ const getAllLocations = async (includeInactive = false) => {
         l.location_name,
         l.address,
         l.location_plant_no,
-        l.plant_type_id,
-        COALESCE(lt.location_type_name, 'Unknown') AS plant_type_name,
         l.plant_address,
         l.added_by,
         COALESCE(u.name, 'Unknown') AS added_by_name,
@@ -65,7 +61,6 @@ const getAllLocations = async (includeInactive = false) => {
         l.created_at,
         l.updated_at
       FROM locations l
-      LEFT JOIN location_types lt ON l.plant_type_id = lt.id
       LEFT JOIN users u ON l.added_by = u.id
       ${includeInactive ? '' : 'WHERE l.active = TRUE'}
       ORDER BY l.created_at DESC
@@ -77,14 +72,14 @@ const getAllLocations = async (includeInactive = false) => {
   }
 };
 
-const updateLocation = async (id, locationName, address, locationPlantNo, plantTypeId, plantAddress) => {
+const updateLocation = async (id, locationName, address, locationPlantNo, plantAddress) => {
   try {
     const query = `
       UPDATE locations
-      SET location_name = ?, address = ?, location_plant_no = ?, plant_type_id = ?, plant_address = ?, updated_at = NOW()
+      SET location_name = ?, address = ?, location_plant_no = ?, plant_address = ?, updated_at = NOW()
       WHERE id = ?
     `;
-    const [result] = await db.query(query, [locationName, address, locationPlantNo, plantTypeId, plantAddress, id]);
+    const [result] = await db.query(query, [locationName, address, locationPlantNo, plantAddress, id]);
     return result;
   } catch (error) {
     throw error;

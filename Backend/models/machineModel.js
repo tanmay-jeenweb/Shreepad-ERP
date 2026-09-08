@@ -6,7 +6,6 @@ const createMachinesTable = async () => {
             id INT AUTO_INCREMENT PRIMARY KEY,
             machine_number VARCHAR(100) NOT NULL UNIQUE,
             name VARCHAR(150) NOT NULL,
-            machine_type_id INT DEFAULT NULL,
             capacity VARCHAR(100) DEFAULT NULL,
             location_id INT DEFAULT NULL,
             company_name VARCHAR(150) DEFAULT NULL,
@@ -58,7 +57,6 @@ const ensureMachineColumns = async () => {
 const createMachine = async (
     machineNumber,
     name,
-    machineTypeId = null,
     capacity = null,
     locationId = null,
     companyName = null,
@@ -71,14 +69,13 @@ const createMachine = async (
 ) => {
     const query = `
         INSERT INTO machines
-        (machine_number, name, machine_type_id, capacity, location_id, company_name, outgoing_job_work, machine_shift, maintenance, added_by, device_id, active)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (machine_number, name, capacity, location_id, company_name, outgoing_job_work, machine_shift, maintenance, added_by, device_id, active)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const [result] = await db.execute(query, [
         machineNumber,
         name,
-        machineTypeId,
         capacity,
         locationId,
         companyName,
@@ -96,10 +93,9 @@ const createMachine = async (
 const getAllMachines = async (includeInactive = false) => {
     const whereClause = includeInactive ? '' : 'WHERE m.active = TRUE';
     const query = `
-        SELECT m.*, mt.machine_type_name AS machine_type_name, l.location_name AS location_name,
+        SELECT m.*, l.location_name AS location_name,
                COALESCE(u.name, 'Unknown') AS added_by_name, m.device_id, m.active
         FROM machines m
-        LEFT JOIN machine_types mt ON m.machine_type_id = mt.id
         LEFT JOIN locations l ON m.location_id = l.id
         LEFT JOIN users u ON m.added_by = u.id
         ${whereClause}
@@ -120,7 +116,6 @@ const updateMachine = async (
     id,
     machineNumber,
     name,
-    machineTypeId = null,
     capacity = null,
     locationId = null,
     companyName = null,
@@ -133,7 +128,6 @@ const updateMachine = async (
         UPDATE machines SET
             machine_number = ?,
             name = ?,
-            machine_type_id = ?,
             capacity = ?,
             location_id = ?,
             company_name = ?,
@@ -147,7 +141,6 @@ const updateMachine = async (
     const [result] = await db.execute(query, [
         machineNumber,
         name,
-        machineTypeId,
         capacity,
         locationId,
         companyName,

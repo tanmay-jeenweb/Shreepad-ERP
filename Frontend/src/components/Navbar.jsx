@@ -179,15 +179,6 @@ export default function Navbar({ title }) {
             desc: "Configure access roles & permissions"
         },
         {
-            name: "Location Types Master",
-            path: "/admin/location-types",
-            masterKey: "location_type",
-            icon: "fa-solid fa-layer-group",
-            color: "bg-amber-50 text-amber-600 border border-amber-100/50",
-            activeColor: "bg-amber-100 text-amber-700",
-            desc: "Define hierarchical levels & categories"
-        },
-        {
             name: "Location Master",
             path: "/admin/locations",
             masterKey: "location",
@@ -195,15 +186,6 @@ export default function Navbar({ title }) {
             color: "bg-rose-50 text-rose-600 border border-rose-100/50",
             activeColor: "bg-rose-100 text-rose-700",
             desc: "Track physical sites & addresses"
-        },
-        {
-            name: "Machine Types Master",
-            path: "/admin/machine-types",
-            masterKey: "machine_type",
-            icon: "fa-solid fa-gears",
-            color: "bg-cyan-50 text-cyan-600 border border-cyan-100/50",
-            activeColor: "bg-cyan-100 text-cyan-700",
-            desc: "Classify industrial equipment configurations"
         },
         {
             name: "Machine Master",
@@ -333,7 +315,7 @@ export default function Navbar({ title }) {
             icon: "fa-solid fa-sliders",
             color: "bg-indigo-50 text-indigo-600 border border-indigo-100/50",
             activeColor: "bg-indigo-100 text-indigo-700",
-            desc: "Configure ID prefixes for GRN, Purchase Order & more"
+            desc: "Configure system-wide settings like batch year override"
         }
     ];
 

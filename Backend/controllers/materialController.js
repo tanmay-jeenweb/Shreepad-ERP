@@ -13,6 +13,7 @@ const addMaterial = async (req, res) => {
         const {
             materialCode,
             code,
+            prefix,
             materialName,
             unitId,
             hsnCode,
@@ -47,6 +48,7 @@ const addMaterial = async (req, res) => {
         const data = {
             materialCode: materialCode.trim(),
             code: code ? code.trim() : null,
+            prefix: prefix ? prefix.trim().toUpperCase().slice(0, 10) : null,
             materialName: materialName.trim(),
             unitId: unitId || null,
             hsnCode: hsnCode ? hsnCode.trim() : null,
@@ -129,6 +131,7 @@ const updateMaterialController = async (req, res) => {
         const {
             materialCode,
             code,
+            prefix,
             materialName,
             unitId,
             hsnCode,
@@ -166,6 +169,7 @@ const updateMaterialController = async (req, res) => {
         const data = {
             materialCode: materialCode.trim(),
             code: code ? code.trim() : null,
+            prefix: prefix !== undefined ? (prefix ? prefix.trim().toUpperCase().slice(0, 10) : null) : (beforeData ? beforeData.prefix : null),
             materialName: materialName.trim(),
             unitId: unitId || null,
             hsnCode: hsnCode ? hsnCode.trim() : null,

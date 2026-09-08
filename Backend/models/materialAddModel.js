@@ -127,13 +127,13 @@ const mapMaterialTypeToPrefixKey = (type) => {
 
 const generateInternalBatchNumber = async (connection, materialId, settings) => {
     if (!materialId) return null;
-    const [matRows] = await connection.execute('SELECT code, material_type FROM materials WHERE id = ?', [materialId]);
+    const [matRows] = await connection.execute('SELECT code, material_type, prefix FROM materials WHERE id = ?', [materialId]);
     if (matRows.length === 0) return null;
     const mat = matRows[0];
     if (!mat.code) return null; // No code, no batch number
 
     const prefixKey = mapMaterialTypeToPrefixKey(mat.material_type);
-    const prefix = settings ? (settings[prefixKey] || 'OTH') : 'OTH';
+    const prefix = mat.prefix || (settings ? (settings[prefixKey] || 'OTH') : 'OTH');
 
     const year = (settings && settings.batch_year) ? settings.batch_year : new Date().getFullYear().toString().slice(-2);
 
@@ -144,14 +144,14 @@ const generateInternalBatchNumber = async (connection, materialId, settings) => 
 
 const previewNextBatchNumber = async (materialId) => {
     if (!materialId) return null;
-    const [matRows] = await db.execute('SELECT code, material_type FROM materials WHERE id = ?', [materialId]);
+    const [matRows] = await db.execute('SELECT code, material_type, prefix FROM materials WHERE id = ?', [materialId]);
     if (matRows.length === 0) return null;
     const mat = matRows[0];
     if (!mat.code) return null;
 
     const settings = await getSettings();
     const prefixKey = mapMaterialTypeToPrefixKey(mat.material_type);
-    const prefix = settings ? (settings[prefixKey] || 'OTH') : 'OTH';
+    const prefix = mat.prefix || (settings ? (settings[prefixKey] || 'OTH') : 'OTH');
     const year = (settings && settings.batch_year) ? settings.batch_year : new Date().getFullYear().toString().slice(-2);
 
     const [seqRows] = await db.execute(

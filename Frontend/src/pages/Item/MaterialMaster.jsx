@@ -95,6 +95,19 @@ export default function MaterialMaster() {
         ),
       },
       {
+        key: "prefix",
+        label: "Prefix",
+        minWidth: "80px",
+        render: (row) =>
+          row.prefix ? (
+            <span className="font-mono font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded text-xs border border-slate-200">
+              {row.prefix}
+            </span>
+          ) : (
+            <span className="text-slate-400 italic text-xs">—</span>
+          ),
+      },
+      {
         key: "material_name",
         label: "Material Name",
         minWidth: "150px",

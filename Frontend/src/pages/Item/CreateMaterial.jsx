@@ -8,6 +8,20 @@ import { getUnits } from "../../api/unitApi";
 import toast from "react-hot-toast";
 
 
+const DEFAULT_PREFIXES = {
+  "Finished Goods": "FG",
+  "Semi Finished Goods": "SFG",
+  "Raw Materials": "RM",
+  "Store Consumed": "SC",
+  "Packaging Material": "PM",
+  "Waste and scrap": "WS",
+  "Capital Equipment": "CE",
+  "Assembly Item": "AI",
+  "Uniform and other Item": "UI",
+  "Service": "SRV",
+  "Other": "OTH",
+};
+
 const emptyForm = {
   materialCode: "",
   code: "",
@@ -16,6 +30,7 @@ const emptyForm = {
   hsnCode: "",
   materialGroupId: "",
   materialType: "",
+  prefix: "",
   gstPercent: "",
   selfVal: "",
   purchaseVal: "",
@@ -65,6 +80,7 @@ export default function CreateMaterial() {
               hsnCode: mat.hsn_code || "",
               materialGroupId: mat.material_group_id ? String(mat.material_group_id) : "",
               materialType: mat.material_type || "",
+              prefix: mat.prefix || (mat.material_type ? DEFAULT_PREFIXES[mat.material_type] || "" : ""),
               gstPercent: mat.gst_percent || "",
               selfVal: mat.self_val !== null && mat.self_val !== undefined ? String(mat.self_val) : "",
               purchaseVal: mat.purchase_val !== null && mat.purchase_val !== undefined ? String(mat.purchase_val) : "",
@@ -90,7 +106,24 @@ export default function CreateMaterial() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    if (name === "materialType") {
+      setForm((prev) => {
+        const prevDefault = DEFAULT_PREFIXES[prev.materialType] || "";
+        const shouldAutoSetPrefix = !prev.prefix || prev.prefix === prevDefault;
+        const newPrefix = shouldAutoSetPrefix
+          ? (DEFAULT_PREFIXES[value] || "")
+          : prev.prefix;
+        return {
+          ...prev,
+          materialType: value,
+          prefix: newPrefix,
+        };
+      });
+    } else if (name === "prefix") {
+      setForm((prev) => ({ ...prev, prefix: value.toUpperCase() }));
+    } else {
+      setForm((prev) => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -114,11 +147,17 @@ export default function CreateMaterial() {
       return;
     }
 
+    if (form.materialType && !form.prefix.trim()) {
+      toast.error(`${form.materialType} Prefix is required.`);
+      return;
+    }
+
     setSaving(true);
     try {
       const payload = {
         materialCode: form.materialCode.trim(),
         code: form.code ? form.code.trim() : null,
+        prefix: form.prefix ? form.prefix.trim().toUpperCase() : null,
         materialName: form.materialName.trim(),
         unitId: form.unitId ? Number(form.unitId) : null,
         hsnCode: form.hsnCode.trim() || null,
@@ -310,6 +349,28 @@ export default function CreateMaterial() {
                   ))}
                 </select>
               </div>
+
+              {/* Prefix (Appears when Material Type is selected) */}
+              {form.materialType && (
+                <div>
+                  <label className={labelCls}>
+                    {form.materialType} Prefix <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="prefix"
+                    value={form.prefix}
+                    onChange={handleChange}
+                    placeholder={`e.g. ${DEFAULT_PREFIXES[form.materialType] || "FG"}`}
+                    maxLength={10}
+                    className={`${inputCls} font-mono uppercase`}
+                    required
+                  />
+                  <p className="mt-1 text-xs text-slate-400">
+                    Prefix used for internal batch numbers for this material.
+                  </p>
+                </div>
+              )}
 
               {/* Moulds Selection (Conditional) */}
 

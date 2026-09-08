@@ -7,6 +7,7 @@ const createMaterialsTable = async () => {
             id INT AUTO_INCREMENT PRIMARY KEY,
             material_code VARCHAR(100) NOT NULL UNIQUE,
             code VARCHAR(3) DEFAULT NULL UNIQUE,
+            prefix VARCHAR(10) DEFAULT NULL,
             material_name VARCHAR(255) NOT NULL,
             unit_id INT,
             hsn_code VARCHAR(50),
@@ -36,7 +37,8 @@ const createMaterialsTable = async () => {
 const ensureMaterialColumns = async () => {
     const columnsToEnsure = [
         { name: 'active', query: 'ALTER TABLE materials ADD COLUMN active BOOLEAN DEFAULT TRUE' },
-        { name: 'code', query: 'ALTER TABLE materials ADD COLUMN code VARCHAR(3) DEFAULT NULL UNIQUE' }
+        { name: 'code', query: 'ALTER TABLE materials ADD COLUMN code VARCHAR(3) DEFAULT NULL UNIQUE' },
+        { name: 'prefix', query: 'ALTER TABLE materials ADD COLUMN prefix VARCHAR(10) DEFAULT NULL' }
     ];
 
     for (const col of columnsToEnsure) {
@@ -49,12 +51,21 @@ const ensureMaterialColumns = async () => {
             console.log(`Added column ${col.name} to materials`);
         }
     }
+
+    try {
+        await db.execute(`UPDATE materials SET prefix = 'FG' WHERE material_type = 'Finished Goods' AND (prefix IS NULL OR prefix = '')`);
+        await db.execute(`UPDATE materials SET prefix = 'SFG' WHERE material_type = 'Semi Finished Goods' AND (prefix IS NULL OR prefix = '')`);
+        await db.execute(`UPDATE materials SET prefix = 'RM' WHERE material_type = 'Raw Materials' AND (prefix IS NULL OR prefix = '')`);
+    } catch (err) {
+        console.error('Error populating default material prefixes:', err);
+    }
 };
 
 const createMaterial = async (data, addedBy, deviceId) => {
     const {
         materialCode,
         code,
+        prefix,
         materialName,
         unitId,
         hsnCode,
@@ -72,6 +83,7 @@ const createMaterial = async (data, addedBy, deviceId) => {
         INSERT INTO materials (
             material_code,
             code,
+            prefix,
             material_name,
             unit_id,
             hsn_code,
@@ -86,12 +98,13 @@ const createMaterial = async (data, addedBy, deviceId) => {
             added_by,
             device_id
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const [results] = await db.execute(query, [
         materialCode,
         code || null,
+        prefix || null,
         materialName,
         unitId || null,
         hsnCode || null,
@@ -117,6 +130,7 @@ const getAllMaterials = async (includeInactive = false) => {
             m.id,
             m.material_code,
             m.code,
+            m.prefix,
             m.material_name,
             m.unit_id,
             u.unit_name,
@@ -160,6 +174,7 @@ const updateMaterial = async (id, data) => {
     const {
         materialCode,
         code,
+        prefix,
         materialName,
         unitId,
         hsnCode,
@@ -178,6 +193,7 @@ const updateMaterial = async (id, data) => {
         SET
             material_code = ?,
             code = ?,
+            prefix = ?,
             material_name = ?,
             unit_id = ?,
             hsn_code = ?,
@@ -195,6 +211,7 @@ const updateMaterial = async (id, data) => {
     const [results] = await db.execute(query, [
         materialCode,
         code || null,
+        prefix || null,
         materialName,
         unitId || null,
         hsnCode || null,

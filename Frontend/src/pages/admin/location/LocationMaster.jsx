@@ -1,7 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import Navbar from "../../../components/Navbar";
 import { getLocations, updateLocation, deleteLocation, toggleLocationActive } from "../../../api/locationApi.js";
-import { getLocationTypes } from "../../../api/locationTypeApi.js";
 import toast from "react-hot-toast";
 import DataTable from "../../../components/DataTable";
 import { useNavigate } from "react-router-dom";
@@ -9,7 +8,6 @@ import { usePermission } from "../../../context/PermissionContext";
 
 export default function LocationMaster() {
   const [locations, setLocations] = useState([]);
-  const [locationTypes, setLocationTypes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -20,7 +18,6 @@ export default function LocationMaster() {
     locationName: "",
     address: "",
     locationPlantNo: "",
-    plantTypeId: "",
     plantAddress: ""
   });
 
@@ -39,22 +36,9 @@ export default function LocationMaster() {
     }
   };
 
-  const loadLocationTypes = async () => {
-    try {
-      const response = await getLocationTypes();
-      setLocationTypes(response.data.data || []);
-    } catch (err) {
-      console.error("Failed to load location types", err);
-    }
-  };
-
   useEffect(() => {
     loadLocations();
   }, [showInactive]);
-
-  useEffect(() => {
-    loadLocationTypes();
-  }, []);
 
 
 
@@ -64,7 +48,6 @@ export default function LocationMaster() {
       locationName: location.location_name,
       address: location.address || "",
       locationPlantNo: location.location_plant_no || "",
-      plantTypeId: location.plant_type_id || "",
       plantAddress: location.plant_address || ""
     });
   };
@@ -75,14 +58,13 @@ export default function LocationMaster() {
       locationName: "",
       address: "",
       locationPlantNo: "",
-      plantTypeId: "",
       plantAddress: ""
     });
   };
 
   const handleUpdateLocation = async (id) => {
-    if (!editingData.locationName.trim() || !editingData.plantTypeId) {
-      setError("Location name and plant type are required.");
+    if (!editingData.locationName.trim()) {
+      setError("Location name is required.");
       return;
     }
 
@@ -97,7 +79,6 @@ export default function LocationMaster() {
         locationName: "",
         address: "",
         locationPlantNo: "",
-        plantTypeId: "",
         plantAddress: ""
       });
       await loadLocations();
@@ -189,28 +170,6 @@ export default function LocationMaster() {
           />
         ) : (
           row.location_plant_no
-        )
-      },
-      {
-        key: 'plant_type_name',
-        label: 'Plant Type',
-        render: (row) => editingId === row.id ? (
-          <select
-            value={editingData.plantTypeId}
-            onChange={(e) => setEditingData({ ...editingData, plantTypeId: e.target.value })}
-            className="border border-slate-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full bg-white"
-          >
-            <option value="">Select type</option>
-            {locationTypes.map((type) => (
-              <option key={type.id} value={type.id}>
-                {type.location_type_name}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <span className="rounded-full bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 border border-indigo-100">
-            {row.plant_type_name}
-          </span>
         )
       },
       {
@@ -333,7 +292,7 @@ export default function LocationMaster() {
     }
 
     return cols;
-  }, [editingId, editingData, locationTypes, saving, hasPermission]);
+  }, [editingId, editingData, saving, hasPermission]);
 
   return (
     <div className="flex-1 flex flex-col bg-slate-50 font-sans text-slate-900">
