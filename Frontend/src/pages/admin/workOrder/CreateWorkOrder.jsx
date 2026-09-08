@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../../../components/Navbar";
 import { createWorkOrder, getNextWorkOrderNo, getMaterialStock } from "../../../api/workOrderApi";
@@ -24,21 +24,10 @@ export default function CreateWorkOrder() {
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [workOrderDate, setWorkOrderDate] = useState(new Date().toISOString().substring(0, 10));
   const [items, setItems] = useState([]);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
-  // Modal states for row edit
+  // Modal states for work order configuration
   const [showModal, setShowModal] = useState(false);
-  const [currentEditIndex, setCurrentEditIndex] = useState(null);
-  const [modalData, setModalData] = useState({
-    quantity: 0,
-    production_quantity: 0,
-    exp_delivery_date: "",
-    batch_no: "",
-    actual_delivery_date: "",
-    remarks: "",
-    machine_id: "",
-    job_party_id: ""
-  });
+  const [modalItems, setModalItems] = useState([]);
 
 
   const formatDate = (d) => {
@@ -225,37 +214,111 @@ export default function CreateWorkOrder() {
     }
   };
 
-  const openEditModal = (index) => {
-    setCurrentEditIndex(index);
-    setModalData({
-      quantity: items[index].quantity,
-      production_quantity: items[index].production_quantity,
-      exp_delivery_date: items[index].exp_delivery_date || "",
-      batch_no: items[index].batch_no || "",
-      actual_delivery_date: items[index].actual_delivery_date || "",
-      remarks: items[index].remarks || "",
-      machine_id: items[index].machine_id || "",
-      job_party_id: items[index].job_party_id || "",
-      rawMaterials: items[index].rawMaterials ? [...items[index].rawMaterials] : []
+  const handleModalItemChange = (idx, field, value) => {
+    setModalItems(prev => {
+      const next = [...prev];
+      next[idx] = { ...next[idx], [field]: value };
+
+      if (field === "quantity" || field === "production_quantity") {
+        if (field === "quantity" && (!next[idx].production_quantity || Number(next[idx].production_quantity) === Number(next[idx].quantity))) {
+          next[idx].production_quantity = value;
+        }
+        const currentProdQty = Number(next[idx].production_quantity) || 0;
+        if (next[idx].rawMaterials) {
+          next[idx].rawMaterials = next[idx].rawMaterials.map(rm => {
+            const req = Number((Number(rm.bomQty) * currentProdQty).toFixed(3));
+            const avail = Number(rm.availableStock) || 0;
+            const calcMin = Math.max(0, Number((req - avail).toFixed(3)));
+            return {
+              ...rm,
+              productionAmount: req,
+              calculatedMinSupply: calcMin,
+              minSupplyNeeded: (rm.minSupplyNeeded !== undefined && rm.minSupplyNeeded !== "" && Number(rm.minSupplyNeeded) >= calcMin)
+                ? rm.minSupplyNeeded
+                : calcMin
+            };
+          });
+        }
+      }
+      return next;
     });
-    setShowModal(true);
   };
 
-  const saveModalData = () => {
-    const updated = [...items];
-    updated[currentEditIndex] = {
-      ...updated[currentEditIndex],
-      ...modalData,
-      quantity: Number(modalData.quantity),
-      production_quantity: Number(modalData.production_quantity),
-      rawMaterials: modalData.rawMaterials
-    };
-    setItems(updated);
-    setShowModal(false);
-    toast.success("Row details updated");
+  const handleRMMinSupplyChange = (itemIdx, rmIdx, value) => {
+    if (value !== "" && !/^\d*\.?\d*$/.test(value)) {
+      return;
+    }
+    setModalItems(prev => {
+      const next = [...prev];
+      const targetItem = { ...next[itemIdx] };
+      const nextRMs = [...(targetItem.rawMaterials || [])];
+      nextRMs[rmIdx] = {
+        ...nextRMs[rmIdx],
+        minSupplyNeeded: value
+      };
+      targetItem.rawMaterials = nextRMs;
+      next[itemIdx] = targetItem;
+      return next;
+    });
   };
 
+  const handleRMMinSupplyBlur = (itemIdx, rmIdx, calculatedMinSupply) => {
+    const minVal = Number(calculatedMinSupply) || 0;
+    setModalItems(prev => {
+      const next = [...prev];
+      const targetItem = { ...next[itemIdx] };
+      const nextRMs = [...(targetItem.rawMaterials || [])];
+      const rawVal = nextRMs[rmIdx]?.minSupplyNeeded;
+      const currentVal = Number(rawVal);
+      if (rawVal === "" || isNaN(currentVal) || currentVal < minVal) {
+        toast.error(`Minimum supply cannot be less than ${minVal}`);
+        nextRMs[rmIdx] = {
+          ...nextRMs[rmIdx],
+          minSupplyNeeded: minVal
+        };
+      } else {
+        nextRMs[rmIdx] = {
+          ...nextRMs[rmIdx],
+          minSupplyNeeded: currentVal
+        };
+      }
+      targetItem.rawMaterials = nextRMs;
+      next[itemIdx] = targetItem;
+      return next;
+    });
+  };
 
+  const allRawMaterials = useMemo(() => {
+    const list = [];
+    (modalItems || []).forEach((it, itemIdx) => {
+      if (it.rawMaterials && it.rawMaterials.length > 0) {
+        it.rawMaterials.forEach((rm, rmIdx) => {
+          const prodQty = Number(it.production_quantity) || 0;
+          const bomQty = Number(rm.bomQty) || 0;
+          const requiredProdQty = Number((bomQty * prodQty).toFixed(3));
+          const availableStock = Number(rm.availableStock) || 0;
+          const calculatedMinSupply = Math.max(0, Number((requiredProdQty - availableStock).toFixed(3)));
+          const minSupplyNeeded = rm.minSupplyNeeded !== undefined && rm.minSupplyNeeded !== null && rm.minSupplyNeeded !== ""
+            ? rm.minSupplyNeeded
+            : calculatedMinSupply;
+
+          list.push({
+            ...rm,
+            itemIdx,
+            rmIdx,
+            finishedGoodName: it.material_name,
+            bomQty,
+            availableStock,
+            requiredProdQty,
+            calculatedMinSupply,
+            minSupplyNeeded,
+            unitName: rm.unitName || "kg"
+          });
+        });
+      }
+    });
+    return list;
+  }, [modalItems]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -268,14 +331,42 @@ export default function CreateWorkOrder() {
       toast.error("Please select materials and quantities for all rows");
       return;
     }
-    setShowConfirmModal(true);
+    const cloned = JSON.parse(JSON.stringify(items)).map(it => {
+      const prodQty = Number(it.production_quantity) || 0;
+      if (it.rawMaterials) {
+        it.rawMaterials = it.rawMaterials.map(rm => {
+          const req = Number((Number(rm.bomQty) * prodQty).toFixed(3));
+          const avail = Number(rm.availableStock) || 0;
+          const calcMin = Math.max(0, Number((req - avail).toFixed(3)));
+          return {
+            ...rm,
+            productionAmount: req,
+            calculatedMinSupply: calcMin,
+            minSupplyNeeded: (rm.minSupplyNeeded !== undefined && rm.minSupplyNeeded !== "" && Number(rm.minSupplyNeeded) >= calcMin)
+              ? rm.minSupplyNeeded
+              : calcMin
+          };
+        });
+      }
+      return it;
+    });
+    setModalItems(cloned);
+    setShowModal(true);
   };
 
   const submitWorkOrder = async () => {
+    for (const rm of allRawMaterials) {
+      const minVal = Number(rm.calculatedMinSupply) || 0;
+      const val = Number(rm.minSupplyNeeded);
+      if (rm.minSupplyNeeded === "" || isNaN(val) || val < minVal) {
+        toast.error(`Minimum supply for ${rm.materialName || "material"} cannot be less than ${minVal} ${rm.unitName || ""}`);
+        return;
+      }
+    }
     setLoading(true);
     try {
       const flattenedItems = [];
-      for (const it of items) {
+      for (const it of modalItems) {
         // Add Finished Good row
         flattenedItems.push({
           material_id: Number(it.material_id),
@@ -289,13 +380,14 @@ export default function CreateWorkOrder() {
           job_party_id: it.job_party_id ? Number(it.job_party_id) : null
         });
 
-        // Add allocated Raw Materials (if input is not zero)
+        // Add allocated Raw Materials (if required > 0)
         if (it.rawMaterials) {
           for (const rm of it.rawMaterials) {
-            if (Number(rm.productionAmount) > 0) {
+            const requiredQty = Number((Number(rm.bomQty) * (Number(it.production_quantity) || 0)).toFixed(3));
+            if (requiredQty > 0) {
               flattenedItems.push({
                 material_id: Number(rm.materialId),
-                quantity: Number(rm.productionAmount),
+                quantity: requiredQty,
                 production_quantity: 0,
                 exp_delivery_date: it.exp_delivery_date || null,
                 batch_no: it.batch_no || null,
@@ -317,7 +409,7 @@ export default function CreateWorkOrder() {
 
       await createWorkOrder(payload);
       toast.success("Work Order created successfully!");
-      setShowConfirmModal(false);
+      setShowModal(false);
       navigate("/sales/work-orders");
     } catch (err) {
       console.error(err);
@@ -474,15 +566,6 @@ export default function CreateWorkOrder() {
                           <div className="flex items-center justify-center gap-2">
                             <button
                               type="button"
-                              onClick={() => openEditModal(idx)}
-                              disabled={!item.material_id}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 cursor-pointer disabled:opacity-50"
-                              title="Edit Setup Details"
-                            >
-                              <i className="fa-solid fa-gears text-sm"></i>
-                            </button>
-                            <button
-                              type="button"
                               onClick={() => removeItemRow(idx)}
                               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-250 bg-rose-50 text-rose-600 hover:bg-rose-100 cursor-pointer"
                               title="Delete Row"
@@ -511,349 +594,259 @@ export default function CreateWorkOrder() {
         </form>
       </main>
 
-      {/* Row Edit Modal */}
+      {/* Work Order Configuration & Allocation Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                <i className="fa-solid fa-pen-to-square text-[#369ACF]"></i>
-                Configure Item Production Details
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowModal(false)}
-                className="text-slate-400 hover:text-slate-600 text-lg cursor-pointer"
-              >
-                &times;
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70 shrink-0">
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                  Material Name
-                </label>
-                <input
-                  type="text"
-                  value={items[currentEditIndex]?.material_name}
-                  disabled
-                  className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-lg text-slate-500 cursor-not-allowed"
-                />
-              </div>
-
-
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                    Quantity <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    step="0.001"
-                    value={modalData.quantity}
-                    onChange={(e) => {
-                      const newQty = Number(e.target.value);
-                      const updatedRMs = (modalData.rawMaterials || []).map(rm => ({
-                        ...rm,
-                        productionAmount: Number((rm.bomQty * newQty).toFixed(3))
-                      }));
-                      setModalData({ 
-                        ...modalData, 
-                        quantity: e.target.value,
-                        production_quantity: e.target.value,
-                        rawMaterials: updatedRMs 
-                      });
-                    }}
-                    required
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                    Production Quantity <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    step="0.001"
-                    value={modalData.production_quantity}
-                    onChange={(e) => {
-                      const newProdQty = Number(e.target.value);
-                      const updatedRMs = (modalData.rawMaterials || []).map(rm => ({
-                        ...rm,
-                        productionAmount: Number((rm.bomQty * newProdQty).toFixed(3))
-                      }));
-                      setModalData({ 
-                        ...modalData, 
-                        production_quantity: e.target.value,
-                        rawMaterials: updatedRMs 
-                      });
-                    }}
-                    required
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                    Exp. Delivery Date
-                  </label>
-                  <DateInput
-                    value={modalData.exp_delivery_date}
-                    onChange={(e) => setModalData({ ...modalData, exp_delivery_date: e.target.value })}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                    Batch Number
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Enter batch number"
-                    value={modalData.batch_no}
-                    onChange={(e) => setModalData({ ...modalData, batch_no: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-              </div>
-
-
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                    Actual Delivery Date
-                  </label>
-                  <DateInput
-                    value={modalData.actual_delivery_date}
-                    onChange={(e) => setModalData({ ...modalData, actual_delivery_date: e.target.value })}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                    Remarks
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Enter remarks"
-                    value={modalData.remarks}
-                    onChange={(e) => setModalData({ ...modalData, remarks: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-              </div>
-
-              {modalData.rawMaterials && modalData.rawMaterials.length > 0 && (
-                <div className="border-t border-slate-100 pt-4">
-                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
-                    Raw Materials Allocation Check
-                  </h4>
-                  <div className="overflow-x-auto border border-slate-150 rounded-lg">
-                    <table className="w-full text-left text-xs text-slate-600 border-collapse">
-                      <thead className="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100">
-                        <tr>
-                          <th className="px-3 py-2">Raw Material</th>
-                          <th className="px-3 py-2 text-right">Available Stock</th>
-                          <th className="px-3 py-2 text-right">BOM Ratio</th>
-                          <th className="px-3 py-2 text-right">Allocated Qty (kg)</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                        {modalData.rawMaterials.map((rm, rmIdx) => (
-                          <tr key={rmIdx} className="hover:bg-slate-50/50">
-                            <td className="px-3 py-2">
-                              <div className="flex flex-col">
-                                <span className="font-semibold text-slate-800">{rm.materialName}</span>
-                                <span className="text-[10px] text-slate-400 font-mono">{rm.materialCode}</span>
-                              </div>
-                            </td>
-                            <td className="px-3 py-2 text-right text-slate-500 font-mono">
-                              {rm.availableStock.toFixed(3)} {rm.unitName}
-                            </td>
-                            <td className="px-3 py-2 text-right text-slate-500 font-mono">
-                              {rm.bomQty.toFixed(4)}
-                            </td>
-                            <td className="px-3 py-2 text-right">
-                              <input
-                                type="number"
-                                step="0.001"
-                                value={rm.productionAmount}
-                                onChange={(e) => {
-                                  const updatedRMs = [...modalData.rawMaterials];
-                                  updatedRMs[rmIdx] = {
-                                    ...updatedRMs[rmIdx],
-                                    productionAmount: Number(e.target.value)
-                                  };
-                                  setModalData({ ...modalData, rawMaterials: updatedRMs });
-                                }}
-                                className="w-20 px-2 py-1 border border-slate-200 rounded text-right text-xs focus:outline-none focus:border-indigo-500"
-                              />
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-
-            </div>
-
-            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setShowModal(false)}
-                className="px-4 py-2 text-sm font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg shadow-sm hover:bg-slate-50 cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={saveModalData}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg shadow transition-colors cursor-pointer"
-              >
-                Save Changes
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showConfirmModal && selectedCustomer && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-in fade-in duration-200">
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
-            {/* Header */}
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
-              <div>
-                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                  <i className="fa-solid fa-file-contract text-[#369ACF]"></i>
-                  Confirm Work Order Creation
+                <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                  <i className="fa-solid fa-sliders text-[#369ACF]"></i>
+                  Work Order Configuration
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Review header info and configured items before final submission.
+                  Configure production details and review raw materials allocation before saving.
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setShowConfirmModal(false)}
+                onClick={() => setShowModal(false)}
                 className="text-slate-400 hover:text-slate-600 text-2xl font-bold cursor-pointer"
               >
                 &times;
               </button>
             </div>
 
-            {/* Content */}
+            {/* Modal Body */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {/* Header Info Panel */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-50 p-5 rounded-xl border border-slate-100">
-                <div>
-                  <span className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
-                    Work Order Number
-                  </span>
-                  <span className="text-sm font-mono font-bold text-slate-800 mt-1 block">
-                    {nextWONo}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
-                    Work Order Date
-                  </span>
-                  <span className="text-sm font-semibold text-slate-800 mt-1 block">
-                    {workOrderDate ? formatDate(workOrderDate) : "—"}
-                  </span>
-                </div>
-                 <div>
-                  <span className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
-                    Customer
-                  </span>
-                  <span className="text-sm font-semibold text-slate-800 mt-1 block">
-                    {selectedCustomer.customer_name} ({selectedCustomer.customer_code || "—"})
-                  </span>
-                </div>
-              </div>
-
-              {/* Items List */}
-              <div>
-                <h4 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
-                  <i className="fa-solid fa-boxes-stacked text-slate-400"></i>
-                  Configured Items ({items.length})
+              {/* Item Production Details Sections */}
+              <div className="space-y-4">
+                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                  <i className="fa-solid fa-boxes-stacked text-[#369ACF]"></i>
+                  Production Details ({modalItems.length} {modalItems.length === 1 ? "Item" : "Items"})
                 </h4>
 
-                <div className="border border-slate-100 rounded-xl overflow-hidden shadow-sm bg-white">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm text-slate-600 border-collapse">
-                      <thead className="bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100">
-                        <tr>
-                          <th className="px-5 py-3">Material Details</th>
-                          <th className="px-5 py-3 text-right">Quantity</th>
-                          <th className="px-5 py-3 text-right">Prod Qty</th>
-                          <th className="px-5 py-3">BOM Raw Material</th>
-                          <th className="px-5 py-3 text-right">RM Required</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                        {items.map((it, idx) => {
-                          const machineName = machines.find(m => String(m.id) === String(it.machine_id))?.name || "Not Selected";
+                {modalItems.map((item, idx) => (
+                  <div key={idx} className="border border-slate-200 rounded-xl p-4 bg-white shadow-sm space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 text-xs font-bold bg-indigo-50 text-indigo-700 rounded-md border border-indigo-100">
+                          Item #{idx + 1}
+                        </span>
+                        <span className="text-sm font-bold text-slate-800">
+                          {item.material_name || "Unselected"}
+                        </span>
+                        {item.material_code && (
+                          <span className="text-xs font-mono text-slate-400">
+                            ({item.material_code})
+                          </span>
+                        )}
+                      </div>
+                    </div>
 
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                          Quantity <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          step="0.001"
+                          value={item.quantity}
+                          onChange={(e) => handleModalItemChange(idx, "quantity", e.target.value)}
+                          required
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                          Production Quantity <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          step="0.001"
+                          value={item.production_quantity}
+                          onChange={(e) => handleModalItemChange(idx, "production_quantity", e.target.value)}
+                          required
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm font-semibold text-indigo-600 focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                          Exp. Delivery Date
+                        </label>
+                        <DateInput
+                          value={item.exp_delivery_date}
+                          onChange={(e) => handleModalItemChange(idx, "exp_delivery_date", e.target.value)}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                          Batch Number
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Enter batch number"
+                          value={item.batch_no}
+                          onChange={(e) => handleModalItemChange(idx, "batch_no", e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                          Actual Delivery Date
+                        </label>
+                        <DateInput
+                          value={item.actual_delivery_date}
+                          onChange={(e) => handleModalItemChange(idx, "actual_delivery_date", e.target.value)}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                          Remarks
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Enter remarks"
+                          value={item.remarks}
+                          onChange={(e) => handleModalItemChange(idx, "remarks", e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Raw Materials Allocation Check Section */}
+              <div className="border-t border-slate-200 pt-5">
+                <div className="mb-3">
+                  <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                    <i className="fa-solid fa-layer-group text-[#369ACF]"></i>
+                    Raw Materials Allocation Check
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Live check of stock availability and minimum supply needed based on required production quantities.
+                  </p>
+                </div>
+
+                <div className="overflow-x-auto border border-slate-200 rounded-xl shadow-sm bg-white">
+                  <table className="w-full text-left text-xs text-slate-600 border-collapse">
+                    <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                      <tr>
+                        <th className="px-4 py-3">Raw Material Name</th>
+                        <th className="px-4 py-3 text-right">Available Stock</th>
+                        <th className="px-4 py-3 text-right">Raw material required for 1 Unit</th>
+                        <th className="px-4 py-3 text-right">Raw material required accoring to production quantity</th>
+                        <th className="px-4 py-3 text-right">Minimum Supply needed to be made</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                      {allRawMaterials.length > 0 ? (
+                        allRawMaterials.map((rm, rmIdx) => {
+                          const isShortfall = rm.minSupplyNeeded > 0;
                           return (
-                            <tr key={idx} className="hover:bg-slate-50/40">
-                              <td className="px-5 py-3">
-                                <div className="flex flex-col">
-                                  <span className="font-semibold text-slate-900">{it.material_name}</span>
-                                  <span className="text-xs text-slate-500 font-mono mt-0.5">{it.material_code}</span>
+                            <tr key={rmIdx} className="hover:bg-slate-50/60 transition-colors">
+                              <td className="px-4 py-3">
+                                <div className="font-semibold text-slate-800">{rm.materialName}</div>
+                                <div className="text-[11px] text-slate-400 font-mono flex items-center gap-1.5 mt-0.5">
+                                  <span>{rm.materialCode || "—"}</span>
+                                  {modalItems.length > 1 && (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-sans font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                                      For: {rm.finishedGoodName}
+                                    </span>
+                                  )}
                                 </div>
                               </td>
-                              <td className="px-5 py-3 text-right text-slate-900 font-bold">{it.quantity}</td>
-                              <td className="px-5 py-3 text-right text-indigo-650 font-bold">{it.production_quantity}</td>
-                              <td className="px-5 py-3 text-xs text-slate-655" colSpan={2}>
-                                {it.rawMaterials && it.rawMaterials.filter(rm => rm.productionAmount > 0).length > 0 ? (
-                                  <div className="space-y-1">
-                                    <div className="font-semibold text-slate-500">Allocated Raw Materials:</div>
-                                    <ul className="list-disc pl-4 text-slate-600 space-y-0.5">
-                                      {it.rawMaterials.filter(rm => rm.productionAmount > 0).map((rm, rmIdx) => (
-                                        <li key={rmIdx}>
-                                          {rm.materialName} ({rm.materialCode}): <span className="font-bold text-slate-800">{rm.productionAmount.toFixed(3)} {rm.unitName}</span> (Stock: {rm.availableStock.toFixed(3)})
-                                        </li>
-                                      ))}
-                                    </ul>
+                              <td className="px-4 py-3 text-right font-mono text-slate-600 text-xs">
+                                {rm.availableStock.toFixed(3)} {rm.unitName}
+                              </td>
+                              <td className="px-4 py-3 text-right font-mono text-slate-600 text-xs">
+                                {rm.bomQty.toFixed(4)} {rm.unitName}
+                              </td>
+                              <td className="px-4 py-3 text-right font-mono font-semibold text-indigo-700 text-xs">
+                                {rm.requiredProdQty.toFixed(3)} {rm.unitName}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <div className="flex flex-col items-end gap-1">
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <input
+                                      type="text"
+                                      value={rm.minSupplyNeeded}
+                                      onChange={(e) => handleRMMinSupplyChange(rm.itemIdx, rm.rmIdx, e.target.value)}
+                                      onBlur={() => handleRMMinSupplyBlur(rm.itemIdx, rm.rmIdx, rm.calculatedMinSupply)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          e.preventDefault();
+                                          handleRMMinSupplyBlur(rm.itemIdx, rm.rmIdx, rm.calculatedMinSupply);
+                                        }
+                                      }}
+                                      placeholder={String(rm.calculatedMinSupply)}
+                                      className={`w-28 px-2.5 py-1 text-right text-xs font-mono font-semibold border rounded-lg focus:outline-none transition-colors bg-white ${
+                                        (rm.minSupplyNeeded === "" || Number(rm.minSupplyNeeded) < rm.calculatedMinSupply)
+                                          ? "border-rose-400 text-rose-600 focus:border-rose-500"
+                                          : "border-slate-200 text-slate-800 focus:border-indigo-500"
+                                      }`}
+                                    />
+                                    <span className="text-[11px] text-slate-400 font-mono w-6 text-left shrink-0">
+                                      {rm.unitName}
+                                    </span>
                                   </div>
-                                ) : (
-                                  <span className="text-slate-400 italic">No RM Allocated</span>
-                                )}
+                                  {(rm.minSupplyNeeded === "" || Number(rm.minSupplyNeeded) < rm.calculatedMinSupply) && (
+                                    <span className="text-[10px] text-rose-500 font-medium">
+                                      Min: {rm.calculatedMinSupply} {rm.unitName}
+                                    </span>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-8 text-center text-xs text-slate-400 italic">
+                            No raw materials configured for the selected finished goods BOMs.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
 
-            {/* Footer */}
+            {/* Modal Footer */}
             <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-3 shrink-0">
               <button
                 type="button"
-                onClick={() => setShowConfirmModal(false)}
-                className="px-4 py-2 text-sm font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg shadow-sm hover:bg-slate-50 cursor-pointer"
+                onClick={() => setShowModal(false)}
+                className="px-4 py-2 text-sm font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg shadow-sm hover:bg-slate-100 transition-colors cursor-pointer"
               >
-                Back to Edit
+                Back to Form
               </button>
               <button
                 type="button"
                 onClick={submitWorkOrder}
                 disabled={loading}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg shadow transition-colors cursor-pointer"
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg shadow transition-colors disabled:opacity-50 flex items-center gap-2 cursor-pointer"
               >
-                {loading ? "Creating..." : "Confirm & Create"}
+                {loading ? (
+                  <>
+                    <i className="fa-solid fa-spinner fa-spin text-xs"></i>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <i className="fa-solid fa-check text-xs"></i>
+                    Confirm & Save Work Order
+                  </>
+                )}
               </button>
             </div>
           </div>

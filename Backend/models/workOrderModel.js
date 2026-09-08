@@ -265,89 +265,6 @@ const createWorkOrder = async (customerId, workOrderDate, addedBy, deviceId, ite
             ]);
 
             const workOrderItemId = itemResult.insertId;
-
-
-
-            // Deduct from stock if we are getting quantity from stock
-            const stockDeductQty = Number(item.quantity) - Number(item.production_quantity || 0);
-            if (stockDeductQty > 0) {
-                const materialId = item.material_id;
-
-                // Query available batches (FIFO)
-                const queryBatches = `
-                    SELECT 
-                        NULL AS grn_item_id,
-                        mai.id AS ma_item_id,
-                        mai.internal_batch_number,
-                        mai.quantity AS approved_qty,
-                        COALESCE(issue_agg.issued_qty, 0) AS issued_qty,
-                        ma.ma_date AS receipt_date,
-                        mai.id AS item_id
-                    FROM material_add_items mai
-                    JOIN material_add_master ma ON mai.ma_id = ma.id
-                    LEFT JOIN (
-                        SELECT ma_item_id, SUM(issue_quantity) AS issued_qty
-                        FROM stock_issues WHERE ma_item_id IS NOT NULL
-                        GROUP BY ma_item_id
-                    ) issue_agg ON mai.id = issue_agg.ma_item_id
-                    WHERE mai.material_id = ?
-
-                    UNION ALL
-
-                    SELECT 
-                        NULL AS grn_item_id,
-                        NULL AS ma_item_id,
-                        r.internal_batch_number,
-                        r.quantity AS approved_qty,
-                        COALESCE(issue_agg.issued_qty, 0) AS issued_qty,
-                        r.return_date AS receipt_date,
-                        r.id AS item_id
-                    FROM rm_returns r
-                    LEFT JOIN (
-                        SELECT rm_return_id, SUM(issue_quantity) AS issued_qty
-                        FROM stock_issues WHERE rm_return_id IS NOT NULL
-                        GROUP BY rm_return_id
-                    ) issue_agg ON r.id = issue_agg.rm_return_id
-                    WHERE r.material_id = ?
-
-                    ORDER BY receipt_date ASC, item_id ASC
-                `;
-
-                const [batches] = await connection.execute(queryBatches, [materialId, materialId]);
-
-                let remainingToIssue = stockDeductQty;
-                const insertIssueQuery = `
-                    INSERT INTO stock_issues (grn_item_id, ma_item_id, issue_quantity, removal_type, issue_date, remarks, added_by)
-                    VALUES (?, ?, ?, 'issue', ?, ?, ?)
-                `;
-
-                const remarksStr = `Issued for Work Order WO-${String(workOrderNo).padStart(4, '0')}`;
-
-                for (const batch of batches) {
-                    if (remainingToIssue <= 0) break;
-
-                    const approved = Number(batch.approved_qty);
-                    const issued = Number(batch.issued_qty);
-                    const available = approved - issued;
-
-                    if (available > 0) {
-                        const deductQty = Math.min(remainingToIssue, available);
-                        await connection.execute(insertIssueQuery, [
-                            batch.grn_item_id || null,
-                            batch.ma_item_id || null,
-                            deductQty,
-                            workOrderDate,
-                            remarksStr,
-                            addedBy
-                        ]);
-                        remainingToIssue -= deductQty;
-                    }
-                }
-
-                if (remainingToIssue > 0) {
-                    throw new Error(`Insufficient stock. Need to issue ${stockDeductQty} units, but only ${stockDeductQty - remainingToIssue} units are available.`);
-                }
-            }
         }
 
         await connection.commit();
@@ -455,23 +372,7 @@ const deleteWorkOrder = async (id) => {
     try {
         await connection.beginTransaction();
 
-        // 1. Fetch work order to get work_order_no
-        const [woRows] = await connection.execute(
-            `SELECT work_order_no FROM work_orders WHERE id = ?`,
-            [id]
-        );
-        if (woRows.length > 0) {
-            const workOrderNo = woRows[0].work_order_no;
-            // const remarksStr = `Issued for Work Order WO-${String(workOrderNo).padStart(4, '0')}`;
-            
-            // // 2. Delete corresponding stock issues (DISABLED FOR NOW)
-            // await connection.execute(
-            //     `DELETE FROM stock_issues WHERE remarks = ?`,
-            //     [remarksStr]
-            // );
-        }
-
-        // 3. Delete work order (will cascade delete work_order_items)
+        // Delete work order (will cascade delete work_order_items)
         await connection.execute(`DELETE FROM work_orders WHERE id = ?`, [id]);
 
         await connection.commit();

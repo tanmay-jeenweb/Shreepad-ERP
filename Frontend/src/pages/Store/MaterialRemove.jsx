@@ -52,9 +52,7 @@ export default function MaterialRemove() {
             setSelectedBatchDetails({
                 grn_item_id: batch.grn_item_id || null,
                 ma_item_id: batch.ma_item_id || null,
-                job_party_name: batch.job_party_name || "—",
                 material_type: batch.material_type || "—",
-                grade: batch.grade || "—",
                 balance_quantity: parseFloat(batch.balance_quantity || 0)
             });
         }
@@ -187,20 +185,6 @@ export default function MaterialRemove() {
                                 </h3>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    {/* Job Of Party Name */}
-                                    <div className="space-y-1">
-                                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                                            Job Of Party Name
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={selectedBatchDetails?.job_party_name || ""}
-                                            readOnly
-                                            className={readonlyInputCls}
-                                            placeholder="—"
-                                        />
-                                    </div>
-
                                     {/* Type */}
                                     <div className="space-y-1">
                                         <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
@@ -209,22 +193,6 @@ export default function MaterialRemove() {
                                         <input
                                             type="text"
                                             value={selectedBatchDetails?.material_type || ""}
-                                            readOnly
-                                            className={readonlyInputCls}
-                                            placeholder="—"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    {/* Grade */}
-                                    <div className="space-y-1">
-                                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                                            Grade {selectedBatchDetails?.material_type === "Raw Materials" && <span className="text-indigo-600 font-bold">(RM)</span>}
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={selectedBatchDetails?.grade || ""}
                                             readOnly
                                             className={readonlyInputCls}
                                             placeholder="—"

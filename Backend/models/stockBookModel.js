@@ -372,7 +372,6 @@ const getActiveBatches = async () => {
             r.id AS rm_return_id,
             COALESCE(mai.internal_batch_number, r.internal_batch_number) AS internal_batch_number,
             COALESCE(mai.material_name, r.material_name) AS product,
-            NULL AS job_party_name,
             ss.material_type,
             (COALESCE(r.quantity, ss.total_kg, 0) - COALESCE(issue_agg.issued_qty, 0)) AS balance_quantity
         FROM stock_status ss

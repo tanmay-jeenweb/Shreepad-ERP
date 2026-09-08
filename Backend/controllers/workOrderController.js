@@ -30,7 +30,7 @@ const addWorkOrder = async (req, res) => {
         });
     } catch (error) {
         console.error("Error in addWorkOrder controller:", error);
-        const statusCode = (error.message && (error.message.includes("No working hours") || error.message.includes("Insufficient stock"))) ? 400 : 500;
+        const statusCode = (error.message && error.message.includes("No working hours")) ? 400 : 500;
         return res.status(statusCode).json({
             success: false,
             message: error.message || "Internal Server Error"
