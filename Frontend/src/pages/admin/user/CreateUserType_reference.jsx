@@ -7,7 +7,6 @@ import toast from "react-hot-toast";
 const MASTERS = [
   { key: "user_type",             label: "User Type Master" },
   { key: "location",              label: "Location Master" },
-  { key: "material_group",        label: "Material Group Master" },
   { key: "unit",                  label: "Unit Master" },
   { key: "material",              label: "Material Master" },
   { key: "worker_employee_type",  label: "Worker/Employee Type Master" },

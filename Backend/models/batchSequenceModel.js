@@ -4,7 +4,7 @@ const createBatchSequenceTable = async () => {
     const query = `
         CREATE TABLE IF NOT EXISTS batch_number_sequences (
             id INT AUTO_INCREMENT PRIMARY KEY,
-            material_code VARCHAR(3) NOT NULL,
+            material_code VARCHAR(100) NOT NULL,
             batch_year VARCHAR(2) NOT NULL,
             last_sequence INT DEFAULT 0,
             UNIQUE KEY unique_batch (material_code, batch_year)
@@ -12,6 +12,13 @@ const createBatchSequenceTable = async () => {
     `;
 
     await db.execute(query);
+
+    try {
+        await db.execute(`ALTER TABLE batch_number_sequences MODIFY COLUMN material_code VARCHAR(100) NOT NULL`);
+    } catch (e) {
+        // ignore if already modified
+    }
+
     console.log('Batch sequence table ready');
 };
 

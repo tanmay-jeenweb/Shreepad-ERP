@@ -127,41 +127,41 @@ const mapMaterialTypeToPrefixKey = (type) => {
 
 const generateInternalBatchNumber = async (connection, materialId, settings) => {
     if (!materialId) return null;
-    const [matRows] = await connection.execute('SELECT code, material_type, prefix FROM materials WHERE id = ?', [materialId]);
+    const [matRows] = await connection.execute('SELECT material_code, material_type, prefix FROM materials WHERE id = ?', [materialId]);
     if (matRows.length === 0) return null;
     const mat = matRows[0];
-    if (!mat.code) return null; // No code, no batch number
 
     const prefixKey = mapMaterialTypeToPrefixKey(mat.material_type);
     const prefix = mat.prefix || (settings ? (settings[prefixKey] || 'OTH') : 'OTH');
 
     const year = (settings && settings.batch_year) ? settings.batch_year : new Date().getFullYear().toString().slice(-2);
 
-    const seq = await getNextSequence(connection, mat.code, year);
+    const seqKey = prefix || mat.material_code || String(materialId);
+    const seq = await getNextSequence(connection, seqKey, year);
 
-    return `${prefix}${mat.code}${year}${String(seq).padStart(4, '0')}`;
+    return `${prefix}${year}${String(seq).padStart(4, '0')}`;
 };
 
 const previewNextBatchNumber = async (materialId) => {
     if (!materialId) return null;
-    const [matRows] = await db.execute('SELECT code, material_type, prefix FROM materials WHERE id = ?', [materialId]);
+    const [matRows] = await db.execute('SELECT material_code, material_type, prefix FROM materials WHERE id = ?', [materialId]);
     if (matRows.length === 0) return null;
     const mat = matRows[0];
-    if (!mat.code) return null;
 
     const settings = await getSettings();
     const prefixKey = mapMaterialTypeToPrefixKey(mat.material_type);
     const prefix = mat.prefix || (settings ? (settings[prefixKey] || 'OTH') : 'OTH');
     const year = (settings && settings.batch_year) ? settings.batch_year : new Date().getFullYear().toString().slice(-2);
 
+    const seqKey = prefix || mat.material_code || String(materialId);
     const [seqRows] = await db.execute(
         `SELECT last_sequence FROM batch_number_sequences WHERE material_code = ? AND batch_year = ?`,
-        [mat.code, year]
+        [seqKey, year]
     );
     const lastSeq = seqRows.length > 0 ? seqRows[0].last_sequence : 0;
     const nextSeq = lastSeq + 1;
 
-    return `${prefix}${mat.code}${year}${String(nextSeq).padStart(4, '0')}`;
+    return `${prefix}${year}${String(nextSeq).padStart(4, '0')}`;
 };
 
 // ─── Material Lookups ─────────────────────────────────────────────────────────

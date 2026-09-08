@@ -80,8 +80,7 @@ export default function CreateWorkOrder() {
         const allMaterials = matRes.data.data || [];
         const filteredMat = allMaterials.filter(m => {
           const type = (m.material_type || "").toLowerCase();
-          const group = (m.material_group_name || "").toLowerCase();
-          const isFinishedOrSemi = type.includes("finish") || type.includes("semi") || group.includes("finish") || group.includes("semi");
+          const isFinishedOrSemi = type.includes("finish") || type.includes("semi");
           return isFinishedOrSemi && activeBomMaterialIds.has(Number(m.id));
         });
         setMaterials(filteredMat);

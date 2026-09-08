@@ -6,12 +6,10 @@ const createMaterialsTable = async () => {
         CREATE TABLE IF NOT EXISTS materials (
             id INT AUTO_INCREMENT PRIMARY KEY,
             material_code VARCHAR(100) NOT NULL UNIQUE,
-            code VARCHAR(3) DEFAULT NULL UNIQUE,
             prefix VARCHAR(10) DEFAULT NULL,
             material_name VARCHAR(255) NOT NULL,
             unit_id INT,
             hsn_code VARCHAR(50),
-            material_group_id INT,
             material_type VARCHAR(100),
             gst_percent VARCHAR(50),
             self_val DECIMAL(15,2),
@@ -25,7 +23,6 @@ const createMaterialsTable = async () => {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (unit_id) REFERENCES units(id) ON DELETE SET NULL,
-            FOREIGN KEY (material_group_id) REFERENCES material_groups(id) ON DELETE SET NULL,
             FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE CASCADE
         )
     `;
@@ -37,7 +34,6 @@ const createMaterialsTable = async () => {
 const ensureMaterialColumns = async () => {
     const columnsToEnsure = [
         { name: 'active', query: 'ALTER TABLE materials ADD COLUMN active BOOLEAN DEFAULT TRUE' },
-        { name: 'code', query: 'ALTER TABLE materials ADD COLUMN code VARCHAR(3) DEFAULT NULL UNIQUE' },
         { name: 'prefix', query: 'ALTER TABLE materials ADD COLUMN prefix VARCHAR(10) DEFAULT NULL' }
     ];
 
@@ -52,6 +48,33 @@ const ensureMaterialColumns = async () => {
         }
     }
 
+    // Cleanup dropped columns and foreign keys
+    try {
+        // Drop FK on material_group_id if it exists
+        const [fkRows] = await db.execute(
+            `SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'materials' AND COLUMN_NAME = 'material_group_id' AND REFERENCED_TABLE_NAME IS NOT NULL`
+        );
+        for (const row of fkRows) {
+            await db.execute(`ALTER TABLE materials DROP FOREIGN KEY ${row.CONSTRAINT_NAME}`);
+            console.log(`Dropped FK ${row.CONSTRAINT_NAME} from materials`);
+        }
+
+        // Drop columns if they exist
+        const columnsToDrop = ['code', 'material_group_id'];
+        for (const col of columnsToDrop) {
+            const [cRows] = await db.execute(
+                `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'materials' AND COLUMN_NAME = ?`,
+                [col]
+            );
+            if (cRows.length > 0) {
+                await db.execute(`ALTER TABLE materials DROP COLUMN ${col}`);
+                console.log(`Dropped column ${col} from materials`);
+            }
+        }
+    } catch (cleanupErr) {
+        console.error('Error during materials column cleanup:', cleanupErr.message);
+    }
+
     try {
         await db.execute(`UPDATE materials SET prefix = 'FG' WHERE material_type = 'Finished Goods' AND (prefix IS NULL OR prefix = '')`);
         await db.execute(`UPDATE materials SET prefix = 'SFG' WHERE material_type = 'Semi Finished Goods' AND (prefix IS NULL OR prefix = '')`);
@@ -64,12 +87,10 @@ const ensureMaterialColumns = async () => {
 const createMaterial = async (data, addedBy, deviceId) => {
     const {
         materialCode,
-        code,
         prefix,
         materialName,
         unitId,
         hsnCode,
-        materialGroupId,
         materialType,
         gstPercent,
         selfVal,
@@ -82,12 +103,10 @@ const createMaterial = async (data, addedBy, deviceId) => {
     const query = `
         INSERT INTO materials (
             material_code,
-            code,
             prefix,
             material_name,
             unit_id,
             hsn_code,
-            material_group_id,
             material_type,
             gst_percent,
             self_val,
@@ -98,17 +117,15 @@ const createMaterial = async (data, addedBy, deviceId) => {
             added_by,
             device_id
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const [results] = await db.execute(query, [
         materialCode,
-        code || null,
         prefix || null,
         materialName,
         unitId || null,
         hsnCode || null,
-        materialGroupId || null,
         materialType || null,
         gstPercent || null,
         selfVal || null,
@@ -129,14 +146,11 @@ const getAllMaterials = async (includeInactive = false) => {
         SELECT
             m.id,
             m.material_code,
-            m.code,
             m.prefix,
             m.material_name,
             m.unit_id,
             u.unit_name,
             m.hsn_code,
-            m.material_group_id,
-            mg.material_group_name,
             m.material_type,
             m.gst_percent,
             m.self_val,
@@ -150,7 +164,6 @@ const getAllMaterials = async (includeInactive = false) => {
             m.created_at
         FROM materials m
         LEFT JOIN units u ON m.unit_id = u.id
-        LEFT JOIN material_groups mg ON m.material_group_id = mg.id
         LEFT JOIN users usr ON m.added_by = usr.id
         ${whereClause}
         ORDER BY m.created_at DESC
@@ -173,12 +186,10 @@ const getMaterialById = async (id) => {
 const updateMaterial = async (id, data) => {
     const {
         materialCode,
-        code,
         prefix,
         materialName,
         unitId,
         hsnCode,
-        materialGroupId,
         materialType,
         gstPercent,
         selfVal,
@@ -192,12 +203,10 @@ const updateMaterial = async (id, data) => {
         UPDATE materials
         SET
             material_code = ?,
-            code = ?,
             prefix = ?,
             material_name = ?,
             unit_id = ?,
             hsn_code = ?,
-            material_group_id = ?,
             material_type = ?,
             gst_percent = ?,
             self_val = ?,
@@ -210,12 +219,10 @@ const updateMaterial = async (id, data) => {
 
     const [results] = await db.execute(query, [
         materialCode,
-        code || null,
         prefix || null,
         materialName,
         unitId || null,
         hsnCode || null,
-        materialGroupId || null,
         materialType || null,
         gstPercent || null,
         selfVal || null,

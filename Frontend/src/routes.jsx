@@ -21,7 +21,6 @@ import CreateCustomer from "./pages/admin/customer/CreateCustomer";
 import EditCustomer from "./pages/admin/customer/EditCustomer";
 import CreateUserType from "./pages/admin/user/CreateUserType";
 import Profile from "./pages/Profile";
-import MaterialGroupMaster from "./pages/Item/MaterialGroupMaster";
 import MaterialTypeMaster from "./pages/Item/MaterialTypeMaster";
 import UnitMaster from "./pages/Item/UnitMaster";
 import MaterialMaster from "./pages/Item/MaterialMaster";
@@ -186,12 +185,7 @@ export default function AppRoutes() {
 
             {/* Sub SD Reason Master removed */}
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="material_group" requiredAction="read" />}>
-                <Route
-                    path="/admin/material-groups"
-                    element={<MaterialGroupMaster />}
-                />
-            </Route>
+            {/* Material Group Master removed */}
 
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="material_type" requiredAction="read" />}>
                 <Route

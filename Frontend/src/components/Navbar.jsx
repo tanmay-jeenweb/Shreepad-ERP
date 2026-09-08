@@ -196,16 +196,6 @@ export default function Navbar({ title }) {
             activeColor: "bg-fuchsia-100 text-fuchsia-700",
             desc: "Register & monitor machine operations"
         },
-
-        {
-            name: "Material Group Master",
-            path: "/admin/material-groups",
-            masterKey: "material_group",
-            icon: "fa-solid fa-boxes-stacked",
-            color: "bg-teal-50 text-teal-600 border border-teal-100/50",
-            activeColor: "bg-teal-100 text-teal-700",
-            desc: "Manage material group names and details"
-        },
         {
             name: "Material Type Master",
             path: "/admin/material-types",

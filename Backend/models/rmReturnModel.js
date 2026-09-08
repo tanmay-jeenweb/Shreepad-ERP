@@ -84,19 +84,19 @@ const mapMaterialTypeToPrefixKey = (type) => {
 
 const generateInternalBatchNumber = async (connection, materialId, settings) => {
     if (!materialId) return null;
-    const [matRows] = await connection.execute('SELECT code, material_type, prefix FROM materials WHERE id = ?', [materialId]);
+    const [matRows] = await connection.execute('SELECT material_code, material_type, prefix FROM materials WHERE id = ?', [materialId]);
     if (matRows.length === 0) return null;
     const mat = matRows[0];
-    if (!mat.code) return null; // No code, no batch number
 
     const prefixKey = mapMaterialTypeToPrefixKey(mat.material_type);
     const prefix = mat.prefix || (settings ? (settings[prefixKey] || 'OTH') : 'OTH');
 
     const year = (settings && settings.batch_year) ? settings.batch_year : new Date().getFullYear().toString().slice(-2);
 
-    const seq = await getNextSequence(connection, mat.code, year);
+    const seqKey = prefix || mat.material_code || String(materialId);
+    const seq = await getNextSequence(connection, seqKey, year);
 
-    return `-${prefix}${mat.code}${year}${String(seq).padStart(4, '0')}`;
+    return `-${prefix}${year}${String(seq).padStart(4, '0')}`;
 };
 
 const createRmReturn = async (data, addedBy) => {

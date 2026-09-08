@@ -33,7 +33,6 @@ function DetailModal({ isOpen, row, onClose }) {
       const MASTERS_MAP = {
         user_type: "User Group Master",
         location: "Location Master",
-        material_group: "Material Group Master",
         unit: "Unit Master",
         material: "Material Master",
         vendor: "Vendor Master",

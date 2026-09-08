@@ -12,12 +12,10 @@ const addMaterial = async (req, res) => {
     try {
         const {
             materialCode,
-            code,
             prefix,
             materialName,
             unitId,
             hsnCode,
-            materialGroupId,
             materialType,
             gstPercent,
             selfVal,
@@ -38,21 +36,12 @@ const addMaterial = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Material name is required' });
         }
 
-        if (!code || !code.trim()) {
-            return res.status(400).json({ success: false, message: 'Code is required' });
-        }
-        if (!/^\d{3}$/.test(code.trim())) {
-            return res.status(400).json({ success: false, message: 'Code must be exactly 3 numeric digits' });
-        }
-
         const data = {
             materialCode: materialCode.trim(),
-            code: code ? code.trim() : null,
             prefix: prefix ? prefix.trim().toUpperCase().slice(0, 10) : null,
             materialName: materialName.trim(),
             unitId: unitId || null,
             hsnCode: hsnCode ? hsnCode.trim() : null,
-            materialGroupId: materialGroupId || null,
             materialType: materialType || null,
             gstPercent: gstPercent ? gstPercent.trim() : null,
             selfVal: selfVal !== undefined && selfVal !== null && selfVal !== '' ? Number(selfVal) : null,
@@ -87,9 +76,6 @@ const addMaterial = async (req, res) => {
     } catch (error) {
         console.error('Error adding material:', error);
         if (error.code === 'ER_DUP_ENTRY') {
-            if (error.message.includes('materials.code') || error.message.includes('code')) {
-                return res.status(400).json({ success: false, message: 'This 3-digit code is already in use by another material' });
-            }
             return res.status(400).json({ success: false, message: 'Material code already exists' });
         }
         res.status(500).json({ success: false, message: 'Internal server error' });
@@ -130,12 +116,10 @@ const updateMaterialController = async (req, res) => {
         const { id } = req.params;
         const {
             materialCode,
-            code,
             prefix,
             materialName,
             unitId,
             hsnCode,
-            materialGroupId,
             materialType,
             gstPercent,
             selfVal,
@@ -153,13 +137,6 @@ const updateMaterialController = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Material name is required' });
         }
 
-        if (!code || !code.trim()) {
-            return res.status(400).json({ success: false, message: 'Code is required' });
-        }
-        if (!/^\d{3}$/.test(code.trim())) {
-            return res.status(400).json({ success: false, message: 'Code must be exactly 3 numeric digits' });
-        }
-
         const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
         const beforeData = await getMaterialById(id);
         if (!beforeData) {
@@ -168,12 +145,10 @@ const updateMaterialController = async (req, res) => {
 
         const data = {
             materialCode: materialCode.trim(),
-            code: code ? code.trim() : null,
             prefix: prefix !== undefined ? (prefix ? prefix.trim().toUpperCase().slice(0, 10) : null) : (beforeData ? beforeData.prefix : null),
             materialName: materialName.trim(),
             unitId: unitId || null,
             hsnCode: hsnCode ? hsnCode.trim() : null,
-            materialGroupId: materialGroupId || null,
             materialType: materialType || null,
             gstPercent: gstPercent ? gstPercent.trim() : null,
             selfVal: selfVal !== undefined && selfVal !== null && selfVal !== '' ? Number(selfVal) : null,
@@ -199,9 +174,6 @@ const updateMaterialController = async (req, res) => {
     } catch (error) {
         console.error('Error updating material:', error);
         if (error.code === 'ER_DUP_ENTRY') {
-            if (error.message.includes('materials.code') || error.message.includes('code')) {
-                return res.status(400).json({ success: false, message: 'This 3-digit code is already in use by another material' });
-            }
             return res.status(400).json({ success: false, message: 'Material code already exists' });
         }
         res.status(500).json({ success: false, message: 'Internal server error' });

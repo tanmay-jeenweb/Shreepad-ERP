@@ -2,7 +2,6 @@ import { useEffect, useState, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import { createMaterial, updateMaterial, getMaterialById } from "../../api/materialApi";
-import { getMaterialGroups } from "../../api/materialGroupApi";
 import { getMaterialTypes } from "../../api/materialTypeApi";
 import { getUnits } from "../../api/unitApi";
 import toast from "react-hot-toast";
@@ -24,11 +23,9 @@ const DEFAULT_PREFIXES = {
 
 const emptyForm = {
   materialCode: "",
-  code: "",
   materialName: "",
   unitId: "",
   hsnCode: "",
-  materialGroupId: "",
   materialType: "",
   prefix: "",
   gstPercent: "",
@@ -46,7 +43,6 @@ export default function CreateMaterial() {
   const isEditMode = Boolean(editId);
 
   const [form, setForm] = useState(emptyForm);
-  const [groups, setGroups] = useState([]);
   const [materialTypes, setMaterialTypes] = useState([]);
   const [units, setUnits] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -58,12 +54,10 @@ export default function CreateMaterial() {
       setLoading(true);
       try {
         // Fetch dropdowns
-        const [groupRes, unitRes, typeRes] = await Promise.all([
-          getMaterialGroups(),
+        const [unitRes, typeRes] = await Promise.all([
           getUnits(),
           getMaterialTypes(),
         ]);
-        setGroups(groupRes.data?.data || []);
         setUnits(unitRes.data?.data || []);
         setMaterialTypes(typeRes.data?.data || []);
 
@@ -74,11 +68,9 @@ export default function CreateMaterial() {
           if (mat) {
             setForm({
               materialCode: mat.material_code || "",
-              code: mat.code || "",
               materialName: mat.material_name || "",
               unitId: mat.unit_id ? String(mat.unit_id) : "",
               hsnCode: mat.hsn_code || "",
-              materialGroupId: mat.material_group_id ? String(mat.material_group_id) : "",
               materialType: mat.material_type || "",
               prefix: mat.prefix || (mat.material_type ? DEFAULT_PREFIXES[mat.material_type] || "" : ""),
               gstPercent: mat.gst_percent || "",
@@ -138,15 +130,6 @@ export default function CreateMaterial() {
       return;
     }
 
-    if (!form.code || !form.code.trim()) {
-      toast.error("3-digit Code is required.");
-      return;
-    }
-    if (!/^\d{3}$/.test(form.code.trim())) {
-      toast.error("Code must be exactly 3 numeric digits.");
-      return;
-    }
-
     if (form.materialType && !form.prefix.trim()) {
       toast.error(`${form.materialType} Prefix is required.`);
       return;
@@ -156,12 +139,10 @@ export default function CreateMaterial() {
     try {
       const payload = {
         materialCode: form.materialCode.trim(),
-        code: form.code ? form.code.trim() : null,
         prefix: form.prefix ? form.prefix.trim().toUpperCase() : null,
         materialName: form.materialName.trim(),
         unitId: form.unitId ? Number(form.unitId) : null,
         hsnCode: form.hsnCode.trim() || null,
-        materialGroupId: form.materialGroupId ? Number(form.materialGroupId) : null,
         materialType: form.materialType || null,
         gstPercent: form.gstPercent.trim() || null,
         selfVal: form.selfVal !== "" ? Number(form.selfVal) : null,
@@ -250,24 +231,6 @@ export default function CreateMaterial() {
                 />
               </div>
 
-              {/* 3-Digit Code */}
-              <div>
-                <label className={labelCls}>
-                  Code <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="code"
-                  value={form.code}
-                  onChange={handleChange}
-                  placeholder="e.g. 042"
-                  maxLength={3}
-                  pattern="\d{3}"
-                  className={inputCls}
-                  required
-                />
-              </div>
-
               {/* Material Name */}
               <div>
                 <label className={labelCls}>
@@ -312,24 +275,6 @@ export default function CreateMaterial() {
                   placeholder="Enter HSN code"
                   className={inputCls}
                 />
-              </div>
-
-              {/* Material Group */}
-              <div>
-                <label className={labelCls}>Material Group</label>
-                <select
-                  name="materialGroupId"
-                  value={form.materialGroupId}
-                  onChange={handleChange}
-                  className={inputCls}
-                >
-                  <option value="">— Select Material Group —</option>
-                  {groups.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.material_group_name}
-                    </option>
-                  ))}
-                </select>
               </div>
 
               {/* Material Type */}

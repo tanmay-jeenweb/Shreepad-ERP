@@ -30,7 +30,6 @@ const MODULE_GROUPS = [
     icon: "fa-solid fa-boxes-stacked",
     description: "Material groups and specifications.",
     masters: [
-      { key: "material_group",      label: "Material Group Master" },
       { key: "material_type",        label: "Material Type Master" },
       { key: "unit",                label: "Unit Master" },
       { key: "material",            label: "Material Master" },
