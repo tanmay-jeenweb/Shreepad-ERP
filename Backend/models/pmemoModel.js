@@ -297,7 +297,7 @@ const createPMemo = async (workOrderItemId, date, rmDetails = {}, rmIssues = [],
                 formattedMemoNo,
                 issue.date || date,
                 issue.remark || null,
-                addedBy
+                addedBy || null
             ]);
             const stockIssueId = stockIssueResult.insertId;
 
@@ -312,7 +312,7 @@ const createPMemo = async (workOrderItemId, date, rmDetails = {}, rmIssues = [],
                 issue.date || date,
                 issue.remark || null,
                 Number(issue.material_id),
-                issue.grade,
+                issue.grade || '',
                 issue.internal_batch_number,
                 null,
                 issue.ma_item_id || null,
@@ -347,6 +347,13 @@ const ensurePMemoRmIssuesColumns = async () => {
             await db.execute(`ALTER TABLE pmemo_rm_issues ADD COLUMN rm_return_id INT DEFAULT NULL`);
             await db.execute(`ALTER TABLE pmemo_rm_issues ADD CONSTRAINT fk_pmemo_rm_issues_rtr FOREIGN KEY (rm_return_id) REFERENCES rm_returns(id) ON DELETE SET NULL`);
             console.log(`Added column rm_return_id to pmemo_rm_issues`);
+        }
+
+        // Ensure grade is nullable or defaults to empty string
+        try {
+            await db.execute(`ALTER TABLE pmemo_rm_issues MODIFY COLUMN grade VARCHAR(100) NULL DEFAULT ''`);
+        } catch (e) {
+            // Ignore if already modified
         }
     } catch (err) {
         console.error('Error ensuring pmemo_rm_issues columns:', err.message || err);

@@ -42,7 +42,7 @@ const getPMemoDetails = async (req, res) => {
                         r.return_date,
                         r.material_id,
                         r.material_name,
-                        r.job_party_name,
+                        NULL AS job_party_name,
                         r.grade,
                         r.location_id,
                         r.location_name,
@@ -61,13 +61,36 @@ const getPMemoDetails = async (req, res) => {
             }
         }
 
+        const db = require('../config/db.js');
+        let bomRawMaterials = [];
+        try {
+            const [bomRows] = await db.execute(
+                `SELECT 
+                    bm.material_id,
+                    m.material_name,
+                    m.material_code,
+                    bm.quantity AS bom_quantity
+                 FROM work_order_items woi
+                 JOIN bill_of_materials bom ON woi.material_id = bom.material_id
+                 JOIN bom_materials bm ON bom.id = bm.bom_id
+                 JOIN materials m ON bm.material_id = m.id
+                 WHERE woi.id = ?
+                 ORDER BY m.material_name ASC`,
+                [workOrderItemId]
+            );
+            bomRawMaterials = bomRows;
+        } catch (bomErr) {
+            console.error('Error fetching BOM raw materials for P Memo:', bomErr);
+        }
+
         res.status(200).json({
             success: true,
             data: {
                 ...details,
                 proposed_p_memo_no: nextNo,
                 rmIssues,
-                rmReturns
+                rmReturns,
+                bomRawMaterials
             }
         });
     } catch (error) {

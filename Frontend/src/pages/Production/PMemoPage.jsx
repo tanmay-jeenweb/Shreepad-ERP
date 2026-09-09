@@ -355,7 +355,7 @@ export default function PMemoPage() {
                                 <h2 className="text-lg font-bold text-slate-800">Production Memo Specifications</h2>
                             </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
                                 {/* Date Field (Editable) */}
                                 <div>
                                     <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
@@ -379,19 +379,6 @@ export default function PMemoPage() {
                                     </div>
                                 </div>
 
-                                {/* Machine Name */}
-                                <div>
-                                    <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                                        Machine Name
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={machineName}
-                                        readOnly
-                                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs text-slate-600 bg-slate-50 focus:outline-none font-medium"
-                                    />
-                                </div>
-
                                 {/* Material Name */}
                                 <div>
                                     <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
@@ -400,19 +387,6 @@ export default function PMemoPage() {
                                     <input
                                         type="text"
                                         value={materialName}
-                                        readOnly
-                                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs text-slate-600 bg-slate-50 focus:outline-none font-medium"
-                                    />
-                                </div>
-
-                                {/* RM Type */}
-                                <div>
-                                    <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                                        RM Type
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={rawMaterialName}
                                         readOnly
                                         className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs text-slate-600 bg-slate-50 focus:outline-none font-medium"
                                     />
@@ -431,19 +405,6 @@ export default function PMemoPage() {
                                     />
                                 </div>
 
-                                {/* Color */}
-                                <div>
-                                    <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                                        Color
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={color}
-                                        readOnly
-                                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs text-slate-600 bg-slate-50 focus:outline-none font-medium"
-                                    />
-                                </div>
-
                                 {/* Batch */}
                                 <div>
                                     <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
@@ -452,19 +413,6 @@ export default function PMemoPage() {
                                     <input
                                         type="text"
                                         value={batch}
-                                        readOnly
-                                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs text-slate-600 bg-slate-50 focus:outline-none font-medium"
-                                    />
-                                </div>
-
-                                {/* Mould Cavity */}
-                                <div>
-                                    <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                                        Mould Cavity
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={mouldCavity}
                                         readOnly
                                         className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs text-slate-600 bg-slate-50 focus:outline-none font-medium"
                                     />
@@ -845,15 +793,9 @@ function RmIssueChit({ chit, rawMaterialsList, materialName, machineName, itemCo
                 </div>
 
                 <div className="grid grid-cols-12 border-b border-slate-400">
-                    {/* Material Name / Colour */}
-                    {/* <div className="col-span-6 border-r border-slate-400 p-2 bg-slate-50/50 font-semibold text-slate-700">
-                        Material Name/COLOUR: <span className="font-bold text-slate-800 ml-1.5">{color}</span>
-                    </div> */}
-                    <div className="col-span-3 border-r border-slate-400 p-2 font-bold bg-slate-50 text-slate-500 uppercase tracking-wider text-[10px]">Material Colour:</div>
-                    <div className="col-span-3 border-r border-slate-400 p-2 font-mono font-semibold text-slate-800">{color}</div>
                     {/* RM Issue Sheet No. */}
                     <div className="col-span-3 border-r border-slate-400 p-2 font-bold bg-slate-50 text-slate-500 uppercase tracking-wider text-[10px]">RM Issue Sheet No.</div>
-                    <div className="col-span-3 p-2 font-mono font-semibold text-slate-800">
+                    <div className="col-span-9 p-2 font-mono font-semibold text-slate-800">
                         {pMemoNo ? `PM-${String(pMemoNo).padStart(4, "0")}` : "—"}
                     </div>
                 </div>
@@ -870,7 +812,6 @@ function RmIssueChit({ chit, rawMaterialsList, materialName, machineName, itemCo
                             <th className="border-r border-slate-400 p-2 w-20">Qty/kg</th>
                             <th className="border-r border-slate-400 p-2 w-24">Total/kg</th>
                             <th className="border-r border-slate-400 p-2 min-w-[120px]">RM Type</th>
-                            <th className="border-r border-slate-400 p-2 min-w-[150px]">Grade</th>
                             <th className="border-r border-slate-400 p-2 min-w-[120px]">S Batch</th>
                             <th className="border-r border-slate-400 p-2 min-w-[120px]">I Batch</th>
                             <th className="p-2 w-16">MFI</th>
@@ -884,7 +825,6 @@ function RmIssueChit({ chit, rawMaterialsList, materialName, machineName, itemCo
                                     <td className="border-r border-slate-400 p-2 font-medium bg-emerald-50/20">{Number(row.qty).toFixed(3)}</td>
                                     <td className="border-r border-slate-400 p-2 font-bold bg-amber-50/20">{totalRequired.toFixed(3)}</td>
                                     <td className="border-r border-slate-400 p-2 font-bold text-slate-800">{getRmName(row.material_id)}</td>
-                                    <td className="border-r border-slate-400 p-2 font-medium">{row.grade}</td>
                                     <td className="border-r border-slate-400 p-2 font-mono text-[11px]">{row.supplier_batch_number || "—"}</td>
                                     <td className="border-r border-slate-400 p-2 font-mono text-[11px] font-semibold text-slate-800">{row.internal_batch_number}</td>
                                     <td className="p-2 font-mono">{row.mfi || "0.00"}</td>
@@ -896,7 +836,7 @@ function RmIssueChit({ chit, rawMaterialsList, materialName, machineName, itemCo
                         <tr className="bg-slate-100 font-bold text-slate-800 border-t border-slate-400">
                             <td className="border-r border-slate-400 p-2 bg-emerald-50/30">{totalQty.toFixed(3)}</td>
                             <td className="border-r border-slate-400 p-2 bg-amber-50/30">{totalTotalRequired.toFixed(3)}</td>
-                            <td colSpan="5" className="p-2 text-left uppercase tracking-wider text-[10px] text-slate-500 font-bold">
+                            <td colSpan="4" className="p-2 text-left uppercase tracking-wider text-[10px] text-slate-500 font-bold">
                                 Total Quantity
                             </td>
                         </tr>
@@ -940,7 +880,6 @@ function RmReturnChit({ chit, onPrint }) {
                     <thead>
                         <tr className="bg-slate-50 border-b border-slate-400 font-semibold text-slate-700">
                             <th className="border-r border-slate-400 p-2">Date</th>
-                            <th className="border-r border-slate-400 p-2">Party</th>
                             <th className="border-r border-slate-400 p-2">RM Type</th>
                             <th className="border-r border-slate-400 p-2">Grade</th>
                             <th className="border-r border-slate-400 p-2">Location</th>
@@ -951,7 +890,6 @@ function RmReturnChit({ chit, onPrint }) {
                     <tbody>
                         <tr className="text-slate-800">
                             <td className="border-r border-slate-400 p-2">{formatDate(chit.return_date)}</td>
-                            <td className="border-r border-slate-400 p-2 font-bold">{chit.job_party_name || "—"}</td>
                             <td className="border-r border-slate-400 p-2 font-bold">{chit.material_name || "—"}</td>
                             <td className="border-r border-slate-400 p-2 font-medium">{chit.grade || "—"}</td>
                             <td className="border-r border-slate-400 p-2 font-medium">{chit.location_name || "—"}</td>

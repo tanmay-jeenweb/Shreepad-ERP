@@ -20,8 +20,6 @@ export default function PMRmReturnPage() {
     // Form inputs state
     const [returnDate, setReturnDate] = useState(new Date().toISOString().split("T")[0]);
     const [workOrderNo, setWorkOrderNo] = useState("");
-    const [jobPartyName, setJobPartyName] = useState("");
-    const [jobPartyId, setJobPartyId] = useState(null);
     const [selectedRmName, setSelectedRmName] = useState("");
     const [selectedGrade, setSelectedGrade] = useState("");
     const [selectedLocationId, setSelectedLocationId] = useState("");
@@ -45,8 +43,6 @@ export default function PMRmReturnPage() {
                 if (pMemoData) {
                     setPmemoId(pMemoData.id);
                     setWorkOrderNo(pMemoData.work_order_no);
-                    setJobPartyId(pMemoData.job_party_id);
-                    setJobPartyName(pMemoData.job_party_name);
                     setIsFinalSubmitted(false); // Keep return page unlocked
                 } else {
                     toast.error("P Memo details not found.");
@@ -98,8 +94,6 @@ export default function PMRmReturnPage() {
         ) || null;
     }, [selectedRmName, selectedGrade, rawMaterialsList]);
 
-    const hasMissingJobParty = workOrderNo && !jobPartyId;
-
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (isFinalSubmitted) {
@@ -107,9 +101,6 @@ export default function PMRmReturnPage() {
         }
 
         // Standard validation
-        if (!jobPartyId) {
-            return toast.error("Cannot return raw material for this Work Order because it does not have an associated Job Party.");
-        }
         if (!selectedRmName) {
             return toast.error("Please select a Material Name.");
         }
@@ -133,7 +124,6 @@ export default function PMRmReturnPage() {
                 pmemo_id: pmemoId,
                 return_date: returnDate,
                 material_id: selectedMaterial.material_id,
-                job_party_id: jobPartyId,
                 grade: selectedGrade,
                 location_id: Number(selectedLocationId),
                 quantity: qty
@@ -236,30 +226,6 @@ export default function PMRmReturnPage() {
                                 />
                             </div>
 
-                            {/* Job of Party name (Get from Work order) */}
-                            <div className="flex flex-col gap-1.5 md:col-span-2">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                                    Job of Party Name
-                                </label>
-                                <input
-                                    type="text"
-                                    readOnly
-                                    value={jobPartyName || (workOrderNo ? "N/A - Missing Job Party" : "")}
-                                    placeholder="Auto-populated from Work Order"
-                                    className={`h-10 px-3 border border-slate-300 rounded-lg text-sm outline-none font-semibold ${
-                                        hasMissingJobParty 
-                                            ? "bg-rose-50 border-rose-300 text-rose-700" 
-                                            : "bg-slate-50 text-slate-500 cursor-not-allowed"
-                                    }`}
-                                />
-                                {hasMissingJobParty && (
-                                    <div className="text-[11px] font-semibold text-rose-600 bg-rose-50 border border-rose-200 px-3 py-2 rounded-lg flex items-start gap-1.5 mt-1 animate-fadeIn">
-                                        <i className="fa-solid fa-triangle-exclamation mt-0.5"></i>
-                                        <span>Cannot return raw material for this Work Order because it does not have an associated Job Party.</span>
-                                    </div>
-                                )}
-                            </div>
-
                             {/* RM Name */}
                             <div className="flex flex-col gap-1.5">
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
@@ -357,7 +323,7 @@ export default function PMRmReturnPage() {
                             {!isFinalSubmitted && (
                                 <button
                                     type="submit"
-                                    disabled={saving || hasMissingJobParty}
+                                    disabled={saving}
                                     className="px-6 py-2.5 rounded-lg bg-[#369ACF] hover:bg-[#032a52] text-white font-semibold transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer text-sm"
                                 >
                                     {saving ? (

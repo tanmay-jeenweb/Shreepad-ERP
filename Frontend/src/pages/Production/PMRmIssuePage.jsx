@@ -48,12 +48,12 @@ export default function PMRmIssuePage() {
     const [submittedChits, setSubmittedChits] = useState([]);
 
     // Global Lot and Date for all RM issues
-    const [issueLot, setIssueLot] = useState("");
+    const [issueLot, setIssueLot] = useState("1");
     const [issueDate, setIssueDate] = useState(new Date().toISOString().split("T")[0]);
 
     const handleLotChange = (val) => {
         setIssueLot(val);
-        const lotVal = parseFloat(val) || 0;
+        const lotVal = parseFloat(val) > 0 ? parseFloat(val) : (val === "" ? 1 : 0);
 
         setRmIssues(prev => prev.map((item, idx) => {
             const rowQty = parseFloat(item.qty) || 0;
@@ -164,8 +164,8 @@ export default function PMRmIssuePage() {
                         : (data.running_total_kg && uWeight > 0 ? Math.round(parseFloat(data.running_total_kg) / uWeight) : "");
                     setRunningTotalNos(valRunningTotalNos);
 
-                    // Form starts blank, so we don't pre-populate the inputs
-                    setIssueLot("");
+                    // Default issueLot to next lot number (starts at 1)
+                    setIssueLot("1");
                     setIssueDate(new Date().toISOString().split("T")[0]);
 
                     // Group saved RM issues by lot to construct submittedChits
@@ -207,9 +207,11 @@ export default function PMRmIssuePage() {
                     const chits = Object.values(grouped).sort((a, b) => a.lot - b.lot);
                     setSubmittedChits(chits);
                     setRmIssues([]); // Start the active form blank!
-                }
-                if (rmRes.data?.success) {
-                    setRawMaterialsList(rmRes.data.data || []);
+                    setIssueLot(String(chits.length + 1));
+
+                    // Display ONLY raw materials configured in the BOM for this product
+                    const bomMaterials = data.bomRawMaterials || [];
+                    setRawMaterialsList(bomMaterials);
                 }
             } catch (err) {
                 console.error("Failed to load P Memo details:", err);
@@ -226,7 +228,7 @@ export default function PMRmIssuePage() {
     // Cascading options helper
     const uniqueRmTypes = useMemo(() => {
         return Array.from(
-            new Map(rawMaterialsList.map(item => [item.material_id, item.material_name])).entries()
+            new Map(rawMaterialsList.map(item => [item.material_id || item.id, item.material_name])).entries()
         ).map(([id, name]) => ({ material_id: id, material_name: name }));
     }, [rawMaterialsList]);
 
@@ -272,25 +274,13 @@ export default function PMRmIssuePage() {
             item.mfi = "";
             item.supplier_batch_number = "";
             item.batches = [];
-        }
 
-        if (field === "grade") {
-            item.internal_batch_number = "";
-            item.grn_item_id = null;
-            item.ma_item_id = null;
-            item.rm_return_id = null;
-            item.qty = "";
-            item.available_qty = 0;
-            item.mfi = "";
-            item.supplier_batch_number = "";
-            item.batches = [];
-
-            if (item.material_id && value) {
+            if (value) {
                 item.loadingBatches = true;
                 updated[idx] = item;
                 setRmIssues([...updated]);
                 try {
-                    const res = await getAvailableBatches(item.material_id, value);
+                    const res = await getAvailableBatches(value, "");
                     if (res.data?.success) {
                         item.batches = res.data.data || [];
                     }
@@ -337,7 +327,7 @@ export default function PMRmIssuePage() {
 
         if (field === "qty") {
             const val = parseFloat(value) || 0;
-            const currentLot = parseFloat(issueLot) || 0;
+            const currentLot = parseFloat(issueLot) > 0 ? parseFloat(issueLot) : 1;
             const totalRequired = currentLot * val;
             if (totalRequired > item.available_qty) {
                 toast.error(`Total quantity (${totalRequired.toFixed(3)} kg) exceeds available stock (${item.available_qty} kg)`);
@@ -366,10 +356,6 @@ export default function PMRmIssuePage() {
             const item = rmIssues[i];
             if (!item.material_id) {
                 toast.error(`Row ${i + 1}: Please select an RM Type.`);
-                return false;
-            }
-            if (!item.grade) {
-                toast.error(`Row ${i + 1}: Please select a Grade.`);
                 return false;
             }
             if (!item.internal_batch_number) {
@@ -421,13 +407,13 @@ export default function PMRmIssuePage() {
                 chit.rows.map(row => ({
                     lot: Number(chit.lot),
                     date: chit.date,
-                    remark: row.remark,
+                    remark: row.remark || null,
                     material_id: Number(row.material_id),
-                    grade: row.grade,
+                    grade: row.grade || '',
                     internal_batch_number: row.internal_batch_number,
-                    grn_item_id: row.grn_item_id,
-                    ma_item_id: row.ma_item_id,
-                    rm_return_id: row.rm_return_id,
+                    grn_item_id: row.grn_item_id || null,
+                    ma_item_id: row.ma_item_id || null,
+                    rm_return_id: row.rm_return_id || null,
                     qty: Number(row.qty)
                 }))
             );
@@ -440,13 +426,13 @@ export default function PMRmIssuePage() {
             const newIssues = rmIssues.map(item => ({
                 lot: uniqueLot,
                 date: issueDate,
-                remark: item.remark,
+                remark: item.remark || null,
                 material_id: Number(item.material_id),
-                grade: item.grade,
+                grade: item.grade || '',
                 internal_batch_number: item.internal_batch_number,
-                grn_item_id: item.grn_item_id,
-                ma_item_id: item.ma_item_id,
-                rm_return_id: item.rm_return_id,
+                grn_item_id: item.grn_item_id || null,
+                ma_item_id: item.ma_item_id || null,
+                rm_return_id: item.rm_return_id || null,
                 qty: Number(item.qty)
             }));
 
@@ -482,7 +468,7 @@ export default function PMRmIssuePage() {
                 ]);
                 // Reset form fields
                 setRmIssues([]);
-                setIssueLot("");
+                setIssueLot(String(submittedChits.length + 2));
                 setIssueDate(new Date().toISOString().split("T")[0]);
             } else {
                 toast.success("Raw Material Issues updated successfully");
@@ -496,7 +482,10 @@ export default function PMRmIssuePage() {
         }
     };
 
-    const grandTotalIssuedQty = rmIssues.reduce((sum, item) => sum + ((parseFloat(issueLot) || 0) * (parseFloat(item.qty) || 0)), 0);
+    const grandTotalIssuedQty = rmIssues.reduce((sum, item) => {
+        const lotMultiplier = parseFloat(issueLot) > 0 ? parseFloat(issueLot) : (issueLot === "" ? 1 : 0);
+        return sum + (lotMultiplier * (parseFloat(item.qty) || 0));
+    }, 0);
 
     if (loading) {
         return (
@@ -549,7 +538,7 @@ export default function PMRmIssuePage() {
                     )}
 
                     {/* Read-Only Header Summary */}
-                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div>
                             <span className="block text-[10px] font-bold text-slate-400 uppercase">Item Name</span>
                             <span className="text-xs font-semibold text-slate-700">{materialName}</span>
@@ -559,14 +548,12 @@ export default function PMRmIssuePage() {
                             <span className="text-xs font-semibold text-slate-700">{machineName}</span>
                         </div>
                         <div>
-                            <span className="block text-[10px] font-bold text-slate-400 uppercase">RM Formulation (Master)</span>
-                            <span className="text-xs font-semibold text-slate-700">{rawMaterialName}</span>
-                        </div>
-                        <div>
                             <span className="block text-[10px] font-bold text-slate-400 uppercase">Total Qty (Required)</span>
                             <span className="text-xs font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded inline-block mt-0.5">{Number(rmRequired || 0).toFixed(3)} kg</span>
                         </div>
-                    </div>                    <form onSubmit={(e) => handleSubmit(e, "rm-issue")} className="space-y-6">
+                    </div>
+
+                    <form onSubmit={(e) => handleSubmit(e, "rm-issue")} className="space-y-6">
                         {/* Raw Material Issue Section */}
                         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-6">
                             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -618,11 +605,10 @@ export default function PMRmIssuePage() {
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-xs">
                                         <thead>
-                                            <tr className="bg-blue-900 border-b border-blue-800">
+                                            <tr className="bg-blue-900 border-blue-800">
                                                 <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white whitespace-nowrap w-6">#</th>
                                                 <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white whitespace-nowrap min-w-[150px]">Remark</th>
-                                                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white whitespace-nowrap min-w-[180px]">RM Type</th>
-                                                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white whitespace-nowrap min-w-[120px]">Grade</th>
+                                                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white whitespace-nowrap min-w-[180px]">Raw Material</th>
                                                 <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white whitespace-nowrap min-w-[150px]">I-Batch</th>
                                                 <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white whitespace-nowrap min-w-[120px]">S-Batch</th>
                                                 <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white whitespace-nowrap min-w-[90px]">MFI</th>
@@ -633,11 +619,8 @@ export default function PMRmIssuePage() {
                                         </thead>
                                         <tbody>
                                             {rmIssues.map((item, idx) => {
-                                                const grades = rawMaterialsList
-                                                    .filter(rm => rm.material_id === Number(item.material_id))
-                                                    .map(rm => rm.grade);
-
-                                                const totalQty = (parseFloat(issueLot) || 0) * (parseFloat(item.qty) || 0);
+                                                const lotMultiplier = parseFloat(issueLot) > 0 ? parseFloat(issueLot) : (issueLot === "" ? 1 : 0);
+                                                const totalQty = lotMultiplier * (parseFloat(item.qty) || 0);
 
                                                 return (
                                                     <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors group">
@@ -660,26 +643,12 @@ export default function PMRmIssuePage() {
                                                                 className="w-full px-2.5 py-2 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#369ACF]/20 bg-white cursor-pointer disabled:bg-slate-50 disabled:text-slate-400"
                                                                 required
                                                             >
-                                                                <option value="">— Select —</option>
+                                                                <option value="">
+                                                                    {uniqueRmTypes.length === 0 ? "— No BOM materials found —" : "— Select Raw Material —"}
+                                                                </option>
                                                                 {uniqueRmTypes.map(rm => (
                                                                     <option key={rm.material_id} value={rm.material_id}>
                                                                         {rm.material_name}
-                                                                    </option>
-                                                                ))}
-                                                            </select>
-                                                        </td>
-                                                        <td className="px-3 py-2.5">
-                                                            <select
-                                                                value={item.grade}
-                                                                onChange={(e) => handleRowChange(idx, "grade", e.target.value)}
-                                                                disabled={isFinalSubmitted || !item.material_id}
-                                                                className="w-full px-2.5 py-2 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#369ACF]/20 bg-white cursor-pointer disabled:bg-slate-50 disabled:text-slate-400"
-                                                                required
-                                                            >
-                                                                <option value="">— Grade —</option>
-                                                                {grades.map((grade, gIdx) => (
-                                                                    <option key={gIdx} value={grade}>
-                                                                        {grade}
                                                                     </option>
                                                                 ))}
                                                             </select>
@@ -689,7 +658,7 @@ export default function PMRmIssuePage() {
                                                                 <select
                                                                     value={item.internal_batch_number}
                                                                     onChange={(e) => handleRowChange(idx, "internal_batch_number", e.target.value)}
-                                                                    disabled={isFinalSubmitted || !item.material_id || !item.grade || item.loadingBatches}
+                                                                    disabled={isFinalSubmitted || !item.material_id || item.loadingBatches}
                                                                     className="w-full px-2.5 py-2 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#369ACF]/20 bg-white cursor-pointer disabled:bg-slate-50 disabled:text-slate-400"
                                                                     required
                                                                 >
@@ -708,7 +677,7 @@ export default function PMRmIssuePage() {
                                                                         </>
                                                                     )}
                                                                 </select>
-                                                                {item.material_id && item.grade && !item.loadingBatches && item.batches.length === 0 && (
+                                                                {item.material_id && !item.loadingBatches && item.batches.length === 0 && (
                                                                     <span className="absolute -bottom-4 left-0.5 text-[9px] text-rose-500 font-semibold">
                                                                         Not Available in Stock
                                                                     </span>
