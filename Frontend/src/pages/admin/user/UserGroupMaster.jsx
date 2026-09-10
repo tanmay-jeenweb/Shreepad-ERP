@@ -26,6 +26,8 @@ const MODULE_GROUPS = [
     description: "Manage machines and their specifications.",
     masters: [
       { key: "machine",             label: "Machine Master" },
+      { key: "bom",                 label: "Bill of Material" },
+      { key: "workshop_entry",       label: "Workshop Entry" },
     ]
   },
   {

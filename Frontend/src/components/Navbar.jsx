@@ -321,8 +321,15 @@ export default function Navbar({ title }) {
     const availableProductionLinks = [
         { name: "Production", path: "/production", icon: "fa-solid fa-industry", masterKey: "bom" },
         { name: "Work Order", path: "/sales/work-orders", icon: "fa-solid fa-file-signature", masterKey: "work_order" },
-        { name: "Bill of Material", path: "/production/bom", icon: "fa-solid fa-file-lines", masterKey: "bom" }
-    ].filter(m => isAdmin || hasPermission(m.masterKey, "read"));
+        { name: "Bill of Material", path: "/production/bom", icon: "fa-solid fa-file-lines", masterKey: "bom" },
+        { name: "Workshop Entry", path: "/production/workshop-entry", icon: "fa-solid fa-screwdriver-wrench", masterKey: "workshop_entry" }
+    ].filter(m => {
+        if (isAdmin) return true;
+        if (m.name === "Workshop Entry") {
+            return hasPermission("workshop_entry", "read") || hasPermission("bom", "read") || hasPermission("work_order", "read");
+        }
+        return hasPermission(m.masterKey, "read");
+    });
 
     const availableSalesLinks = [
     ].filter(m => isAdmin || hasPermission(m.masterKey, "read"));

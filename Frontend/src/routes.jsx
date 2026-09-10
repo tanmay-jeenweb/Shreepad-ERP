@@ -46,6 +46,8 @@ import ProductionMaster from "./pages/Production/ProductionMaster";
 import PMemoPage from "./pages/Production/PMemoPage";
 import PMRmIssuePage from "./pages/Production/PMRmIssuePage";
 import PMRmReturnPage from "./pages/Production/PMRmReturnPage";
+import WorkshopEntryMaster from "./pages/Production/WorkshopEntryMaster";
+import WorkshopEntryDetails from "./pages/Production/WorkshopEntryDetails";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 import OrganizationDetails from "./pages/admin/organization/OrganizationDetails";
@@ -319,6 +321,8 @@ export default function AppRoutes() {
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="bom" requiredAction="read" />}>
                 <Route path="/production" element={<ProductionMaster />} />
                 <Route path="/production/bom" element={<BillOfMaterial />} />
+                <Route path="/production/workshop-entry" element={<WorkshopEntryMaster />} />
+                <Route path="/production/workshop-entry/:pmemoId" element={<WorkshopEntryDetails />} />
             </Route>
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="bom" requiredAction="read" />}>
                 <Route path="/production/p-memo/:workOrderItemId" element={<PMemoPage />} />
