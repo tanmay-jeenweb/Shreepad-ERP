@@ -42,6 +42,7 @@ import CreateWorkOrder from "./pages/admin/workOrder/CreateWorkOrder";
 import EditWorkOrder from "./pages/admin/workOrder/EditWorkOrder";
 import BillOfMaterial from "./pages/Production/BillOfMaterial";
 import CreateBOM from "./pages/Production/CreateBOM";
+import ProductionMaster from "./pages/Production/ProductionMaster";
 import PMemoPage from "./pages/Production/PMemoPage";
 import PMRmIssuePage from "./pages/Production/PMRmIssuePage";
 import PMRmReturnPage from "./pages/Production/PMRmReturnPage";
@@ -314,8 +315,9 @@ export default function AppRoutes() {
                 <Route path="/sales/work-orders/edit/:id" element={<EditWorkOrder />} />
             </Route>
 
-            {/* BOM Routes */}
+            {/* Production Routes */}
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="bom" requiredAction="read" />}>
+                <Route path="/production" element={<ProductionMaster />} />
                 <Route path="/production/bom" element={<BillOfMaterial />} />
             </Route>
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="bom" requiredAction="read" />}>

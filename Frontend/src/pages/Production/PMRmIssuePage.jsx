@@ -25,22 +25,13 @@ export default function PMRmIssuePage() {
     const [mouldCavity, setMouldCavity] = useState("");
     const [productionQuantity, setProductionQuantity] = useState("");
 
-    // P Memo RM and Loss details
+    // Total RM quantity required for this work order item
     const [rmRequired, setRmRequired] = useState(0);
-    const [rmMade, setRmMade] = useState(0);
-    const [rmToBeMade, setRmToBeMade] = useState(0);
-    const [lossKg, setLossKg] = useState(0);
-    const [lossPercent, setLossPercent] = useState(0);
-    const [rmReturn, setRmReturn] = useState(0);
-    const [runningTotalKg, setRunningTotalKg] = useState(0);
-    const [runningTotalPercent, setRunningTotalPercent] = useState(0);
-    const [runningTotalNos, setRunningTotalNos] = useState("");
 
     const [isEditMode, setIsEditMode] = useState(false);
     const [isFinalSubmitted, setIsFinalSubmitted] = useState(false);
 
     // RM Issue Module States
-    const [mainRmFormulation, setMainRmFormulation] = useState("");
     const [rawMaterialsList, setRawMaterialsList] = useState([]);
     const [rmIssues, setRmIssues] = useState([]);
 
@@ -140,29 +131,10 @@ export default function PMRmIssuePage() {
                     setBatch(data.batch || "—");
                     setMouldCavity(data.mould_cavity || "—");
                     setProductionQuantity(data.production_quantity || "—");
-                    setMainRmFormulation(data.rm_formulation || "");
-
                     const uWeight = parseFloat(data.unit_weight) || 0;
                     const prodQty = parseFloat(data.production_quantity) || 0;
                     const computedRequired = uWeight * prodQty;
-
-                    const backendRequired = data.rm_required !== null && data.rm_required !== undefined ? parseFloat(data.rm_required) : null;
-                    const finalRequired = backendRequired !== null ? backendRequired : computedRequired;
-
-                    setRmRequired(finalRequired);
-                    const valRmMade = data.rm_made !== null && data.rm_made !== undefined ? parseFloat(data.rm_made) : 0;
-                    setRmMade(valRmMade);
-                    setRmToBeMade(data.rm_to_be_made !== null && data.rm_to_be_made !== undefined ? parseFloat(data.rm_to_be_made) : finalRequired);
-                    setLossKg(data.loss_kg !== null && data.loss_kg !== undefined ? parseFloat(data.loss_kg) : 0);
-                    setLossPercent(data.loss_percent !== null && data.loss_percent !== undefined ? parseFloat(data.loss_percent) : 0);
-                    setRmReturn(data.rm_return !== null && data.rm_return !== undefined ? parseFloat(data.rm_return) : 0);
-                    setRunningTotalKg(data.running_total_kg !== null && data.running_total_kg !== undefined ? parseFloat(data.running_total_kg) : 0);
-                    setRunningTotalPercent(data.running_total_percent !== null && data.running_total_percent !== undefined ? parseFloat(data.running_total_percent) : 0);
-                    
-                    const valRunningTotalNos = data.running_total_nos !== null && data.running_total_nos !== undefined
-                        ? parseFloat(data.running_total_nos)
-                        : (data.running_total_kg && uWeight > 0 ? Math.round(parseFloat(data.running_total_kg) / uWeight) : "");
-                    setRunningTotalNos(valRunningTotalNos);
+                    setRmRequired(computedRequired);
 
                     // Default issueLot to next lot number (starts at 1)
                     setIssueLot("1");
@@ -236,7 +208,7 @@ export default function PMRmIssuePage() {
         setRmIssues(prev => [
             ...prev,
             {
-                remark: mainRmFormulation || "",
+                remark: "",
                 material_id: "",
                 grade: "",
                 internal_batch_number: "",
@@ -441,15 +413,6 @@ export default function PMRmIssuePage() {
             await createPMemo({
                 workOrderItemId: Number(workOrderItemId),
                 date,
-                rm_required: Number(rmRequired) || 0,
-                rm_made: Number(rmMade) || 0,
-                rm_to_be_made: Number(rmRequired - rmMade) || 0,
-                loss_kg: Number(lossKg) || 0,
-                loss_percent: Number(lossPercent) || 0,
-                rm_return: Number(rmReturn) || 0,
-                running_total_kg: Number(runningTotalKg) || 0,
-                running_total_percent: Number(runningTotalPercent) || 0,
-                running_total_nos: runningTotalNos === "" ? null : Number(runningTotalNos),
                 is_final_submitted: 0, // Keep production memo unlocked
                 rmIssues: combinedIssues
             });

@@ -106,15 +106,6 @@ const addPMemo = async (req, res) => {
         const {
             workOrderItemId,
             date,
-            rm_required,
-            rm_made,
-            rm_to_be_made,
-            loss_kg,
-            loss_percent,
-            rm_return,
-            running_total_kg,
-            running_total_percent,
-            running_total_nos,
             is_final_submitted,
             rmIssues
         } = req.body;
@@ -126,19 +117,8 @@ const addPMemo = async (req, res) => {
         const result = await createPMemo(
             workOrderItemId,
             date,
-            {
-                rm_required,
-                rm_made,
-                rm_to_be_made,
-                loss_kg,
-                loss_percent,
-                rm_return,
-                running_total_kg,
-                running_total_percent,
-                running_total_nos,
-                is_final_submitted
-            },
-            rmIssues || [],
+            is_final_submitted ? 1 : 0,
+            rmIssues !== undefined ? rmIssues : null,
             addedBy
         );
 
@@ -147,23 +127,14 @@ const addPMemo = async (req, res) => {
             req.user?.name || req.user?.username || 'Unknown',
             deviceId,
             'Production Memo',
-            'created',
+            'saved',
             null,
             {
                 work_order_item_id: workOrderItemId,
                 p_memo_no: result.p_memo_no,
                 date,
-                rm_required,
-                rm_made,
-                rm_to_be_made,
-                loss_kg,
-                loss_percent,
-                rm_return,
-                running_total_kg,
-                running_total_percent,
-                running_total_nos,
                 is_final_submitted,
-                rmIssues_count: (rmIssues || []).length,
+                rmIssues_count: Array.isArray(rmIssues) ? rmIssues.length : undefined,
                 added_by: addedBy,
                 device_id: deviceId
             }

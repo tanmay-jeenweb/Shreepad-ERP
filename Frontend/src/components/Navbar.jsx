@@ -319,6 +319,7 @@ export default function Navbar({ title }) {
     });
 
     const availableProductionLinks = [
+        { name: "Production", path: "/production", icon: "fa-solid fa-industry", masterKey: "bom" },
         { name: "Work Order", path: "/sales/work-orders", icon: "fa-solid fa-file-signature", masterKey: "work_order" },
         { name: "Bill of Material", path: "/production/bom", icon: "fa-solid fa-file-lines", masterKey: "bom" }
     ].filter(m => isAdmin || hasPermission(m.masterKey, "read"));

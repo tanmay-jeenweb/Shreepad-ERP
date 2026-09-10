@@ -24,50 +24,16 @@ export default function PMemoPage() {
     const [mouldCavity, setMouldCavity] = useState("");
     const [productionQuantity, setProductionQuantity] = useState("");
 
-    // P Memo RM and Loss details states
-    const [rmRequired, setRmRequired] = useState(0);
-    const [rmMade, setRmMade] = useState(0);
-    const [rmToBeMade, setRmToBeMade] = useState(0);
-    const [lossKg, setLossKg] = useState(0);
-    const [lossPercent, setLossPercent] = useState(0);
-    const [rmReturn, setRmReturn] = useState(0);
-    const [runningTotalKg, setRunningTotalKg] = useState(0);
-    const [runningTotalPercent, setRunningTotalPercent] = useState(0);
-    const [runningTotalNos, setRunningTotalNos] = useState("");
-
     // Flag indicating if it's already created
     const [isEditMode, setIsEditMode] = useState(false);
     const [isFinalSubmitted, setIsFinalSubmitted] = useState(false);
 
-    // RM Issue Module States
-    const [mainRmFormulation, setMainRmFormulation] = useState("");
+    // RM Issue and Return Lists
     const [rawMaterialsList, setRawMaterialsList] = useState([]);
     const [rmIssues, setRmIssues] = useState([]);
     const [itemCode, setItemCode] = useState("");
     const [submittedChits, setSubmittedChits] = useState([]);
     const [submittedReturnChits, setSubmittedReturnChits] = useState([]);
-
-    // Global Lot and Date for all RM issues
-    const [issueLot, setIssueLot] = useState("");
-    const [issueDate, setIssueDate] = useState(new Date().toISOString().split("T")[0]);
-
-    const handleLotChange = (val) => {
-        setIssueLot(val);
-        const lotVal = parseFloat(val) || 0;
-
-        setRmIssues(prev => prev.map((item, idx) => {
-            const rowQty = parseFloat(item.qty) || 0;
-            const totalRequired = lotVal * rowQty;
-            if (totalRequired > item.available_qty) {
-                toast.error(`Row ${idx + 1}: Total quantity (${totalRequired.toFixed(3)} kg) exceeds available stock (${item.available_qty} kg). Adjusting row quantity.`);
-                return {
-                    ...item,
-                    qty: lotVal > 0 ? (item.available_qty / lotVal).toFixed(3) : ""
-                };
-            }
-            return item;
-        }));
-    };
 
     const handlePrint = (lotId) => {
         const element = document.getElementById(`chit-${lotId}`);
@@ -141,39 +107,6 @@ export default function PMemoPage() {
                     setBatch(data.batch || "—");
                     setMouldCavity(data.mould_cavity || "—");
                     setProductionQuantity(data.production_quantity || "—");
-                    setMainRmFormulation(data.rm_formulation || "");
-
-                    const uWeight = parseFloat(data.unit_weight) || 0;
-                    const prodQty = parseFloat(data.production_quantity) || 0;
-                    const computedRequired = uWeight * prodQty;
-
-                    const backendRequired = data.rm_required !== null && data.rm_required !== undefined ? parseFloat(data.rm_required) : null;
-                    const finalRequired = backendRequired !== null ? backendRequired : computedRequired;
-
-                    setRmRequired(finalRequired);
-                    const valRmMade = data.rm_made !== null && data.rm_made !== undefined ? parseFloat(data.rm_made) : 0;
-                    setRmMade(valRmMade);
-                    setRmToBeMade(data.rm_to_be_made !== null && data.rm_to_be_made !== undefined ? parseFloat(data.rm_to_be_made) : finalRequired);
-                    setLossKg(data.loss_kg !== null && data.loss_kg !== undefined ? parseFloat(data.loss_kg) : 0);
-                    setLossPercent(data.loss_percent !== null && data.loss_percent !== undefined ? parseFloat(data.loss_percent) : 0);
-                    setRmReturn(data.rm_return !== null && data.rm_return !== undefined ? parseFloat(data.rm_return) : 0);
-                    setRunningTotalKg(data.running_total_kg !== null && data.running_total_kg !== undefined ? parseFloat(data.running_total_kg) : 0);
-                    setRunningTotalPercent(data.running_total_percent !== null && data.running_total_percent !== undefined ? parseFloat(data.running_total_percent) : 0);
-
-                    const valRunningTotalNos = data.running_total_nos !== null && data.running_total_nos !== undefined
-                        ? parseFloat(data.running_total_nos)
-                        : (data.running_total_kg && uWeight > 0 ? Math.round(parseFloat(data.running_total_kg) / uWeight) : "");
-                    setRunningTotalNos(valRunningTotalNos);
-
-                    // Initialize global Lot and Date from existing issues if present
-                    if (data.rmIssues && data.rmIssues.length > 0) {
-                        const firstIssue = data.rmIssues[0];
-                        setIssueLot(firstIssue.lot || "");
-                        setIssueDate(firstIssue.date ? new Date(firstIssue.date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]);
-                    } else {
-                        setIssueLot("");
-                        setIssueDate(new Date().toISOString().split("T")[0]);
-                    }
 
                     // Group saved RM issues by lot to construct submittedChits
                     const grouped = {};
@@ -215,29 +148,8 @@ export default function PMemoPage() {
                     setSubmittedChits(chits);
                     setSubmittedReturnChits(data.rmReturns || []);
 
-                    // Load saved RM issues
-                    const loadedIssues = (data.rmIssues || []).map(issue => ({
-                        remark: issue.remark || "",
-                        material_id: issue.material_id || "",
-                        grade: issue.grade || "",
-                        internal_batch_number: issue.internal_batch_number || "",
-                        grn_item_id: issue.grn_item_id || null,
-                        ma_item_id: issue.ma_item_id || null,
-                        qty: issue.qty || "",
-                        available_qty: Number(issue.total_quantity) || 0,
-                        mfi: issue.mfi || "",
-                        supplier_batch_number: issue.supplier_batch_number || "",
-                        batches: [{
-                            internal_batch_number: issue.internal_batch_number,
-                            available_qty: Number(issue.total_quantity),
-                            grn_item_id: issue.grn_item_id,
-                            ma_item_id: issue.ma_item_id,
-                            mfi: issue.mfi || "",
-                            supplier_batch_number: issue.supplier_batch_number || ""
-                        }],
-                        loadingBatches: false
-                    }));
-                    setRmIssues(loadedIssues);
+                    // Load saved RM issues for count display
+                    setRmIssues(data.rmIssues || []);
                 }
                 if (rmRes.data?.success) {
                     setRawMaterialsList(rmRes.data.data || []);
@@ -245,7 +157,7 @@ export default function PMemoPage() {
             } catch (err) {
                 console.error("Failed to load P Memo details:", err);
                 toast.error("Failed to load P Memo details");
-                navigate("/sales/work-orders");
+                navigate("/production");
             } finally {
                 setLoading(false);
             }
@@ -268,30 +180,10 @@ export default function PMemoPage() {
             await createPMemo({
                 workOrderItemId: Number(workOrderItemId),
                 date,
-                rm_required: Number(rmRequired) || 0,
-                rm_made: Number(rmMade) || 0,
-                rm_to_be_made: Number(rmRequired - rmMade) || 0,
-                loss_kg: Number(lossKg) || 0,
-                loss_percent: Number(lossPercent) || 0,
-                rm_return: Number(rmReturn) || 0,
-                running_total_kg: Number(runningTotalKg) || 0,
-                running_total_percent: Number(runningTotalPercent) || 0,
-                running_total_nos: runningTotalNos === "" ? null : Number(runningTotalNos),
-                is_final_submitted: isFinalSubmitted ? 1 : 0,
-                rmIssues: rmIssues.map(item => ({
-                    lot: Number(issueLot) || 0,
-                    date: issueDate,
-                    remark: item.remark,
-                    material_id: Number(item.material_id),
-                    grade: item.grade,
-                    internal_batch_number: item.internal_batch_number,
-                    grn_item_id: item.grn_item_id,
-                    ma_item_id: item.ma_item_id,
-                    qty: Number(item.qty)
-                }))
+                is_final_submitted: isFinalSubmitted ? 1 : 0
             });
             toast.success(isEditMode ? "P Memo updated successfully" : "P Memo created successfully");
-            navigate("/sales/work-orders");
+            navigate("/production");
         } catch (err) {
             console.error("Failed to save P Memo:", err);
             toast.error(err?.response?.data?.message || "Failed to save P Memo");
@@ -324,11 +216,11 @@ export default function PMemoPage() {
                             </h1>
                         </div>
                         <button
-                            onClick={() => navigate("/sales/work-orders")}
+                            onClick={() => navigate("/production")}
                             className="text-slate-500 hover:text-slate-700 font-medium text-sm flex items-center gap-2 cursor-pointer font-semibold"
                         >
                             <i className="fa-solid fa-arrow-left"></i>
-                            Back to Work Orders
+                            Back to Production
                         </button>
                     </div>
 
@@ -433,172 +325,7 @@ export default function PMemoPage() {
                             </div>
                         </div>
 
-                        {/* Raw Material Formulation Details Card */}
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-6">
-                            <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
-                                <div className="flex items-center gap-2">
-                                    <i className="fa-solid fa-flask text-[#369ACF] text-lg"></i>
-                                    <h2 className="text-lg font-bold text-slate-800">Raw Material Formulation</h2>
-                                </div>
-                            </div>
-
-                            <div className="overflow-x-auto">
-                                <table className="w-full border-collapse border border-slate-200 rounded-lg text-sm text-slate-800">
-                                    <thead>
-                                        <tr className="bg-slate-100 border-b border-slate-200">
-                                            <th className="px-4 py-3 text-left font-bold text-slate-700 uppercase tracking-wider text-xs w-1/3">
-                                                Parameter
-                                            </th>
-                                            <th className="px-4 py-3 text-left font-bold text-slate-700 uppercase tracking-wider text-xs">
-                                                Value
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-200">
-                                        {/* 1. RM Required (kg) */}
-                                        <tr className="hover:bg-slate-50/50">
-                                            <td className="px-4 py-3 font-semibold text-slate-600 bg-slate-50/50">
-                                                1. RM Required (kg)
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <div className="px-3 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 bg-slate-50 w-full sm:w-64">
-                                                    {Number(rmRequired || 0).toFixed(3)}
-                                                </div>
-                                            </td>
-                                        </tr>
-
-                                        {/* 2. RM Made (kg) */}
-                                        <tr className="hover:bg-slate-50/50">
-                                            <td className="px-4 py-3 font-semibold text-slate-600 bg-slate-50/50">
-                                                2. RM Made (kg)
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <input
-                                                    type="number"
-                                                    step="0.001"
-                                                    min="0"
-                                                    value={rmMade || ""}
-                                                    onChange={(e) => {
-                                                        const val = parseFloat(e.target.value) || 0;
-                                                        setRmMade(val);
-                                                    }}
-                                                    disabled={isFinalSubmitted}
-                                                    className="w-full sm:w-64 px-3 py-2 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#369ACF]/20 bg-white disabled:bg-slate-50 disabled:text-slate-400 font-semibold"
-                                                    placeholder="Enter weight..."
-                                                />
-                                            </td>
-                                        </tr>
-
-                                        {/* 3. RM To be Made (kg) */}
-                                        <tr className="hover:bg-slate-50/50">
-                                            <td className="px-4 py-3 font-semibold text-slate-600 bg-slate-50/50">
-                                                3. RM To be Made (kg)
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <div className="px-3 py-2 border border-slate-200 rounded-lg text-xs font-bold text-rose-600 bg-slate-50 w-full sm:w-64">
-                                                    {Number(rmRequired - rmMade).toFixed(3)}
-                                                </div>
-                                            </td>
-                                        </tr>
-
-                                        {/* 4. Loss (kg) Loss (%) */}
-                                        <tr className="hover:bg-slate-50/50">
-                                            <td className="px-4 py-3 font-semibold text-slate-600 bg-slate-50/50">
-                                                4. Loss
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <div className="flex flex-wrap items-center gap-3">
-                                                    <div className="flex items-center gap-2">
-                                                        <input
-                                                            type="number"
-                                                            step="0.001"
-                                                            min="0"
-                                                            value={lossKg || ""}
-                                                            onChange={(e) => setLossKg(parseFloat(e.target.value) || 0)}
-                                                            disabled={isFinalSubmitted}
-                                                            className="w-28 px-3 py-2 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#369ACF]/20 bg-white disabled:bg-slate-50 disabled:text-slate-400 font-semibold"
-                                                            placeholder="Loss kg"
-                                                        />
-                                                        <span className="text-xs text-slate-500 font-semibold">kg</span>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <input
-                                                            type="number"
-                                                            step="0.01"
-                                                            min="0"
-                                                            max="100"
-                                                            value={lossPercent || ""}
-                                                            onChange={(e) => setLossPercent(parseFloat(e.target.value) || 0)}
-                                                            disabled={isFinalSubmitted}
-                                                            className="w-28 px-3 py-2 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#369ACF]/20 bg-white disabled:bg-slate-50 disabled:text-slate-400 font-semibold"
-                                                            placeholder="Loss %"
-                                                        />
-                                                        <span className="text-xs text-slate-500 font-semibold">%</span>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                        </tr>
-
-                                        {/* 5. RM Return (kg) */}
-                                        <tr className="hover:bg-slate-50/50">
-                                            <td className="px-4 py-3 font-semibold text-slate-600 bg-slate-50/50">
-                                                5. RM Return (kg)
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <input
-                                                    type="number"
-                                                    step="0.001"
-                                                    min="0"
-                                                    value={rmReturn || ""}
-                                                    onChange={(e) => setRmReturn(parseFloat(e.target.value) || 0)}
-                                                    disabled={isFinalSubmitted}
-                                                    className="w-full sm:w-64 px-3 py-2 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#369ACF]/20 bg-white disabled:bg-slate-50 disabled:text-slate-400 font-semibold"
-                                                    placeholder="Enter return..."
-                                                />
-                                            </td>
-                                        </tr>
-
-                                        {/* 6. Running total Production (kg) = <input text> Nos */}
-                                        <tr className="hover:bg-slate-50/50">
-                                            <td className="px-4 py-3 font-semibold text-slate-600 bg-slate-50/50">
-                                                6. Running total Production (kg)
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <div className="flex flex-wrap items-center gap-3">
-                                                    <div className="px-3 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 bg-slate-50 w-28 text-center">
-                                                        {Number(runningTotalKg || 0).toFixed(3)} kg
-                                                    </div>
-                                                    <span className="text-sm font-bold text-slate-500">=</span>
-                                                    <div className="flex items-center gap-2">
-                                                        <input
-                                                            type="number"
-                                                            step="1"
-                                                            min="0"
-                                                            value={runningTotalNos || ""}
-                                                            onChange={(e) => {
-                                                                const val = e.target.value === "" ? "" : (parseInt(e.target.value) || 0);
-                                                                setRunningTotalNos(val);
-                                                                const uWeight = parseFloat(unitWeight) || 0;
-                                                                if (val === "") {
-                                                                    setRunningTotalKg(0);
-                                                                } else {
-                                                                    setRunningTotalKg(Number((val * uWeight).toFixed(3)));
-                                                                }
-                                                            }}
-                                                            disabled={isFinalSubmitted}
-                                                            className="w-28 px-3 py-2 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#369ACF]/20 bg-white disabled:bg-slate-50 disabled:text-slate-400 font-semibold"
-                                                            placeholder="Enter Nos..."
-                                                        />
-                                                        <span className="text-xs text-slate-500 font-semibold">Nos</span>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
+                        {/* Action Buttons: RM Issues & RM Returns */}
                         <div className="flex flex-wrap gap-4">
                             <button
                                 type="button"
@@ -614,7 +341,7 @@ export default function PMemoPage() {
                                 className="inline-flex items-center gap-2 px-4 py-2 text-md font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-all shadow-sm cursor-pointer"
                             >
                                 <i className="fa-solid fa-arrow-rotate-left"></i>
-                                Raw Material Returns
+                                Raw Material Returns {submittedReturnChits.length > 0 ? `(${submittedReturnChits.length})` : ""}
                             </button>
                         </div>
 
@@ -654,7 +381,7 @@ export default function PMemoPage() {
                             }
                         `}</style>
 
-                        {/* Submitted Chits Section (rendered below formulation section buttons) */}
+                        {/* Submitted Chits Section */}
                         {submittedChits.length > 0 && (
                             <div className="space-y-4 no-print mt-4">
                                 <div className="flex items-center gap-2 pb-2 border-b border-slate-200">
@@ -702,7 +429,7 @@ export default function PMemoPage() {
                         <div className="py-4 flex justify-end gap-3">
                             <button
                                 type="button"
-                                onClick={() => navigate("/sales/work-orders")}
+                                onClick={() => navigate("/production")}
                                 className="px-5 py-2.5 rounded-lg border border-slate-300 text-slate-700 font-semibold bg-white hover:bg-slate-50 transition-colors cursor-pointer text-sm"
                             >
                                 Cancel
