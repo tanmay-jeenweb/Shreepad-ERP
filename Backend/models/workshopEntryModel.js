@@ -240,9 +240,301 @@ const saveWorkshopEntry = async ({
     }
 };
 
+const createWorkshopShiftsTable = async () => {
+    const query = `
+        CREATE TABLE IF NOT EXISTS workshop_shifts (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            pmemo_id INT NOT NULL,
+            shift_name VARCHAR(100) NOT NULL DEFAULT 'Shift 1 (Day)',
+            shift_date DATE NOT NULL,
+            supervisor_a_id INT DEFAULT NULL,
+            supervisor_b_id INT DEFAULT NULL,
+            running_cavity INT DEFAULT 1,
+            cycle_time DECIMAL(10,3) DEFAULT NULL,
+            hourly_target DECIMAL(15,2) DEFAULT NULL,
+            min_hourly_target DECIMAL(15,2) DEFAULT NULL,
+            status VARCHAR(50) DEFAULT 'Configured',
+            remarks TEXT DEFAULT NULL,
+            added_by INT NOT NULL,
+            device_id VARCHAR(255) DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (pmemo_id) REFERENCES production_memos(id) ON DELETE CASCADE,
+            FOREIGN KEY (supervisor_a_id) REFERENCES operators(id) ON DELETE SET NULL,
+            FOREIGN KEY (supervisor_b_id) REFERENCES operators(id) ON DELETE SET NULL,
+            FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE CASCADE
+        )
+    `;
+    await db.execute(query);
+    console.log('Workshop Shifts table ready');
+};
+
+const createWorkshopShiftLogsTable = async () => {
+    const query = `
+        CREATE TABLE IF NOT EXISTS workshop_shift_logs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            shift_id INT NOT NULL,
+            hour_slot VARCHAR(100) DEFAULT NULL,
+            time_from VARCHAR(20) DEFAULT NULL,
+            time_to VARCHAR(20) DEFAULT NULL,
+            operator_id INT DEFAULT NULL,
+            operator_2_id INT DEFAULT NULL,
+            product_weight DECIMAL(15,4) DEFAULT NULL,
+            target_qty DECIMAL(15,2) DEFAULT 0,
+            actual_qty DECIMAL(15,2) DEFAULT 0,
+            rejection_qty DECIMAL(15,2) DEFAULT 0,
+            downtime_minutes INT DEFAULT 0,
+            downtime_reason VARCHAR(255) DEFAULT NULL,
+            remarks TEXT DEFAULT NULL,
+            added_by INT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (shift_id) REFERENCES workshop_shifts(id) ON DELETE CASCADE,
+            FOREIGN KEY (operator_id) REFERENCES operators(id) ON DELETE SET NULL,
+            FOREIGN KEY (operator_2_id) REFERENCES operators(id) ON DELETE SET NULL,
+            FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE CASCADE
+        )
+    `;
+    await db.execute(query);
+
+    // Ensure columns exist on existing table
+    const columns = [
+        { name: 'time_from', sql: 'VARCHAR(20) DEFAULT NULL' },
+        { name: 'time_to', sql: 'VARCHAR(20) DEFAULT NULL' },
+        { name: 'operator_2_id', sql: 'INT DEFAULT NULL' },
+        { name: 'product_weight', sql: 'DECIMAL(15,4) DEFAULT NULL' }
+    ];
+    for (const col of columns) {
+        try {
+            await db.execute(`ALTER TABLE workshop_shift_logs ADD COLUMN ${col.name} ${col.sql}`);
+        } catch (e) {
+            // Column already exists or error ignored
+        }
+    }
+
+    console.log('Workshop Shift Logs table ready');
+};
+
+const getShiftsByPMemoId = async (pmemoId) => {
+    const query = `
+        SELECT 
+            ws.*,
+            opA.operator_name AS supervisor_a_name,
+            opA.operator_code AS supervisor_a_code,
+            opB.operator_name AS supervisor_b_name,
+            opB.operator_code AS supervisor_b_code
+        FROM workshop_shifts ws
+        LEFT JOIN operators opA ON ws.supervisor_a_id = opA.id
+        LEFT JOIN operators opB ON ws.supervisor_b_id = opB.id
+        WHERE ws.pmemo_id = ?
+        ORDER BY ws.shift_date ASC, ws.id ASC
+    `;
+    const [shifts] = await db.execute(query, [pmemoId]);
+
+    for (const shift of shifts) {
+        const [logs] = await db.execute(`
+            SELECT 
+                sl.*,
+                op1.operator_name AS operator_1_name,
+                op1.operator_code AS operator_1_code,
+                op2.operator_name AS operator_2_name,
+                op2.operator_code AS operator_2_code,
+                COALESCE(op1.operator_name, '') AS operator_name
+            FROM workshop_shift_logs sl
+            LEFT JOIN operators op1 ON sl.operator_id = op1.id
+            LEFT JOIN operators op2 ON sl.operator_2_id = op2.id
+            WHERE sl.shift_id = ?
+            ORDER BY sl.id ASC
+        `, [shift.id]);
+        shift.logs = logs;
+    }
+
+    return shifts;
+};
+
+const saveWorkshopShift = async ({
+    id,
+    pmemo_id,
+    shift_name = 'Shift 1 (Day)',
+    shift_date,
+    supervisor_a_id,
+    supervisor_b_id,
+    running_cavity = 1,
+    cycle_time,
+    hourly_target,
+    min_hourly_target,
+    status = 'Configured',
+    remarks,
+    added_by,
+    device_id
+}) => {
+    const cavityNum = Number(running_cavity) || 1;
+    const cycleSec = Number(cycle_time) || 0;
+    const calcHourlyTarget = cycleSec > 0 ? (3600 / cycleSec) * cavityNum : (Number(hourly_target) || 0);
+    const calcMinTarget = calcHourlyTarget * 0.95;
+
+    if (id) {
+        const updateQuery = `
+            UPDATE workshop_shifts SET
+                shift_name = ?,
+                shift_date = ?,
+                supervisor_a_id = ?,
+                supervisor_b_id = ?,
+                running_cavity = ?,
+                cycle_time = ?,
+                hourly_target = ?,
+                min_hourly_target = ?,
+                status = ?,
+                remarks = ?
+            WHERE id = ?
+        `;
+        await db.execute(updateQuery, [
+            shift_name,
+            shift_date,
+            supervisor_a_id || null,
+            supervisor_b_id || null,
+            cavityNum,
+            cycleSec || null,
+            calcHourlyTarget.toFixed(2),
+            calcMinTarget.toFixed(2),
+            status || 'Configured',
+            remarks || null,
+            id
+        ]);
+        return { id, pmemo_id, shift_name, shift_date, hourly_target: calcHourlyTarget, min_hourly_target: calcMinTarget };
+    } else {
+        const insertQuery = `
+            INSERT INTO workshop_shifts (
+                pmemo_id, shift_name, shift_date, supervisor_a_id, supervisor_b_id,
+                running_cavity, cycle_time, hourly_target, min_hourly_target, status, remarks, added_by, device_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+        const [result] = await db.execute(insertQuery, [
+            pmemo_id,
+            shift_name,
+            shift_date,
+            supervisor_a_id || null,
+            supervisor_b_id || null,
+            cavityNum,
+            cycleSec || null,
+            calcHourlyTarget.toFixed(2),
+            calcMinTarget.toFixed(2),
+            status || 'Configured',
+            remarks || null,
+            added_by,
+            device_id
+        ]);
+        return { id: result.insertId, pmemo_id, shift_name, shift_date, hourly_target: calcHourlyTarget, min_hourly_target: calcMinTarget };
+    }
+};
+
+const deleteWorkshopShift = async (id) => {
+    await db.execute(`DELETE FROM workshop_shifts WHERE id = ?`, [id]);
+    return true;
+};
+
+const saveShiftHourlyLog = async ({
+    id,
+    shift_id,
+    hour_slot,
+    time_from,
+    time_to,
+    operator_id,
+    operator_1_id,
+    operator_2_id,
+    product_weight,
+    target_qty = 0,
+    actual_qty = 0,
+    production,
+    production_qty,
+    rejection_qty = 0,
+    rejection,
+    downtime_minutes = 0,
+    downtime_reason = null,
+    remarks = null,
+    added_by
+}) => {
+    const finalOp1 = operator_1_id !== undefined ? (operator_1_id ? Number(operator_1_id) : null) : (operator_id ? Number(operator_id) : null);
+    const finalOp2 = operator_2_id ? Number(operator_2_id) : null;
+    const finalActual = Number(production !== undefined ? production : (production_qty !== undefined ? production_qty : actual_qty)) || 0;
+    const finalRejection = Number(rejection !== undefined ? rejection : rejection_qty) || 0;
+    const finalWeight = product_weight !== undefined && product_weight !== "" && product_weight !== null ? Number(product_weight) : null;
+    const formattedSlot = (time_from && time_to) ? `${time_from} - ${time_to}` : (hour_slot || time_from || time_to || '—');
+
+    if (id) {
+        const updateQuery = `
+            UPDATE workshop_shift_logs SET
+                hour_slot = ?,
+                time_from = ?,
+                time_to = ?,
+                operator_id = ?,
+                operator_2_id = ?,
+                product_weight = ?,
+                target_qty = ?,
+                actual_qty = ?,
+                rejection_qty = ?,
+                downtime_minutes = ?,
+                downtime_reason = ?,
+                remarks = ?
+            WHERE id = ?
+        `;
+        await db.execute(updateQuery, [
+            formattedSlot,
+            time_from || null,
+            time_to || null,
+            finalOp1,
+            finalOp2,
+            finalWeight,
+            Number(target_qty) || 0,
+            finalActual,
+            finalRejection,
+            Number(downtime_minutes) || 0,
+            downtime_reason || null,
+            remarks || null,
+            id
+        ]);
+        return { id, shift_id, hour_slot: formattedSlot, time_from, time_to, operator_id: finalOp1, operator_2_id: finalOp2, product_weight: finalWeight, actual_qty: finalActual, rejection_qty: finalRejection, downtime_minutes };
+    } else {
+        const insertQuery = `
+            INSERT INTO workshop_shift_logs (
+                shift_id, hour_slot, time_from, time_to, operator_id, operator_2_id, product_weight, target_qty, actual_qty, rejection_qty, downtime_minutes, downtime_reason, remarks, added_by
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+        const [result] = await db.execute(insertQuery, [
+            shift_id,
+            formattedSlot,
+            time_from || null,
+            time_to || null,
+            finalOp1,
+            finalOp2,
+            finalWeight,
+            Number(target_qty) || 0,
+            finalActual,
+            finalRejection,
+            Number(downtime_minutes) || 0,
+            downtime_reason || null,
+            remarks || null,
+            added_by
+        ]);
+        return { id: result.insertId, shift_id, hour_slot: formattedSlot, time_from, time_to, operator_id: finalOp1, operator_2_id: finalOp2, product_weight: finalWeight, actual_qty: finalActual, rejection_qty: finalRejection, downtime_minutes };
+    }
+};
+
+const deleteShiftHourlyLog = async (id) => {
+    await db.execute(`DELETE FROM workshop_shift_logs WHERE id = ?`, [id]);
+    return true;
+};
+
 module.exports = {
     createWorkshopEntriesTable,
+    createWorkshopShiftsTable,
+    createWorkshopShiftLogsTable,
     getAllWorkshopEntries,
     getWorkshopEntryByPMemoId,
-    saveWorkshopEntry
+    saveWorkshopEntry,
+    getShiftsByPMemoId,
+    saveWorkshopShift,
+    deleteWorkshopShift,
+    saveShiftHourlyLog,
+    deleteShiftHourlyLog
 };

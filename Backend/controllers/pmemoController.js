@@ -23,6 +23,7 @@ const getPMemoDetails = async (req, res) => {
         // Fetch RM issues if production memo already exists
         let rmIssues = [];
         let rmReturns = [];
+        let shifts = [];
         if (details.p_memo_no) {
             // Find pmemo_id from database
             const db = require('../config/db.js');
@@ -58,6 +59,14 @@ const getPMemoDetails = async (req, res) => {
                     [pmemoId]
                 );
                 rmReturns = returnRows;
+
+                // Fetch Production Shifts and Hourly Logs
+                try {
+                    const { getShiftsByPMemoId } = require('../models/workshopEntryModel.js');
+                    shifts = await getShiftsByPMemoId(pmemoId);
+                } catch (shiftErr) {
+                    console.error('Error fetching shifts for P Memo:', shiftErr);
+                }
             }
         }
 
@@ -83,6 +92,13 @@ const getPMemoDetails = async (req, res) => {
             console.error('Error fetching BOM raw materials for P Memo:', bomErr);
         }
 
+        const productionLogs = (shifts || []).flatMap(s => (s.logs || []).map(l => ({
+            ...l,
+            shift_name: s.shift_name,
+            shift_date: s.shift_date,
+            shift_id: s.id
+        })));
+
         res.status(200).json({
             success: true,
             data: {
@@ -90,6 +106,8 @@ const getPMemoDetails = async (req, res) => {
                 proposed_p_memo_no: nextNo,
                 rmIssues,
                 rmReturns,
+                shifts: shifts || [],
+                productionLogs,
                 bomRawMaterials
             }
         });

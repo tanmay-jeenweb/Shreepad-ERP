@@ -28,12 +28,14 @@ export default function PMemoPage() {
     const [isEditMode, setIsEditMode] = useState(false);
     const [isFinalSubmitted, setIsFinalSubmitted] = useState(false);
 
-    // RM Issue and Return Lists
+    // RM Issue, Return, and Production Lists
     const [rawMaterialsList, setRawMaterialsList] = useState([]);
     const [rmIssues, setRmIssues] = useState([]);
     const [itemCode, setItemCode] = useState("");
     const [submittedChits, setSubmittedChits] = useState([]);
     const [submittedReturnChits, setSubmittedReturnChits] = useState([]);
+    const [productionLogs, setProductionLogs] = useState([]);
+    const [shifts, setShifts] = useState([]);
 
     const handlePrint = (lotId) => {
         const element = document.getElementById(`chit-${lotId}`);
@@ -148,8 +150,10 @@ export default function PMemoPage() {
                     setSubmittedChits(chits);
                     setSubmittedReturnChits(data.rmReturns || []);
 
-                    // Load saved RM issues for count display
+                    // Load saved RM issues and Production logs for count & display
                     setRmIssues(data.rmIssues || []);
+                    setShifts(data.shifts || []);
+                    setProductionLogs(data.productionLogs || []);
                 }
                 if (rmRes.data?.success) {
                     setRawMaterialsList(rmRes.data.data || []);
@@ -325,7 +329,7 @@ export default function PMemoPage() {
                             </div>
                         </div>
 
-                        {/* Action Buttons: RM Issues & RM Returns */}
+                        {/* Action Buttons: RM Issues, RM Returns & Production */}
                         <div className="flex flex-wrap gap-4">
                             <button
                                 type="button"
@@ -342,6 +346,14 @@ export default function PMemoPage() {
                             >
                                 <i className="fa-solid fa-arrow-rotate-left"></i>
                                 Raw Material Returns {submittedReturnChits.length > 0 ? `(${submittedReturnChits.length})` : ""}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => navigate(`/production/p-memo/${workOrderItemId}/production`)}
+                                className="inline-flex items-center gap-2 px-4 py-2 text-md font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-all shadow-sm cursor-pointer"
+                            >
+                                <i className="fa-solid fa-industry"></i>
+                                Production {productionLogs.length > 0 ? `(${productionLogs.length})` : ""}
                             </button>
                         </div>
 
@@ -422,6 +434,91 @@ export default function PMemoPage() {
                                             onPrint={handlePrint}
                                         />
                                     ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Production Hourly Logs Section */}
+                        {productionLogs.length > 0 && (
+                            <div className="space-y-4 no-print mt-4">
+                                <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                                    <div className="flex items-center gap-2">
+                                        <i className="fa-solid fa-industry text-[#369ACF] text-base"></i>
+                                        <h3 className="text-sm font-bold text-slate-800">
+                                            Production Hourly Logs ({productionLogs.length})
+                                        </h3>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate(`/production/p-memo/${workOrderItemId}/production`)}
+                                        className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition cursor-pointer"
+                                    >
+                                        View Full Production Details <i className="fa-solid fa-arrow-right ml-1"></i>
+                                    </button>
+                                </div>
+
+                                <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-xs">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50">
+                                                <th className="py-2.5 px-3">#</th>
+                                                <th className="py-2.5 px-3">Shift</th>
+                                                <th className="py-2.5 px-3">Time (From - To)</th>
+                                                <th className="py-2.5 px-3">Operator 1</th>
+                                                <th className="py-2.5 px-3">Operator 2</th>
+                                                <th className="py-2.5 px-3 text-right">Product Wt. (kg)</th>
+                                                <th className="py-2.5 px-3 text-right">Production</th>
+                                                <th className="py-2.5 px-3 text-right">Rejection</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100 text-xs">
+                                            {productionLogs.map((log, idx) => {
+                                                const timeDisplay = (log.time_from && log.time_to)
+                                                    ? `${log.time_from} - ${log.time_to}`
+                                                    : (log.hour_slot || "—");
+
+                                                const op1Display = log.operator_1_name
+                                                    ? `${log.operator_1_name} ${log.operator_1_code ? `(${log.operator_1_code})` : ""}`
+                                                    : (log.operator_name ? `${log.operator_name} ${log.operator_code ? `(${log.operator_code})` : ""}` : "—");
+
+                                                const op2Display = log.operator_2_name
+                                                    ? `${log.operator_2_name} ${log.operator_2_code ? `(${log.operator_2_code})` : ""}`
+                                                    : "—";
+
+                                                return (
+                                                    <tr key={log.id || idx} className="hover:bg-slate-50/50 transition">
+                                                        <td className="py-2.5 px-3 font-semibold text-slate-400">{idx + 1}</td>
+                                                        <td className="py-2.5 px-3 font-bold text-slate-800">{log.shift_name || "Shift"}</td>
+                                                        <td className="py-2.5 px-3 font-bold text-slate-900">{timeDisplay}</td>
+                                                        <td className="py-2.5 px-3 font-medium text-slate-700">{op1Display}</td>
+                                                        <td className="py-2.5 px-3 font-medium text-slate-600">{op2Display}</td>
+                                                        <td className="py-2.5 px-3 text-right font-medium text-slate-700">
+                                                            {log.product_weight != null && log.product_weight !== "" ? Number(log.product_weight).toFixed(4) : "—"}
+                                                        </td>
+                                                        <td className="py-2.5 px-3 text-right font-black text-emerald-700">
+                                                            {Number(log.actual_qty || 0).toLocaleString()}
+                                                        </td>
+                                                        <td className="py-2.5 px-3 text-right font-bold text-rose-600">
+                                                            {Number(log.rejection_qty || 0) > 0 ? Number(log.rejection_qty).toLocaleString() : "—"}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                        <tfoot>
+                                            <tr className="bg-slate-100 font-black text-slate-900 border-t border-slate-300 text-xs">
+                                                <td colSpan="6" className="py-2.5 px-3 text-right uppercase tracking-wider text-slate-600 font-bold">
+                                                    Total Output:
+                                                </td>
+                                                <td className="py-2.5 px-3 text-right font-black text-emerald-700">
+                                                    {productionLogs.reduce((sum, l) => sum + (Number(l.actual_qty) || 0), 0).toLocaleString()} Nos
+                                                </td>
+                                                <td className="py-2.5 px-3 text-right font-bold text-rose-600">
+                                                    {productionLogs.reduce((sum, l) => sum + (Number(l.rejection_qty) || 0), 0).toLocaleString()} Nos
+                                                </td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
                                 </div>
                             </div>
                         )}
