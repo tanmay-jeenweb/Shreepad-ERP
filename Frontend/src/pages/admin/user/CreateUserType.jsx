@@ -41,6 +41,7 @@ const MODULE_GROUPS = [
     description: "Bill of Materials and production configurations.",
     masters: [
       { key: "bom",                 label: "Bill of Material" },
+      { key: "workshop_entry",       label: "Workshop Entry" },
     ]
   },
   {

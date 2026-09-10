@@ -17,6 +17,7 @@
         { key: 'stock_book', label: 'Stock Book' },
         { key: 'sales_order', label: 'Sales Order' },
         { key: 'work_order', label: 'Work Order' },
+        { key: 'workshop_entry', label: 'Workshop Entry' },
         { key: 'activity_report', label: 'User Activity Records' },
     ];
 
