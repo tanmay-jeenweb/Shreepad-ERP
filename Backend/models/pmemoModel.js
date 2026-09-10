@@ -105,15 +105,6 @@ const getPMemoByWorkOrderItemId = async (workOrderItemId) => {
             woi.id AS work_order_item_id,
             pm.p_memo_no,
             pm.date AS p_memo_date,
-            pm.rm_required,
-            pm.rm_made,
-            pm.rm_to_be_made,
-            pm.loss_kg,
-            pm.loss_percent,
-            pm.rm_return,
-            pm.running_total_kg,
-            pm.running_total_percent,
-            pm.running_total_nos,
             pm.is_final_submitted,
             mac.name AS machine_name,
             m.material_name,
@@ -195,10 +186,21 @@ const getAvailableBatches = async (materialId, grade) => {
     return rows;
 };
 
-const createPMemo = async (workOrderItemId, date, rmDetails = {}, rmIssues = [], addedBy = null) => {
+const createPMemo = async (workOrderItemId, date, optionsOrFinalSubmitted = 0, rmIssues = null, addedBy = null) => {
     const connection = await db.getConnection();
     try {
         await connection.beginTransaction();
+
+        let isFinalSubmitted = 0;
+        let issuesToProcess = rmIssues;
+        let userAddedBy = addedBy;
+
+        if (typeof optionsOrFinalSubmitted === 'object' && optionsOrFinalSubmitted !== null) {
+            // Support legacy rmDetails object format if passed
+            isFinalSubmitted = optionsOrFinalSubmitted.is_final_submitted ? 1 : 0;
+        } else {
+            isFinalSubmitted = optionsOrFinalSubmitted ? 1 : 0;
+        }
 
         // Check if production memo already exists
         const [existing] = await connection.execute(
@@ -221,23 +223,10 @@ const createPMemo = async (workOrderItemId, date, rmDetails = {}, rmIssues = [],
 
         const queryMemo = `
             INSERT INTO production_memos (
-                p_memo_no, work_order_item_id, date,
-                rm_required, rm_made, rm_to_be_made,
-                loss_kg, loss_percent, rm_return,
-                running_total_kg, running_total_percent,
-                running_total_nos, is_final_submitted
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                p_memo_no, work_order_item_id, date, is_final_submitted
+            ) VALUES (?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE 
                 date = VALUES(date),
-                rm_required = VALUES(rm_required),
-                rm_made = VALUES(rm_made),
-                rm_to_be_made = VALUES(rm_to_be_made),
-                loss_kg = VALUES(loss_kg),
-                loss_percent = VALUES(loss_percent),
-                rm_return = VALUES(rm_return),
-                running_total_kg = VALUES(running_total_kg),
-                running_total_percent = VALUES(running_total_percent),
-                running_total_nos = VALUES(running_total_nos),
                 is_final_submitted = VALUES(is_final_submitted)
         `;
 
@@ -245,16 +234,7 @@ const createPMemo = async (workOrderItemId, date, rmDetails = {}, rmIssues = [],
             memoNo,
             workOrderItemId,
             date,
-            rmDetails.rm_required !== undefined && rmDetails.rm_required !== '' ? rmDetails.rm_required : null,
-            rmDetails.rm_made !== undefined && rmDetails.rm_made !== '' ? rmDetails.rm_made : null,
-            rmDetails.rm_to_be_made !== undefined && rmDetails.rm_to_be_made !== '' ? rmDetails.rm_to_be_made : null,
-            rmDetails.loss_kg !== undefined && rmDetails.loss_kg !== '' ? rmDetails.loss_kg : null,
-            rmDetails.loss_percent !== undefined && rmDetails.loss_percent !== '' ? rmDetails.loss_percent : null,
-            rmDetails.rm_return !== undefined && rmDetails.rm_return !== '' ? rmDetails.rm_return : null,
-            rmDetails.running_total_kg !== undefined && rmDetails.running_total_kg !== '' ? rmDetails.running_total_kg : null,
-            rmDetails.running_total_percent !== undefined && rmDetails.running_total_percent !== '' ? rmDetails.running_total_percent : null,
-            rmDetails.running_total_nos !== undefined && rmDetails.running_total_nos !== '' ? rmDetails.running_total_nos : null,
-            rmDetails.is_final_submitted !== undefined ? Number(rmDetails.is_final_submitted) : 0
+            isFinalSubmitted
         ]);
 
         if (existing.length > 0) {
@@ -263,64 +243,66 @@ const createPMemo = async (workOrderItemId, date, rmDetails = {}, rmIssues = [],
             pmemoId = memoResult.insertId;
         }
 
-        // --- Process RM Issues ---
-        const [oldIssues] = await connection.execute(
-            `SELECT id, stock_issue_id FROM pmemo_rm_issues WHERE pmemo_id = ?`,
-            [pmemoId]
-        );
-
-        const oldStockIssueIds = oldIssues.map(oi => oi.stock_issue_id).filter(Boolean);
-        if (oldStockIssueIds.length > 0) {
-            const placeholders = oldStockIssueIds.map(() => '?').join(',');
-            await connection.execute(
-                `DELETE FROM stock_issues WHERE id IN (${placeholders})`,
-                oldStockIssueIds
+        // --- Process RM Issues ONLY if explicitly provided ---
+        if (issuesToProcess !== null && issuesToProcess !== undefined) {
+            const [oldIssues] = await connection.execute(
+                `SELECT id, stock_issue_id FROM pmemo_rm_issues WHERE pmemo_id = ?`,
+                [pmemoId]
             );
-        }
 
-        await connection.execute(
-            `DELETE FROM pmemo_rm_issues WHERE pmemo_id = ?`,
-            [pmemoId]
-        );
+            const oldStockIssueIds = oldIssues.map(oi => oi.stock_issue_id).filter(Boolean);
+            if (oldStockIssueIds.length > 0) {
+                const placeholders = oldStockIssueIds.map(() => '?').join(',');
+                await connection.execute(
+                    `DELETE FROM stock_issues WHERE id IN (${placeholders})`,
+                    oldStockIssueIds
+                );
+            }
 
-        const formattedMemoNo = `PM-${String(memoNo).padStart(4, '0')}`;
-        for (const issue of rmIssues) {
-            const insertStockIssueQuery = `
-                INSERT INTO stock_issues (
-                    ma_item_id, rm_return_id, issue_quantity, p_memo_number, issue_date, remarks, removal_type, added_by
-                ) VALUES (?, ?, ?, ?, ?, ?, 'issue', ?)
-            `;
-            const [stockIssueResult] = await connection.execute(insertStockIssueQuery, [
-                issue.ma_item_id || null,
-                issue.rm_return_id || null,
-                Math.floor(Number(issue.lot) || 0) * (Number(issue.qty) || 0),
-                formattedMemoNo,
-                issue.date || date,
-                issue.remark || null,
-                addedBy
-            ]);
-            const stockIssueId = stockIssueResult.insertId;
+            await connection.execute(
+                `DELETE FROM pmemo_rm_issues WHERE pmemo_id = ?`,
+                [pmemoId]
+            );
 
-            const insertPmRmIssueQuery = `
-                INSERT INTO pmemo_rm_issues (
-                    pmemo_id, lot, date, remark, material_id, grade, internal_batch_number, grn_item_id, ma_item_id, rm_return_id, stock_issue_id, qty, total_quantity
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `;
-            await connection.execute(insertPmRmIssueQuery, [
-                pmemoId,
-                Number(issue.lot) || 0,
-                issue.date || date,
-                issue.remark || null,
-                Number(issue.material_id),
-                issue.grade,
-                issue.internal_batch_number,
-                null,
-                issue.ma_item_id || null,
-                issue.rm_return_id || null,
-                stockIssueId,
-                Number(issue.qty) || 0,
-                Math.floor(Number(issue.lot) || 0) * (Number(issue.qty) || 0)
-            ]);
+            const formattedMemoNo = `PM-${String(memoNo).padStart(4, '0')}`;
+            for (const issue of issuesToProcess) {
+                const insertStockIssueQuery = `
+                    INSERT INTO stock_issues (
+                        ma_item_id, rm_return_id, issue_quantity, p_memo_number, issue_date, remarks, removal_type, added_by
+                    ) VALUES (?, ?, ?, ?, ?, ?, 'issue', ?)
+                `;
+                const [stockIssueResult] = await connection.execute(insertStockIssueQuery, [
+                    issue.ma_item_id || null,
+                    issue.rm_return_id || null,
+                    Math.floor(Number(issue.lot) || 0) * (Number(issue.qty) || 0),
+                    formattedMemoNo,
+                    issue.date || date,
+                    issue.remark || null,
+                    userAddedBy || null
+                ]);
+                const stockIssueId = stockIssueResult.insertId;
+
+                const insertPmRmIssueQuery = `
+                    INSERT INTO pmemo_rm_issues (
+                        pmemo_id, lot, date, remark, material_id, grade, internal_batch_number, grn_item_id, ma_item_id, rm_return_id, stock_issue_id, qty, total_quantity
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `;
+                await connection.execute(insertPmRmIssueQuery, [
+                    pmemoId,
+                    Number(issue.lot) || 0,
+                    issue.date || date,
+                    issue.remark || null,
+                    Number(issue.material_id),
+                    issue.grade || '',
+                    issue.internal_batch_number,
+                    null,
+                    issue.ma_item_id || null,
+                    issue.rm_return_id || null,
+                    stockIssueId,
+                    Number(issue.qty) || 0,
+                    Math.floor(Number(issue.lot) || 0) * (Number(issue.qty) || 0)
+                ]);
+            }
         }
 
         await connection.commit();
@@ -347,6 +329,13 @@ const ensurePMemoRmIssuesColumns = async () => {
             await db.execute(`ALTER TABLE pmemo_rm_issues ADD COLUMN rm_return_id INT DEFAULT NULL`);
             await db.execute(`ALTER TABLE pmemo_rm_issues ADD CONSTRAINT fk_pmemo_rm_issues_rtr FOREIGN KEY (rm_return_id) REFERENCES rm_returns(id) ON DELETE SET NULL`);
             console.log(`Added column rm_return_id to pmemo_rm_issues`);
+        }
+
+        // Ensure grade is nullable or defaults to empty string
+        try {
+            await db.execute(`ALTER TABLE pmemo_rm_issues MODIFY COLUMN grade VARCHAR(100) NULL DEFAULT ''`);
+        } catch (e) {
+            // Ignore if already modified
         }
     } catch (err) {
         console.error('Error ensuring pmemo_rm_issues columns:', err.message || err);

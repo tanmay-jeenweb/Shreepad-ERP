@@ -8,12 +8,9 @@ const { connectDB } = require("./config/db.js");
 const authRoutes = require("./routes/authRoutes.js");
 const adminRoutes = require("./routes/adminRoutes.js");
 const userTypeMasterRoutes = require("./routes/userTypeMasterRoutes.js");
-const locationTypeRoutes = require("./routes/locationTypeRoutes.js");
 const locationRoutes = require("./routes/locationRoutes.js");
-const machineTypeRoutes = require("./routes/machineTypeRoutes.js");
 const machineRoutes = require("./routes/machineRoutes.js");
 const userPreferenceRoutes = require("./routes/userPreferenceRoutes.js");
-const materialGroupRoutes = require("./routes/materialGroupRoutes.js");
 const materialTypeRoutes = require("./routes/materialTypeRoutes.js");
 const unitRoutes = require("./routes/unitRoutes.js");
 const materialRoutes = require("./routes/materialRoutes.js");
@@ -25,7 +22,6 @@ const operatorRoutes = require("./routes/operatorRoutes.js");
 const vendorRoutes = require("./routes/vendorRoutes.js");
 const customerRoutes = require("./routes/customerRoutes.js");
 const processMasterRoutes = require("./routes/processMasterRoutes.js");
-const settingMasterRoutes = require("./routes/settingMasterRoutes.js");
 
 const documentMasterRoutes = require("./routes/documentRoutes.js");
 const organizationRoutes = require("./routes/organizationRoutes.js");
@@ -39,14 +35,11 @@ const rmReturnRoutes = require("./routes/rmReturnRoutes.js");
 
 // Model Initializations
 const { initUserModel } = require("./models/userModel.js");
-const { createLocationTypesTable } = require("./models/locationTypeModel.js");
 const { createLocationsTable } = require("./models/locationModel.js");
-const { createMachineTypesTable } = require("./models/machineTypeModel.js");
 const { createMachinesTable, ensureMachineColumns } = require("./models/machineModel.js");
 const { createUserTypesTable, createUserTypePermissionsTable } = require("./models/userTypeModel.js");
 const { createAuditLogsTable } = require("./models/auditLogModel.js");
 const { createUserPreferencesTable } = require("./models/userPreferenceModel.js");
-const { createMaterialGroupsTable } = require("./models/materialGroupModel.js");
 const { createMaterialTypesTable, seedSystemMaterialTypes } = require("./models/materialTypeModel.js");
 const { createUnitsTable } = require("./models/unitModel.js");
 const { createMaterialsTable, ensureMaterialColumns } = require("./models/materialModel.js");
@@ -58,7 +51,6 @@ const { createOperatorsTable, ensureOperatorColumns } = require("./models/operat
 const { createVendorTables, ensureVendorColumns } = require("./models/vendorModel.js");
 const { createCustomerTables, ensureCustomerColumns } = require("./models/customerModel.js");
 const { createProcessMastersTable } = require("./models/processMasterModel.js");
-const { createSettingMasterTable, ensureSettingsMasterColumns } = require("./models/settingMasterModel.js");
 const { createDocumentMasterTable } = require("./models/documentMaster.js");
 const { createOrganizationTable, ensureOrganizationColumns } = require("./models/organizationModel.js");
 const { createBatchSequenceTable } = require("./models/batchSequenceModel.js");
@@ -100,12 +92,9 @@ app.use(cookieParser());
 app.use(["/api/auth", "/auth"], authRoutes);
 app.use(["/api/admin", "/admin"], adminRoutes);
 app.use(["/api/usertypes", "/usertypes"], userTypeMasterRoutes);
-app.use(["/api/locationtypes", "/locationtypes"], locationTypeRoutes);
 app.use(["/api/locations", "/locations"], locationRoutes);
-app.use(["/api/machinetypes", "/machinetypes"], machineTypeRoutes);
 app.use(["/api/machines", "/machines"], machineRoutes);
 app.use(["/api/table-preferences", "/table-preferences"], userPreferenceRoutes);
-app.use(["/api/materialgroups", "/materialgroups"], materialGroupRoutes);
 app.use(["/api/material-types", "/material-types"], materialTypeRoutes);
 app.use(["/api/units", "/units"], unitRoutes);
 app.use(["/api/materials", "/materials"], materialRoutes);
@@ -117,7 +106,6 @@ app.use(["/api/operators", "/operators"], operatorRoutes);
 app.use(["/api/vendors", "/vendors"], vendorRoutes);
 app.use(["/api/customers", "/customers"], customerRoutes);
 app.use(["/api/process-masters", "/process-masters"], processMasterRoutes);
-app.use(["/api/settings", "/settings"], settingMasterRoutes);
 app.use(["/api/document-masters", "/document-masters"], documentMasterRoutes);
 app.use(["/api/organizations", "/organizations"], organizationRoutes);
 app.use(["/api/stock-book", "/stock-book"], stockBookRoutes);
@@ -149,19 +137,26 @@ const startServer = async () => {
         await createUserTypesTable();
         await createUserTypePermissionsTable();
         await createAuditLogsTable();
-        await createLocationTypesTable();
         await createLocationsTable();
-        await createMachineTypesTable();
         await createMachinesTable();
         await ensureMachineColumns();
         await createUserPreferencesTable();
-        await createMaterialGroupsTable();
         await createMaterialTypesTable();
         await seedSystemMaterialTypes();
         await createUnitsTable();
         await createProcessMastersTable();
         await createMaterialsTable();
         await ensureMaterialColumns();
+
+        // Cleanup material_groups table if exists
+        try {
+            const db = require("./config/db.js");
+            await db.execute("DROP TABLE IF EXISTS material_groups");
+            console.log("Cleaned up material_groups table");
+        } catch (dropErr) {
+            console.error("Error dropping material_groups table:", dropErr.message);
+        }
+
         await createBOMTable();
         await createTermsAndConditionsTable();
         await createOperatorTypesTable();
@@ -173,8 +168,17 @@ const startServer = async () => {
         await ensureVendorColumns();
         await createCustomerTables();
         await ensureCustomerColumns();
-        await createSettingMasterTable();
-        await ensureSettingsMasterColumns();
+
+        // Cleanup settings_master table and permissions if exist
+        try {
+            const db = require("./config/db.js");
+            await db.execute("DROP TABLE IF EXISTS settings_master");
+            await db.execute("DELETE FROM user_type_permissions WHERE master_name = 'setting_master'");
+            console.log("Cleaned up settings_master table and permissions");
+        } catch (dropErr) {
+            console.error("Error dropping settings_master table:", dropErr.message);
+        }
+
         await createBatchSequenceTable();
         await createOrganizationTable();
         await ensureOrganizationColumns();

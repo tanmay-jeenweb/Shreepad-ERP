@@ -1,7 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import Navbar from "../../../components/Navbar";
 import { getAllMachines, updateMachine, deleteMachine, toggleMachineActive } from "../../../api/machineApi";
-import { getMachineTypes } from "../../../api/machineTypeApi";
 import { getLocations } from "../../../api/locationApi";
 import DataTable from "../../../components/DataTable";
 import toast from "react-hot-toast";
@@ -11,7 +10,6 @@ import { usePermission } from "../../../context/PermissionContext";
 export default function MachineMaster() {
   const [loading, setLoading] = useState(false);
   const [machines, setMachines] = useState([]);
-  const [machineTypes, setMachineTypes] = useState([]);
   const [locations, setLocations] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -24,13 +22,11 @@ export default function MachineMaster() {
     setLoading(true);
     setError("");
     try {
-      const [mRes, typesRes, locRes] = await Promise.all([
+      const [mRes, locRes] = await Promise.all([
         getAllMachines(showInactive),
-        getMachineTypes(),
         getLocations()
       ]);
       setMachines(mRes.data.data || []);
-      setMachineTypes(typesRes.data.data || []);
       setLocations(locRes.data.data || []);
     } catch (err) {
       console.error("Failed to load machine data", err);
@@ -49,13 +45,9 @@ export default function MachineMaster() {
     setEditingData({
       machineNumber: m.machine_number,
       name: m.name,
-      machineTypeId: m.machine_type_id || "",
       capacity: m.capacity || "",
       locationId: m.location_id || "",
-      companyName: m.company_name || "",
       outgoingJobWork: !!m.outgoing_job_work,
-      machineShift: m.machine_shift || "day shift",
-      maintenance: !!m.maintenance,
       active: !!m.active
     });
   };
@@ -155,30 +147,6 @@ export default function MachineMaster() {
           )
       },
       {
-        key: "machine_type_name",
-        label: "Type",
-        minWidth: "140px",
-        render: (row) =>
-          editingId === row.id ? (
-            <select
-              value={editingData?.machineTypeId || ""}
-              onChange={(e) =>
-                setEditingData({ ...editingData, machineTypeId: e.target.value })
-              }
-              className="border border-slate-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full text-sm bg-white"
-            >
-              <option value="">Select type</option>
-              {machineTypes.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.machine_type_name}
-                </option>
-              ))}
-            </select>
-          ) : (
-            row.machine_type_name || "N/A"
-          )
-      },
-      {
         key: "capacity",
         label: "Capacity",
         minWidth: "140px",
@@ -243,23 +211,6 @@ export default function MachineMaster() {
       //   )
       // },
       {
-        key: "company_name",
-        label: "Company",
-        minWidth: "140px",
-        render: (row) =>
-          editingId === row.id ? (
-            <input
-              value={editingData?.companyName || ""}
-              onChange={(e) =>
-                setEditingData({ ...editingData, companyName: e.target.value })
-              }
-              className="border border-slate-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full text-sm"
-            />
-          ) : (
-            row.company_name || "N/A"
-          )
-      },
-      {
         key: "outgoing_job_work",
         label: "Outgoing",
         minWidth: "120px",
@@ -292,104 +243,6 @@ export default function MachineMaster() {
               </label>
             </div>
           ) : row.outgoing_job_work ? (
-            "Yes"
-          ) : (
-            "No"
-          )
-      },
-      {
-        key: "machine_shift",
-        label: "Shift",
-        minWidth: "180px",
-        render: (row) =>
-          editingId === row.id ? (
-            <div className="flex gap-2 text-xs font-medium">
-              <label className="inline-flex items-center cursor-pointer">
-                <input
-                  type="radio"
-                  name={"shift-" + row.id}
-                  value="day shift"
-                  checked={editingData?.machineShift === "day shift"}
-                  onChange={(e) =>
-                    setEditingData({
-                      ...editingData,
-                      machineShift: e.target.value
-                    })
-                  }
-                  className="mr-1 h-3.5 w-3.5 text-indigo-600 focus:ring-indigo-500"
-                />
-                Day
-              </label>
-              <label className="inline-flex items-center cursor-pointer">
-                <input
-                  type="radio"
-                  name={"shift-" + row.id}
-                  value="day-night shift"
-                  checked={editingData?.machineShift === "day-night shift"}
-                  onChange={(e) =>
-                    setEditingData({
-                      ...editingData,
-                      machineShift: e.target.value
-                    })
-                  }
-                  className="mr-1 h-3.5 w-3.5 text-indigo-600 focus:ring-indigo-500"
-                />
-                D-N
-              </label>
-              <label className="inline-flex items-center cursor-pointer">
-                <input
-                  type="radio"
-                  name={"shift-" + row.id}
-                  value="3shift"
-                  checked={editingData?.machineShift === "3shift"}
-                  onChange={(e) =>
-                    setEditingData({
-                      ...editingData,
-                      machineShift: e.target.value
-                    })
-                  }
-                  className="mr-1 h-3.5 w-3.5 text-indigo-600 focus:ring-indigo-500"
-                />
-                3S
-              </label>
-            </div>
-          ) : (
-            row.machine_shift || "N/A"
-          )
-      },
-      {
-        key: "maintenance",
-        label: "Maintenance",
-        minWidth: "120px",
-        render: (row) =>
-          editingId === row.id ? (
-            <div className="flex gap-2">
-              <label className="inline-flex items-center text-xs font-medium cursor-pointer">
-                <input
-                  type="radio"
-                  name={"main-" + row.id}
-                  checked={editingData?.maintenance === true}
-                  onChange={() =>
-                    setEditingData({ ...editingData, maintenance: true })
-                  }
-                  className="mr-1 h-3.5 w-3.5 text-indigo-600 focus:ring-indigo-500"
-                />
-                Yes
-              </label>
-              <label className="inline-flex items-center text-xs font-medium cursor-pointer">
-                <input
-                  type="radio"
-                  name={"main-" + row.id}
-                  checked={editingData?.maintenance === false}
-                  onChange={() =>
-                    setEditingData({ ...editingData, maintenance: false })
-                  }
-                  className="mr-1 h-3.5 w-3.5 text-indigo-600 focus:ring-indigo-500"
-                />
-                No
-              </label>
-            </div>
-          ) : row.maintenance ? (
             "Yes"
           ) : (
             "No"
@@ -537,7 +390,7 @@ export default function MachineMaster() {
     }
 
     return cols;
-  }, [editingId, editingData, machineTypes, locations, saving, hasPermission, showInactive]);
+  }, [editingId, editingData, locations, saving, hasPermission, showInactive]);
 
   return (
     <div className="flex-1 flex flex-col bg-slate-50 font-sans text-slate-900">

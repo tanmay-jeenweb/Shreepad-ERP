@@ -48,6 +48,13 @@ export default function WorkOrderMaster() {
     }
   };
 
+  // Only display Finished Goods / Products in the main table
+  // Raw materials from BOM are viewed inside the View Details modal (Eye icon)
+  const displayItems = useMemo(() => {
+    const fg = items.filter(it => Number(it.production_quantity) > 0);
+    return fg.length > 0 ? fg : items;
+  }, [items]);
+
   const columns = useMemo(() => {
     const cols = [
       {
@@ -139,9 +146,10 @@ export default function WorkOrderMaster() {
         <div className="flex items-center gap-2">
           {/* View Work Order Details */}
           <button
+            type="button"
             onClick={() => setViewWorkOrderId(row.work_order_id)}
             className="flex h-8 w-8 items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-600 hover:bg-sky-100 cursor-pointer"
-            title="View Work Order Details"
+            title="View Work Order Details & P Memo"
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="h-4 w-4">
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.964-7.178z" />
@@ -152,6 +160,7 @@ export default function WorkOrderMaster() {
           {/* Edit Work Order */}
           {canUpdate && (
             <button
+              type="button"
               onClick={() => navigate(`/sales/work-orders/edit/${row.work_order_id}`)}
               className="flex h-8 w-8 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100 cursor-pointer"
               title="Edit Work Order"
@@ -163,6 +172,7 @@ export default function WorkOrderMaster() {
           {/* Delete Work Order */}
           {canDelete && (
             <button
+              type="button"
               onClick={() => handleDelete(row.work_order_id)}
               className="flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 cursor-pointer"
               title="Delete Work Order"
@@ -205,7 +215,7 @@ export default function WorkOrderMaster() {
         <DataTable
           tableId="work_order_master"
           title="Work Orders"
-          data={items}
+          data={displayItems}
           columns={columns}
           loading={loading}
           searchPlaceholder="Search materials, customers or work order number..."

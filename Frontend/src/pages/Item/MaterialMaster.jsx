@@ -83,16 +83,17 @@ export default function MaterialMaster() {
         ),
       },
       {
-        key: "code",
-        label: "Code",
+        key: "prefix",
+        label: "Prefix",
         minWidth: "80px",
-        render: (row) => (
-          row.code ? (
-            <span className="font-mono font-medium text-slate-700">{row.code}</span>
+        render: (row) =>
+          row.prefix ? (
+            <span className="font-mono font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded text-xs border border-slate-200">
+              {row.prefix}
+            </span>
           ) : (
             <span className="text-slate-400 italic text-xs">—</span>
-          )
-        ),
+          ),
       },
       {
         key: "material_name",
@@ -120,17 +121,6 @@ export default function MaterialMaster() {
         render: (row) =>
           row.hsn_code ? (
             <span className="text-slate-700 font-mono text-sm">{row.hsn_code}</span>
-          ) : (
-            <span className="text-slate-400 italic text-xs">—</span>
-          ),
-      },
-      {
-        key: "material_group_name",
-        label: "Material Group",
-        minWidth: "140px",
-        render: (row) =>
-          row.material_group_name ? (
-            <span className="text-slate-700">{row.material_group_name}</span>
           ) : (
             <span className="text-slate-400 italic text-xs">—</span>
           ),

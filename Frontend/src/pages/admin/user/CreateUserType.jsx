@@ -11,7 +11,6 @@ const MODULE_GROUPS = [
     description: "Core configurations, locations, and user types.",
     masters: [
       { key: "user_type",           label: "User Type Master" },
-      { key: "location_type",       label: "Location Type Master" },
       { key: "location",            label: "Location Master" },
       { key: "document",            label: "Document Master" },
       { key: "organization",        label: "Organization Master" },
@@ -23,7 +22,6 @@ const MODULE_GROUPS = [
     icon: "fa-solid fa-industry",
     description: "Manage machines and their specifications.",
     masters: [
-      { key: "machine_type",        label: "Machine Type Master" },
       { key: "machine",             label: "Machine Master" },
     ]
   },
@@ -32,7 +30,6 @@ const MODULE_GROUPS = [
     icon: "fa-solid fa-boxes-stacked",
     description: "Material groups and specifications.",
     masters: [
-      { key: "material_group",      label: "Material Group Master" },
       { key: "material_type",        label: "Material Type Master" },
       { key: "unit",                label: "Unit Master" },
       { key: "material",            label: "Material Master" },

@@ -32,9 +32,7 @@ function DetailModal({ isOpen, row, onClose }) {
     if (key === "permissions" && Array.isArray(val)) {
       const MASTERS_MAP = {
         user_type: "User Group Master",
-        location_type: "Location Type Master",
         location: "Location Master",
-        material_group: "Material Group Master",
         unit: "Unit Master",
         material: "Material Master",
         vendor: "Vendor Master",

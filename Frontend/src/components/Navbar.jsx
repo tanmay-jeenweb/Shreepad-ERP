@@ -179,15 +179,6 @@ export default function Navbar({ title }) {
             desc: "Configure access roles & permissions"
         },
         {
-            name: "Location Types Master",
-            path: "/admin/location-types",
-            masterKey: "location_type",
-            icon: "fa-solid fa-layer-group",
-            color: "bg-amber-50 text-amber-600 border border-amber-100/50",
-            activeColor: "bg-amber-100 text-amber-700",
-            desc: "Define hierarchical levels & categories"
-        },
-        {
             name: "Location Master",
             path: "/admin/locations",
             masterKey: "location",
@@ -197,15 +188,6 @@ export default function Navbar({ title }) {
             desc: "Track physical sites & addresses"
         },
         {
-            name: "Machine Types Master",
-            path: "/admin/machine-types",
-            masterKey: "machine_type",
-            icon: "fa-solid fa-gears",
-            color: "bg-cyan-50 text-cyan-600 border border-cyan-100/50",
-            activeColor: "bg-cyan-100 text-cyan-700",
-            desc: "Classify industrial equipment configurations"
-        },
-        {
             name: "Machine Master",
             path: "/admin/machines",
             masterKey: "machine",
@@ -213,16 +195,6 @@ export default function Navbar({ title }) {
             color: "bg-fuchsia-50 text-fuchsia-600 border border-fuchsia-100/50",
             activeColor: "bg-fuchsia-100 text-fuchsia-700",
             desc: "Register & monitor machine operations"
-        },
-
-        {
-            name: "Material Group Master",
-            path: "/admin/material-groups",
-            masterKey: "material_group",
-            icon: "fa-solid fa-boxes-stacked",
-            color: "bg-teal-50 text-teal-600 border border-teal-100/50",
-            activeColor: "bg-teal-100 text-teal-700",
-            desc: "Manage material group names and details"
         },
         {
             name: "Material Type Master",
@@ -325,15 +297,6 @@ export default function Navbar({ title }) {
             color: "bg-emerald-50 text-emerald-600 border border-emerald-100/50",
             activeColor: "bg-emerald-100 text-emerald-700",
             desc: "Manage organization details and settings"
-        },
-        {
-            name: "Setting Master",
-            path: "/admin/settings",
-            masterKey: "setting_master",
-            icon: "fa-solid fa-sliders",
-            color: "bg-indigo-50 text-indigo-600 border border-indigo-100/50",
-            activeColor: "bg-indigo-100 text-indigo-700",
-            desc: "Configure ID prefixes for GRN, Purchase Order & more"
         }
     ];
 
@@ -356,11 +319,12 @@ export default function Navbar({ title }) {
     });
 
     const availableProductionLinks = [
+        { name: "Production", path: "/production", icon: "fa-solid fa-industry", masterKey: "bom" },
+        { name: "Work Order", path: "/sales/work-orders", icon: "fa-solid fa-file-signature", masterKey: "work_order" },
         { name: "Bill of Material", path: "/production/bom", icon: "fa-solid fa-file-lines", masterKey: "bom" }
     ].filter(m => isAdmin || hasPermission(m.masterKey, "read"));
 
     const availableSalesLinks = [
-        { name: "Work Order", path: "/sales/work-orders", icon: "fa-solid fa-file-signature", masterKey: "work_order" }
     ].filter(m => isAdmin || hasPermission(m.masterKey, "read"));
 
     const availableApprovalLinks = [];
@@ -631,7 +595,7 @@ export default function Navbar({ title }) {
                             <div className="relative w-full" id="production-dropdown">
                                 <button
                                     onClick={toggleProduction}
-                                    className={`flex items-center justify-between w-full px-3.5 py-2.5 text-xs sm:text-sm border border-white/10 rounded-none hover:bg-white/5 focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer whitespace-nowrap ${location.pathname.startsWith("/production/") ? "bg-white/10" : "bg-[#369ACF]"}`}
+                                    className={`flex items-center justify-between w-full px-3.5 py-2.5 text-xs sm:text-sm border border-white/10 rounded-none hover:bg-white/5 focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer whitespace-nowrap ${location.pathname.startsWith("/production/") || availableProductionLinks.some(m => location.pathname.startsWith(m.path)) ? "bg-white/10" : "bg-[#369ACF]"}`}
                                 >
                                     <span className="font-semibold text-white truncate">Production</span>
                                     <svg

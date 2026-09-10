@@ -3,9 +3,7 @@
     // ─── Masters list (must match frontend) ─────────────────────────────────────
     const MASTERS = [
         { key: 'user_type', label: 'User Type Master' },
-        { key: 'location_type', label: 'Location Type Master' },
         { key: 'location', label: 'Location Master' },
-        { key: 'machine_type', label: 'Machine Type Master' },
         { key: 'machine', label: 'Machine Master' },
         { key: 'mould', label: 'Mould Master' },
 

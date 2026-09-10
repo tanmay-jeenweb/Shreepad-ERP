@@ -2,20 +2,32 @@ import { useEffect, useState, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import { createMaterial, updateMaterial, getMaterialById } from "../../api/materialApi";
-import { getMaterialGroups } from "../../api/materialGroupApi";
 import { getMaterialTypes } from "../../api/materialTypeApi";
 import { getUnits } from "../../api/unitApi";
 import toast from "react-hot-toast";
 
 
+const DEFAULT_PREFIXES = {
+  "Finished Goods": "FG",
+  "Semi Finished Goods": "SFG",
+  "Raw Materials": "RM",
+  "Store Consumed": "SC",
+  "Packaging Material": "PM",
+  "Waste and scrap": "WS",
+  "Capital Equipment": "CE",
+  "Assembly Item": "AI",
+  "Uniform and other Item": "UI",
+  "Service": "SRV",
+  "Other": "OTH",
+};
+
 const emptyForm = {
   materialCode: "",
-  code: "",
   materialName: "",
   unitId: "",
   hsnCode: "",
-  materialGroupId: "",
   materialType: "",
+  prefix: "",
   gstPercent: "",
   selfVal: "",
   purchaseVal: "",
@@ -31,7 +43,6 @@ export default function CreateMaterial() {
   const isEditMode = Boolean(editId);
 
   const [form, setForm] = useState(emptyForm);
-  const [groups, setGroups] = useState([]);
   const [materialTypes, setMaterialTypes] = useState([]);
   const [units, setUnits] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -43,12 +54,10 @@ export default function CreateMaterial() {
       setLoading(true);
       try {
         // Fetch dropdowns
-        const [groupRes, unitRes, typeRes] = await Promise.all([
-          getMaterialGroups(),
+        const [unitRes, typeRes] = await Promise.all([
           getUnits(),
           getMaterialTypes(),
         ]);
-        setGroups(groupRes.data?.data || []);
         setUnits(unitRes.data?.data || []);
         setMaterialTypes(typeRes.data?.data || []);
 
@@ -59,12 +68,11 @@ export default function CreateMaterial() {
           if (mat) {
             setForm({
               materialCode: mat.material_code || "",
-              code: mat.code || "",
               materialName: mat.material_name || "",
               unitId: mat.unit_id ? String(mat.unit_id) : "",
               hsnCode: mat.hsn_code || "",
-              materialGroupId: mat.material_group_id ? String(mat.material_group_id) : "",
               materialType: mat.material_type || "",
+              prefix: mat.prefix || (mat.material_type ? DEFAULT_PREFIXES[mat.material_type] || "" : ""),
               gstPercent: mat.gst_percent || "",
               selfVal: mat.self_val !== null && mat.self_val !== undefined ? String(mat.self_val) : "",
               purchaseVal: mat.purchase_val !== null && mat.purchase_val !== undefined ? String(mat.purchase_val) : "",
@@ -90,7 +98,24 @@ export default function CreateMaterial() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    if (name === "materialType") {
+      setForm((prev) => {
+        const prevDefault = DEFAULT_PREFIXES[prev.materialType] || "";
+        const shouldAutoSetPrefix = !prev.prefix || prev.prefix === prevDefault;
+        const newPrefix = shouldAutoSetPrefix
+          ? (DEFAULT_PREFIXES[value] || "")
+          : prev.prefix;
+        return {
+          ...prev,
+          materialType: value,
+          prefix: newPrefix,
+        };
+      });
+    } else if (name === "prefix") {
+      setForm((prev) => ({ ...prev, prefix: value.toUpperCase() }));
+    } else {
+      setForm((prev) => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -105,12 +130,8 @@ export default function CreateMaterial() {
       return;
     }
 
-    if (!form.code || !form.code.trim()) {
-      toast.error("3-digit Code is required.");
-      return;
-    }
-    if (!/^\d{3}$/.test(form.code.trim())) {
-      toast.error("Code must be exactly 3 numeric digits.");
+    if (form.materialType && !form.prefix.trim()) {
+      toast.error(`${form.materialType} Prefix is required.`);
       return;
     }
 
@@ -118,11 +139,10 @@ export default function CreateMaterial() {
     try {
       const payload = {
         materialCode: form.materialCode.trim(),
-        code: form.code ? form.code.trim() : null,
+        prefix: form.prefix ? form.prefix.trim().toUpperCase() : null,
         materialName: form.materialName.trim(),
         unitId: form.unitId ? Number(form.unitId) : null,
         hsnCode: form.hsnCode.trim() || null,
-        materialGroupId: form.materialGroupId ? Number(form.materialGroupId) : null,
         materialType: form.materialType || null,
         gstPercent: form.gstPercent.trim() || null,
         selfVal: form.selfVal !== "" ? Number(form.selfVal) : null,
@@ -211,24 +231,6 @@ export default function CreateMaterial() {
                 />
               </div>
 
-              {/* 3-Digit Code */}
-              <div>
-                <label className={labelCls}>
-                  Code <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="code"
-                  value={form.code}
-                  onChange={handleChange}
-                  placeholder="e.g. 042"
-                  maxLength={3}
-                  pattern="\d{3}"
-                  className={inputCls}
-                  required
-                />
-              </div>
-
               {/* Material Name */}
               <div>
                 <label className={labelCls}>
@@ -275,24 +277,6 @@ export default function CreateMaterial() {
                 />
               </div>
 
-              {/* Material Group */}
-              <div>
-                <label className={labelCls}>Material Group</label>
-                <select
-                  name="materialGroupId"
-                  value={form.materialGroupId}
-                  onChange={handleChange}
-                  className={inputCls}
-                >
-                  <option value="">— Select Material Group —</option>
-                  {groups.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.material_group_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
               {/* Material Type */}
               <div>
                 <label className={labelCls}>Material Type</label>
@@ -310,6 +294,28 @@ export default function CreateMaterial() {
                   ))}
                 </select>
               </div>
+
+              {/* Prefix (Appears when Material Type is selected) */}
+              {form.materialType && (
+                <div>
+                  <label className={labelCls}>
+                    {form.materialType} Prefix <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="prefix"
+                    value={form.prefix}
+                    onChange={handleChange}
+                    placeholder={`e.g. ${DEFAULT_PREFIXES[form.materialType] || "FG"}`}
+                    maxLength={10}
+                    className={`${inputCls} font-mono uppercase`}
+                    required
+                  />
+                  <p className="mt-1 text-xs text-slate-400">
+                    Prefix used for internal batch numbers for this material.
+                  </p>
+                </div>
+              )}
 
               {/* Moulds Selection (Conditional) */}
 

@@ -3,15 +3,15 @@ const { createAuditLog } = require("../models/auditLogModel.js");
 
 const addLocation = async (req, res) => {
   try {
-    const { locationName, address, locationPlantNo, plantTypeId, plantAddress } = req.body;
+    const { locationName, address, locationPlantNo, plantAddress } = req.body;
     const addedBy = req.user.id;
     const deviceId = req.headers["x-device-id"] || req.headers["device-id"] || "Unknown";
 
-    if (!locationName || !plantTypeId) {
-      return res.status(400).json({ message: "Location name and plant type are required" });
+    if (!locationName) {
+      return res.status(400).json({ message: "Location name is required" });
     }
 
-    const result = await createLocation(locationName, address, locationPlantNo, plantTypeId, plantAddress, addedBy, deviceId);
+    const result = await createLocation(locationName, address, locationPlantNo, plantAddress, addedBy, deviceId);
     await createAuditLog(
         addedBy,
         req.user?.name || req.user?.username || 'Unknown',
@@ -24,7 +24,6 @@ const addLocation = async (req, res) => {
             location_name: locationName,
             address,
             location_plant_no: locationPlantNo,
-            plant_type_id: plantTypeId,
             plant_address: plantAddress,
             added_by: addedBy,
             device_id: deviceId
@@ -61,10 +60,10 @@ const getAllLocationsController = async (req, res) => {
 const updateLocationController = async (req, res) => {
   try {
     const { id } = req.params;
-    const { locationName, address, locationPlantNo, plantTypeId, plantAddress } = req.body;
+    const { locationName, address, locationPlantNo, plantAddress } = req.body;
 
-    if (!locationName || !plantTypeId) {
-      return res.status(400).json({ message: "Location name and plant type are required" });
+    if (!locationName) {
+      return res.status(400).json({ message: "Location name is required" });
     }
 
     const deviceId = req.headers["x-device-id"] || req.headers["device-id"] || "Unknown";
@@ -73,7 +72,7 @@ const updateLocationController = async (req, res) => {
       return res.status(404).json({ message: "Location not found" });
     }
 
-    const result = await updateLocation(id, locationName, address, locationPlantNo, plantTypeId, plantAddress);
+    const result = await updateLocation(id, locationName, address, locationPlantNo, plantAddress);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Location not found" });
@@ -91,7 +90,6 @@ const updateLocationController = async (req, res) => {
             location_name: locationName,
             address,
             location_plant_no: locationPlantNo,
-            plant_type_id: plantTypeId,
             plant_address: plantAddress
         }
     );

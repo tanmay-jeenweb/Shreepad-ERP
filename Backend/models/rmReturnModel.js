@@ -1,5 +1,4 @@
 const db = require('../config/db.js');
-const { getSettings } = require('./settingMasterModel.js');
 const { getNextSequence } = require('./batchSequenceModel.js');
 
 const createRmReturnsTable = async () => {
@@ -65,38 +64,38 @@ const generateReturnNo = async (connection) => {
     return `${prefix}${String(seq).padStart(4, '0')}`;
 };
 
-const mapMaterialTypeToPrefixKey = (type) => {
+const mapMaterialTypeToDefaultPrefix = (type) => {
     switch (type) {
-        case 'Finished Goods': return 'prefix_finished_goods';
-        case 'Semi Finished Goods': return 'prefix_semi_finished_goods';
-        case 'Raw Materials': return 'prefix_raw_materials';
-        case 'Store Consumed': return 'prefix_store_consumed';
-        case 'Packaging Material': return 'prefix_packaging_material';
-        case 'Waste and scrap': return 'prefix_waste_and_scrap';
-        case 'Capital Equipment': return 'prefix_capital_equipment';
-        case 'Assembly Item': return 'prefix_assembly_item';
-        case 'Uniform and other Item': return 'prefix_uniform_and_other';
-        case 'Service': return 'prefix_service';
-        case 'Other': return 'prefix_other';
-        default: return 'prefix_other';
+        case 'Finished Goods': return 'FG';
+        case 'Semi Finished Goods': return 'SFG';
+        case 'Raw Materials': return 'RM';
+        case 'Store Consumed': return 'SC';
+        case 'Packaging Material': return 'PM';
+        case 'Waste and scrap': return 'WS';
+        case 'Capital Equipment': return 'CE';
+        case 'Assembly Item': return 'AI';
+        case 'Uniform and other Item': return 'UI';
+        case 'Service': return 'SRV';
+        case 'Other': return 'OTH';
+        default: return 'OTH';
     }
 };
 
-const generateInternalBatchNumber = async (connection, materialId, settings) => {
+const generateInternalBatchNumber = async (connection, materialId) => {
     if (!materialId) return null;
-    const [matRows] = await connection.execute('SELECT code, material_type FROM materials WHERE id = ?', [materialId]);
+    const [matRows] = await connection.execute('SELECT material_code, material_type, prefix FROM materials WHERE id = ?', [materialId]);
     if (matRows.length === 0) return null;
     const mat = matRows[0];
-    if (!mat.code) return null; // No code, no batch number
 
-    const prefixKey = mapMaterialTypeToPrefixKey(mat.material_type);
-    const prefix = settings ? (settings[prefixKey] || 'OTH') : 'OTH';
+    const defaultPrefix = mapMaterialTypeToDefaultPrefix(mat.material_type);
+    const prefix = mat.prefix || defaultPrefix;
 
-    const year = (settings && settings.batch_year) ? settings.batch_year : new Date().getFullYear().toString().slice(-2);
+    const year = new Date().getFullYear().toString().slice(-2);
 
-    const seq = await getNextSequence(connection, mat.code, year);
+    const seqKey = prefix || mat.material_code || String(materialId);
+    const seq = await getNextSequence(connection, seqKey, year);
 
-    return `-${prefix}${mat.code}${year}${String(seq).padStart(4, '0')}`;
+    return `-${prefix}${year}${String(seq).padStart(4, '0')}`;
 };
 
 const createRmReturn = async (data, addedBy) => {
@@ -122,8 +121,7 @@ const createRmReturn = async (data, addedBy) => {
         const locationName = locRows[0].location_name;
 
         // 4. Generate internal batch number
-        const settings = await getSettings();
-        const internalBatchNumber = await generateInternalBatchNumber(connection, data.material_id, settings);
+        const internalBatchNumber = await generateInternalBatchNumber(connection, data.material_id);
 
         // 5. Insert RM Return record
         const insertQuery = `

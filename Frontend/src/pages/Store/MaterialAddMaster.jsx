@@ -77,6 +77,18 @@ export default function MaterialAddMaster() {
             render: (row) => <span className="text-slate-600">{row.location_name || "—"}</span>,
         },
         {
+            key: "vendor_name",
+            label: "Vendor",
+            minWidth: "150px",
+            render: (row) => <span className="text-slate-700 font-medium">{row.vendor_name || "—"}</span>,
+        },
+        {
+            key: "challan_number",
+            label: "Challan #",
+            minWidth: "120px",
+            render: (row) => <span className="text-slate-600">{row.challan_number || "—"}</span>,
+        },
+        {
             key: "status",
             label: "Status",
             minWidth: "120px",

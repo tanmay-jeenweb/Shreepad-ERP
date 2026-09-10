@@ -13,13 +13,9 @@ const addMachine = async (req, res) => {
         const {
             machineNumber,
             name,
-            machineTypeId,
             capacity,
             locationId,
-            companyName,
             outgoingJobWork,
-            machineShift,
-            maintenance,
             active
         } = req.body;
 
@@ -33,13 +29,9 @@ const addMachine = async (req, res) => {
         const result = await createMachine(
             machineNumber,
             name,
-            machineTypeId || null,
             capacity || null,
             locationId || null,
-            companyName || null,
             !!outgoingJobWork,
-            machineShift || null,
-            maintenance !== undefined ? maintenance : false,
             addedBy,
             deviceId,
             active !== undefined ? active : true
@@ -56,13 +48,9 @@ const addMachine = async (req, res) => {
                 id: result.insertId,
                 machine_number: machineNumber,
                 name,
-                machine_type_id: machineTypeId || null,
                 capacity: capacity || null,
                 location_id: locationId || null,
-                company_name: companyName || null,
                 outgoing_job_work: !!outgoingJobWork,
-                machine_shift: machineShift || null,
-                maintenance: maintenance !== undefined ? maintenance : false,
                 added_by: addedBy,
                 device_id: deviceId
             }
@@ -106,13 +94,9 @@ const updateMachineController = async (req, res) => {
         const {
             machineNumber,
             name,
-            machineTypeId,
             capacity,
             locationId,
-            companyName,
             outgoingJobWork,
-            machineShift,
-            maintenance,
             active
         } = req.body;
 
@@ -126,13 +110,9 @@ const updateMachineController = async (req, res) => {
             id,
             machineNumber,
             name,
-            machineTypeId || null,
             capacity || null,
             locationId || null,
-            companyName || null,
             !!outgoingJobWork,
-            machineShift || null,
-            maintenance !== undefined ? maintenance : false,
             active !== undefined ? !!active : true
         );
 
@@ -147,13 +127,9 @@ const updateMachineController = async (req, res) => {
                 ...beforeData,
                 machine_number: machineNumber,
                 name,
-                machine_type_id: machineTypeId || null,
                 capacity: capacity || null,
                 location_id: locationId || null,
-                company_name: companyName || null,
                 outgoing_job_work: !!outgoingJobWork,
-                machine_shift: machineShift || null,
-                maintenance: maintenance !== undefined ? maintenance : false,
                 active: active !== undefined ? !!active : true
             }
         );

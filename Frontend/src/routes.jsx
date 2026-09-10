@@ -7,10 +7,8 @@ import PendingApproval from "./pages/PendingApproval";
 import UserHome from "./pages/user/UserHome";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import UserGroupMaster from "./pages/admin/user/UserGroupMaster";
-import LocationTypeMaster from "./pages/admin/location/LocationTypeMaster";
 import LocationMaster from "./pages/admin/location/LocationMaster";
 import CreateLocation from "./pages/admin/location/CreateLocation";
-import MachineTypeMaster from "./pages/admin/machine/MachineTypeMaster";
 import CreateUser from "./pages/admin/user/CreateUser";
 import MachineMaster from "./pages/admin/machine/MachineMaster";
 import CreateMachine from "./pages/admin/machine/CreateMachine";
@@ -23,7 +21,6 @@ import CreateCustomer from "./pages/admin/customer/CreateCustomer";
 import EditCustomer from "./pages/admin/customer/EditCustomer";
 import CreateUserType from "./pages/admin/user/CreateUserType";
 import Profile from "./pages/Profile";
-import MaterialGroupMaster from "./pages/Item/MaterialGroupMaster";
 import MaterialTypeMaster from "./pages/Item/MaterialTypeMaster";
 import UnitMaster from "./pages/Item/UnitMaster";
 import MaterialMaster from "./pages/Item/MaterialMaster";
@@ -45,13 +42,13 @@ import CreateWorkOrder from "./pages/admin/workOrder/CreateWorkOrder";
 import EditWorkOrder from "./pages/admin/workOrder/EditWorkOrder";
 import BillOfMaterial from "./pages/Production/BillOfMaterial";
 import CreateBOM from "./pages/Production/CreateBOM";
+import ProductionMaster from "./pages/Production/ProductionMaster";
 import PMemoPage from "./pages/Production/PMemoPage";
 import PMRmIssuePage from "./pages/Production/PMRmIssuePage";
 import PMRmReturnPage from "./pages/Production/PMRmReturnPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 import OrganizationDetails from "./pages/admin/organization/OrganizationDetails";
-import SettingMaster from "./pages/admin/settings/SettingMaster";
 import Navbar from "./components/Navbar";
 
 export default function AppRoutes() {
@@ -127,13 +124,6 @@ export default function AppRoutes() {
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="location_type" requiredAction="read" />}>
-                <Route
-                    path="/admin/location-types"
-                    element={<LocationTypeMaster />}
-                />
-            </Route>
-
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="location" requiredAction="read" />}>
                 <Route
                     path="/admin/locations"
@@ -145,13 +135,6 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/locations/create"
                     element={<CreateLocation />}
-                />
-            </Route>
-
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="machine_type" requiredAction="read" />}>
-                <Route
-                    path="/admin/machine-types"
-                    element={<MachineTypeMaster />}
                 />
             </Route>
 
@@ -202,12 +185,7 @@ export default function AppRoutes() {
 
             {/* Sub SD Reason Master removed */}
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="material_group" requiredAction="read" />}>
-                <Route
-                    path="/admin/material-groups"
-                    element={<MaterialGroupMaster />}
-                />
-            </Route>
+            {/* Material Group Master removed */}
 
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="material_type" requiredAction="read" />}>
                 <Route
@@ -291,16 +269,6 @@ export default function AppRoutes() {
                 />
             </Route>
 
-            {/* Setting Master */}
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="setting_master" requiredAction="read" />}>
-                <Route
-                    path="/admin/settings"
-                    element={<SettingMaster />}
-                />
-            </Route>
-
-
-
             <Route element={<ProtectedRoute allowedModule="manufacturing" />}>
                 <Route
                     path="/manufacturing/dashboard"
@@ -347,8 +315,9 @@ export default function AppRoutes() {
                 <Route path="/sales/work-orders/edit/:id" element={<EditWorkOrder />} />
             </Route>
 
-            {/* BOM Routes */}
+            {/* Production Routes */}
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="bom" requiredAction="read" />}>
+                <Route path="/production" element={<ProductionMaster />} />
                 <Route path="/production/bom" element={<BillOfMaterial />} />
             </Route>
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="bom" requiredAction="read" />}>

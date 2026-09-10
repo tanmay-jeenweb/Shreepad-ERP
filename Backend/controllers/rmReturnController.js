@@ -15,12 +15,6 @@ const createRmReturnHandler = async (req, res) => {
             quantity
         } = req.body;
 
-        if (!job_party_id) {
-            return res.status(400).json({
-                success: false,
-                message: "Job of Party is required for raw material returns."
-            });
-        }
 
         const addedBy = req.user.id;
         const result = await createRmReturn({
