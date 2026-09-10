@@ -46,6 +46,7 @@ import ProductionMaster from "./pages/Production/ProductionMaster";
 import PMemoPage from "./pages/Production/PMemoPage";
 import PMRmIssuePage from "./pages/Production/PMRmIssuePage";
 import PMRmReturnPage from "./pages/Production/PMRmReturnPage";
+import PMProductionPage from "./pages/Production/PMProductionPage";
 import WorkshopEntryMaster from "./pages/Production/WorkshopEntryMaster";
 import WorkshopEntryDetails from "./pages/Production/WorkshopEntryDetails";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -328,6 +329,7 @@ export default function AppRoutes() {
                 <Route path="/production/p-memo/:workOrderItemId" element={<PMemoPage />} />
                 <Route path="/production/p-memo/:workOrderItemId/rm-issue" element={<PMRmIssuePage />} />
                 <Route path="/production/p-memo/:workOrderItemId/rm-return" element={<PMRmReturnPage />} />
+                <Route path="/production/p-memo/:workOrderItemId/production" element={<PMProductionPage />} />
             </Route>
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="bom" requiredAction="write" />}>
                 <Route path="/production/bom/create" element={<CreateBOM />} />
