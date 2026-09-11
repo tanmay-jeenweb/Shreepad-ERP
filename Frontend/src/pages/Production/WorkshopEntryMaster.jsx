@@ -28,33 +28,41 @@ export default function WorkshopEntryMaster() {
     loadData();
   }, []);
 
+  const displayItems = useMemo(() => {
+    return items.filter((it) => Number(it.production_quantity) > 0);
+  }, [items]);
+
   const columns = useMemo(() => {
     return [
-      {
-        key: "p_memo_no",
-        label: "P.Memo No.",
-        minWidth: "150px",
-        render: (row) => (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono bg-indigo-50 text-indigo-700 border border-indigo-200">
-            <i className="fa-solid fa-file-invoice text-[11px]"></i>
-            PM-{String(row.p_memo_no).padStart(4, "0")}
-          </span>
-        ),
-      },
       {
         key: "work_order_no",
         label: "Work Order No.",
         minWidth: "150px",
         render: (row) => (
-          <span className="font-bold font-mono text-slate-800 text-sm">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono bg-indigo-50 text-indigo-700 border border-indigo-200">
+            <i className="fa-solid fa-file-lines text-[11px]"></i>
             WO-{String(row.work_order_no).padStart(4, "0")}
           </span>
         ),
       },
       {
+        key: "work_order_date",
+        label: "Date",
+        minWidth: "110px",
+        render: (row) => {
+          if (!row.work_order_date) return "—";
+          const date = new Date(row.work_order_date);
+          if (isNaN(date.getTime())) return "—";
+          const day = String(date.getDate()).padStart(2, "0");
+          const month = String(date.getMonth() + 1).padStart(2, "0");
+          const year = date.getFullYear();
+          return `${day}/${month}/${year}`;
+        },
+      },
+      {
         key: "material_name",
-        label: "Material",
-        minWidth: "250px",
+        label: "Product / Material",
+        minWidth: "240px",
         render: (row) => (
           <div className="flex flex-col">
             <span className="font-semibold text-slate-800 text-sm">
@@ -67,20 +75,50 @@ export default function WorkshopEntryMaster() {
         ),
       },
       {
+        key: "customer_name",
+        label: "Customer",
+        minWidth: "180px",
+        render: (row) => (
+          <span className="font-semibold text-slate-700 text-sm">
+            {row.customer_name || "—"}
+          </span>
+        ),
+      },
+      {
+        key: "batch_no",
+        label: "Batch No.",
+        minWidth: "120px",
+        render: (row) => (
+          <span className="font-mono text-xs text-slate-700 font-semibold bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+            {row.batch_no || "—"}
+          </span>
+        ),
+      },
+      {
+        key: "production_quantity",
+        label: "Prod Qty",
+        minWidth: "110px",
+        render: (row) => (
+          <span className="font-bold text-indigo-700 text-sm">
+            {Number(row.production_quantity || row.quantity || 0).toLocaleString()}
+          </span>
+        ),
+      },
+      {
         key: "actions",
         label: "Actions",
         sortable: false,
-        minWidth: "120px",
+        minWidth: "140px",
         render: (row) => (
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => navigate(`/production/workshop-entry/${row.pmemo_id}`)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg shadow-sm bg-[#369ACF] hover:bg-[#2583b4] text-white cursor-pointer transition-all active:scale-95"
+              onClick={() => navigate(`/production/workshop-entry/${row.work_order_item_id}`)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg shadow-sm bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer transition-all active:scale-95"
               title="Open Workshop Entry Details"
             >
-              <i className="fa-solid fa-circle-info text-xs"></i>
-              Details
+              <i className="fa-solid fa-screwdriver-wrench text-xs"></i>
+              Workshop Entry
             </button>
           </div>
         ),
@@ -101,10 +139,10 @@ export default function WorkshopEntryMaster() {
         <DataTable
           tableId="workshop_entry_master"
           title="Workshop Entry"
-          data={items}
+          data={displayItems}
           columns={columns}
           loading={loading}
-          searchPlaceholder="Search P-Memo, Work Order, Material..."
+          searchPlaceholder="Search Work Order, Material, Customer, Batch..."
         />
       </main>
     </div>

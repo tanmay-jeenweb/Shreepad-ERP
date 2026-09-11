@@ -42,11 +42,6 @@ import CreateWorkOrder from "./pages/admin/workOrder/CreateWorkOrder";
 import EditWorkOrder from "./pages/admin/workOrder/EditWorkOrder";
 import BillOfMaterial from "./pages/Production/BillOfMaterial";
 import CreateBOM from "./pages/Production/CreateBOM";
-import ProductionMaster from "./pages/Production/ProductionMaster";
-import PMemoPage from "./pages/Production/PMemoPage";
-import PMRmIssuePage from "./pages/Production/PMRmIssuePage";
-import PMRmReturnPage from "./pages/Production/PMRmReturnPage";
-import PMProductionPage from "./pages/Production/PMProductionPage";
 import WorkshopEntryMaster from "./pages/Production/WorkshopEntryMaster";
 import WorkshopEntryDetails from "./pages/Production/WorkshopEntryDetails";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -320,16 +315,10 @@ export default function AppRoutes() {
 
             {/* Production Routes */}
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="bom" requiredAction="read" />}>
-                <Route path="/production" element={<ProductionMaster />} />
+                <Route path="/production" element={<Navigate to="/production/workshop-entry" replace />} />
                 <Route path="/production/bom" element={<BillOfMaterial />} />
                 <Route path="/production/workshop-entry" element={<WorkshopEntryMaster />} />
-                <Route path="/production/workshop-entry/:pmemoId" element={<WorkshopEntryDetails />} />
-            </Route>
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="bom" requiredAction="read" />}>
-                <Route path="/production/p-memo/:workOrderItemId" element={<PMemoPage />} />
-                <Route path="/production/p-memo/:workOrderItemId/rm-issue" element={<PMRmIssuePage />} />
-                <Route path="/production/p-memo/:workOrderItemId/rm-return" element={<PMRmReturnPage />} />
-                <Route path="/production/p-memo/:workOrderItemId/production" element={<PMProductionPage />} />
+                <Route path="/production/workshop-entry/:workOrderItemId" element={<WorkshopEntryDetails />} />
             </Route>
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="bom" requiredAction="write" />}>
                 <Route path="/production/bom/create" element={<CreateBOM />} />

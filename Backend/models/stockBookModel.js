@@ -143,6 +143,36 @@ const getStockBookRecords = async (filters = {}) => {
             FROM stock_issues si
             JOIN rm_returns r ON si.rm_return_id = r.id
             WHERE si.rm_return_id IS NOT NULL
+
+            UNION ALL
+
+            SELECT 
+                CONCAT('fg_wpl_', wpl.id) AS id,
+                1 AS is_receipt,
+                NULL AS grn_item_id,
+                woi.material_id AS material_id,
+                wpl.log_date AS date,
+                'FG Produced' AS particular,
+                m.material_name AS product,
+                COALESCE(woi.batch_no, CONCAT('WO-', LPAD(wo.work_order_no, 4, '0'))) AS internal_batch_number,
+                '' AS supplier_batch_number,
+                COALESCE(c.customer_name, 'In-House Production') AS vendor_name,
+                NULL AS job_party_name,
+                '' AS invoice_number,
+                CONCAT('WO-', LPAD(wo.work_order_no, 4, '0')) AS grn_number,
+                '' AS p_memo_number,
+                wpl.quantity AS approved_quantity,
+                0 AS issued_quantity,
+                NULL AS vendor_id,
+                NULL AS job_party_id,
+                NULL AS location_id,
+                wpl.created_at AS created_at
+            FROM workshop_production_logs wpl
+            JOIN work_order_items woi ON wpl.work_order_item_id = woi.id
+            JOIN work_orders wo ON woi.work_order_id = wo.id
+            JOIN materials m ON woi.material_id = m.id
+            LEFT JOIN customer_master c ON wo.customer_id = c.id
+            WHERE wpl.to_bom_process_id IS NULL
         ) t
         LEFT JOIN materials m ON t.material_id = m.id
         WHERE 1 = 1

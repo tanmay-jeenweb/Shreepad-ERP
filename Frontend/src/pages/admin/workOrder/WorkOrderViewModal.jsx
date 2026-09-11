@@ -191,13 +191,13 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                                                 type="button"
                                                                 onClick={() => {
                                                                     onClose();
-                                                                    navigate(`/production/p-memo/${item.id}`);
+                                                                    navigate(`/production/workshop-entry/${item.id}`);
                                                                 }}
-                                                                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-white bg-[#369ACF] hover:bg-[#2583b4] rounded-lg shadow-sm transition-all cursor-pointer"
-                                                                title="Create / View Production Memo (P Memo)"
+                                                                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-all cursor-pointer"
+                                                                title="Open Workshop Entry"
                                                             >
-                                                                <i className="fa-solid fa-file-invoice text-[10px]"></i>
-                                                                P Memo
+                                                                <i className="fa-solid fa-screwdriver-wrench text-[10px]"></i>
+                                                                Workshop Entry
                                                             </button>
                                                         ) : (
                                                             <span className="text-slate-400 italic text-xs">No Permission</span>

@@ -29,7 +29,6 @@ const stockBookRoutes = require("./routes/stockBookRoutes.js");
 const stockStatusRoutes = require("./routes/stockStatusRoutes.js");
 const materialAddRoutes = require("./routes/materialAddRoutes.js");
 const workOrderRoutes = require("./routes/workOrderRoutes.js");
-const pmemoRoutes = require("./routes/pmemoRoutes.js");
 const rmReturnRoutes = require("./routes/rmReturnRoutes.js");
 const workshopEntryRoutes = require("./routes/workshopEntryRoutes.js");
 
@@ -59,9 +58,8 @@ const { createStockIssuesTable, ensureStockIssuesColumns } = require("./models/s
 const { createStockStatusTable, ensureStockStatusColumns } = require("./models/stockStatusModel.js");
 const { createMaterialAddTables, ensureMaterialAddColumns } = require("./models/materialAddModel.js");
 const { createWorkOrdersTable, ensureWorkOrderColumns, ensureSortOrderColumn, ensureIsOnHoldColumn, ensurePlannedDateColumns, ensureDelayColumns, ensurePriorityColumn } = require("./models/workOrderModel.js");
-const { createPMemoTable, createPMemoRmIssuesTable, ensurePMemoColumns, ensurePMemoRmIssuesColumns } = require("./models/pmemoModel.js");
 const { createRmReturnsTable } = require("./models/rmReturnModel.js");
-const { createWorkshopEntriesTable } = require("./models/workshopEntryModel.js");
+const { createWorkshopEntriesTable, createWorkshopRmIssuesTable, createWorkshopProductionLogsTable, ensureWorkshopEntryColumns } = require("./models/workshopEntryModel.js");
 
 
 const app = express();
@@ -114,7 +112,6 @@ app.use(["/api/stock-book", "/stock-book"], stockBookRoutes);
 app.use(["/api/stock-status", "/stock-status"], stockStatusRoutes);
 app.use(["/api/material-add", "/material-add"], materialAddRoutes);
 app.use(["/api/work-orders", "/work-orders"], workOrderRoutes);
-app.use(["/api/p-memos", "/p-memos"], pmemoRoutes);
 app.use(["/api/rm-returns", "/rm-returns"], rmReturnRoutes);
 app.use(["/api/workshop-entries", "/workshop-entries"], workshopEntryRoutes);
 
@@ -199,11 +196,10 @@ const startServer = async () => {
         await ensurePlannedDateColumns();
         await ensureDelayColumns();
         await ensurePriorityColumn();
-        await createPMemoTable();
-        await ensurePMemoColumns();
-        await createPMemoRmIssuesTable();
-        await ensurePMemoRmIssuesColumns();
         await createWorkshopEntriesTable();
+        await ensureWorkshopEntryColumns();
+        await createWorkshopRmIssuesTable();
+        await createWorkshopProductionLogsTable();
 
 
         console.log("All database tables are initialized and ready.");

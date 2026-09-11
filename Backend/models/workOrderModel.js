@@ -310,8 +310,8 @@ const getAllWorkOrders = async (includeHeld = false) => {
             bom.product_weight,
             sched.running_start_date,
             sched.running_end_date,
-            pm.p_memo_no AS p_memo_no,
-            pm.date AS p_memo_date
+            we.id AS workshop_entry_id,
+            COALESCE(we.status, 'Pending') AS workshop_status
         FROM work_orders wo
         JOIN work_order_items woi ON woi.work_order_id = wo.id
         LEFT JOIN customer_master c ON wo.customer_id = c.id
@@ -319,7 +319,7 @@ const getAllWorkOrders = async (includeHeld = false) => {
         LEFT JOIN machines mac ON woi.machine_id = mac.id
         LEFT JOIN users u ON wo.added_by = u.id
         LEFT JOIN bill_of_materials bom ON m.id = bom.material_id
-        LEFT JOIN production_memos pm ON woi.id = pm.work_order_item_id
+        LEFT JOIN workshop_entries we ON woi.id = we.work_order_item_id
         LEFT JOIN (
             SELECT 
                 work_order_item_id,

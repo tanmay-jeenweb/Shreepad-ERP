@@ -222,9 +222,9 @@ export default function StockBook() {
             },
             {
                 key: "p_memo_number",
-                label: "P. Memo Number",
-                minWidth: "130px",
-                render: (row) => <span className="text-slate-600 font-mono">{row.p_memo_number || "—"}</span>,
+                label: "Work Order / Ref No.",
+                minWidth: "150px",
+                render: (row) => <span className="text-slate-600 font-mono font-medium">{row.p_memo_number || "—"}</span>,
             },
             {
                 key: "approved_quantity",
@@ -446,11 +446,11 @@ export default function StockBook() {
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
                                     <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">
-                                        P. Memo Number
+                                        Work Order / Ref No.
                                     </label>
                                     <input
                                         type="text"
-                                        placeholder="Optional P.Memo No."
+                                        placeholder="e.g. WO-0001"
                                         value={pMemoNumber}
                                         onChange={(e) => setPMemoNumber(e.target.value)}
                                         className="w-full h-10 px-3 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:border-indigo-600 transition-all font-mono"
