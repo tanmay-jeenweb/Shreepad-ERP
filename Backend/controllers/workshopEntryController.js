@@ -74,7 +74,7 @@ const saveWorkshopEntryController = async (req, res) => {
         const result = await saveWorkshopEntry({
             pmemo_id,
             machine_id: machine_id ? Number(machine_id) : null,
-            packing_method: packing_method !== undefined ? packing_method : null,
+            packing_method: packingMethodTrim(packing_method),
             status: status || 'Pending',
             remarks: remarks || null,
             added_by: addedBy,
@@ -112,121 +112,14 @@ const saveWorkshopEntryController = async (req, res) => {
     }
 };
 
-const getShiftsController = async (req, res) => {
-    try {
-        const { pmemoId } = req.params;
-        const { getShiftsByPMemoId } = require('../models/workshopEntryModel.js');
-        const shifts = await getShiftsByPMemoId(pmemoId);
-        res.status(200).json({
-            success: true,
-            data: shifts
-        });
-    } catch (error) {
-        console.error('Error fetching workshop shifts:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch workshop shifts'
-        });
-    }
-};
-
-const saveShiftController = async (req, res) => {
-    try {
-        const addedBy = req.user.id;
-        const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
-        const { pmemoId } = req.params;
-        const { saveWorkshopShift } = require('../models/workshopEntryModel.js');
-
-        const result = await saveWorkshopShift({
-            ...req.body,
-            pmemo_id: req.body.pmemo_id || pmemoId,
-            added_by: addedBy,
-            device_id: deviceId
-        });
-
-        res.status(200).json({
-            success: true,
-            message: 'Shift saved successfully',
-            data: result
-        });
-    } catch (error) {
-        console.error('Error saving shift:', error);
-        res.status(500).json({
-            success: false,
-            message: error.message || 'Failed to save shift'
-        });
-    }
-};
-
-const deleteShiftController = async (req, res) => {
-    try {
-        const { shiftId } = req.params;
-        const { deleteWorkshopShift } = require('../models/workshopEntryModel.js');
-        await deleteWorkshopShift(shiftId);
-        res.status(200).json({
-            success: true,
-            message: 'Shift deleted successfully'
-        });
-    } catch (error) {
-        console.error('Error deleting shift:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to delete shift'
-        });
-    }
-};
-
-const saveShiftLogController = async (req, res) => {
-    try {
-        const addedBy = req.user.id;
-        const { shiftId } = req.params;
-        const { saveShiftHourlyLog } = require('../models/workshopEntryModel.js');
-
-        const result = await saveShiftHourlyLog({
-            ...req.body,
-            shift_id: shiftId,
-            added_by: addedBy
-        });
-
-        res.status(200).json({
-            success: true,
-            message: 'Hourly log saved successfully',
-            data: result
-        });
-    } catch (error) {
-        console.error('Error saving shift hourly log:', error);
-        res.status(500).json({
-            success: false,
-            message: error.message || 'Failed to save shift log'
-        });
-    }
-};
-
-const deleteShiftLogController = async (req, res) => {
-    try {
-        const { logId } = req.params;
-        const { deleteShiftHourlyLog } = require('../models/workshopEntryModel.js');
-        await deleteShiftHourlyLog(logId);
-        res.status(200).json({
-            success: true,
-            message: 'Hourly log deleted successfully'
-        });
-    } catch (error) {
-        console.error('Error deleting shift log:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to delete shift log'
-        });
-    }
+const packingMethodTrim = (val) => {
+    if (val === undefined || val === null) return null;
+    if (typeof val === 'string') return val.trim();
+    return String(val);
 };
 
 module.exports = {
     getAllWorkshopEntriesController,
     getWorkshopEntryDetailsController,
-    saveWorkshopEntryController,
-    getShiftsController,
-    saveShiftController,
-    deleteShiftController,
-    saveShiftLogController,
-    deleteShiftLogController
+    saveWorkshopEntryController
 };

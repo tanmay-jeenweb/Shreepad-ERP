@@ -3,7 +3,6 @@ import { useNavigate, useParams } from "react-router-dom";
 import Navbar from "../../../components/Navbar";
 import { getWorkOrderById, updateWorkOrder, getMaterialStock } from "../../../api/workOrderApi";
 import { getMaterials } from "../../../api/materialApi";
-import { getAllMachines } from "../../../api/machineApi";
 import { getBOMs, getBOMByMaterialId } from "../../../api/bomApi";
 import { getJobParties } from "../../../api/jobPartyApi";
 import toast from "react-hot-toast";
@@ -31,7 +30,6 @@ export default function EditWorkOrder() {
   const [items, setItems] = useState([]);
 
   const [materials, setMaterials] = useState([]);
-  const [machines, setMachines] = useState([]);
   const [boms, setBoms] = useState([]);
   const [jobParties, setJobParties] = useState([]);
 
@@ -44,10 +42,9 @@ export default function EditWorkOrder() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [woRes, matRes, machineRes, bomRes, jobPartiesRes] = await Promise.all([
+        const [woRes, matRes, bomRes, jobPartiesRes] = await Promise.all([
           getWorkOrderById(id),
           getMaterials(),
-          getAllMachines(),
           getBOMs(),
           getJobParties()
         ]);
@@ -77,9 +74,6 @@ export default function EditWorkOrder() {
           return isFinishedOrSemi && activeBomMaterialIds.has(Number(m.id));
         });
         setMaterials(filteredMat);
-
-        const machinesList = Array.isArray(machineRes.data) ? machineRes.data : (machineRes.data?.data || []);
-        setMachines(machinesList);
         setJobParties(jobPartiesRes.data?.data || []);
 
         // Reconstruct Finished Goods vs Raw Materials
@@ -100,7 +94,6 @@ export default function EditWorkOrder() {
               batch_no: fgItem.batch_no || "",
               actual_delivery_date: fgItem.actual_delivery_date ? fgItem.actual_delivery_date.substring(0, 10) : "",
               remarks: fgItem.remarks || "",
-              machine_id: fgItem.machine_id || "",
               job_party_id: fgItem.job_party_id || "",
               rawMaterials: []
             };
@@ -164,7 +157,6 @@ export default function EditWorkOrder() {
         material_id: "",
         material_name: "",
         material_code: "",
-        machine_id: "",
         job_party_id: "",
         exp_delivery_date: "",
         batch_no: "",
@@ -181,7 +173,6 @@ export default function EditWorkOrder() {
       material_id: materialId,
       material_name: material ? material.material_name : "",
       material_code: material ? material.material_code : "",
-      machine_id: "",
       job_party_id: "",
       exp_delivery_date: "",
       batch_no: "",
@@ -256,7 +247,6 @@ export default function EditWorkOrder() {
       batch_no: "",
       actual_delivery_date: "",
       remarks: "",
-      machine_id: "",
       job_party_id: ""
     }]);
   };
@@ -424,7 +414,6 @@ export default function EditWorkOrder() {
           material_id: Number(it.material_id),
           quantity: Number(it.quantity),
           production_quantity: Number(it.production_quantity),
-          machine_id: it.machine_id ? Number(it.machine_id) : null,
           exp_delivery_date: it.exp_delivery_date || null,
           batch_no: it.batch_no || null,
           actual_delivery_date: it.actual_delivery_date || null,
@@ -442,7 +431,6 @@ export default function EditWorkOrder() {
                 material_id: Number(rm.materialId),
                 quantity: requiredQty,
                 production_quantity: 0,
-                machine_id: it.machine_id ? Number(it.machine_id) : null,
                 exp_delivery_date: it.exp_delivery_date || null,
                 batch_no: it.batch_no || null,
                 actual_delivery_date: it.actual_delivery_date || null,
@@ -494,7 +482,7 @@ export default function EditWorkOrder() {
               Edit Work Order - WO-{String(workOrder?.work_order_no).padStart(4, "0")}
             </h1>
             <p className="text-sm text-slate-500 mt-1">
-              Modify work order date or items configuration and manage machine scheduling.
+              Modify work order date or items configuration.
             </p>
           </div>
           <button
@@ -580,8 +568,6 @@ export default function EditWorkOrder() {
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                   {items.map((item, idx) => {
-                    const machineName = machines.find(m => String(m.id) === String(item.machine_id))?.name || "";
-
                     return (
                       <tr key={idx} className="hover:bg-slate-50/50">
                         <td className="px-6 py-4">

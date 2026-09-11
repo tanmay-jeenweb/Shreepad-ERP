@@ -10,7 +10,6 @@ const createRmReturnHandler = async (req, res) => {
             return_date,
             material_id,
             job_party_id,
-            grade,
             location_id,
             quantity
         } = req.body;
@@ -22,7 +21,6 @@ const createRmReturnHandler = async (req, res) => {
             return_date,
             material_id,
             job_party_id,
-            grade,
             location_id,
             quantity
         }, addedBy);

@@ -2,7 +2,6 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import { getPMemoDetails } from "../../api/pmemoApi";
-import { getWorkshopShifts } from "../../api/workshopEntryApi";
 import toast from "react-hot-toast";
 
 export default function PMProductionPage() {
@@ -22,18 +21,7 @@ export default function PMProductionPage() {
                 if (res.data?.success && res.data.data) {
                     const data = res.data.data;
                     setPMemoData(data);
-
-                    if (data.id) {
-                        // Also fetch fresh shifts
-                        const shiftRes = await getWorkshopShifts(data.id);
-                        if (shiftRes.data?.success) {
-                            setShifts(shiftRes.data.data || []);
-                        } else {
-                            setShifts(data.shifts || []);
-                        }
-                    } else {
-                        setShifts(data.shifts || []);
-                    }
+                    setShifts(data.shifts || []);
                 } else {
                     toast.error("Failed to load Production Memo details");
                 }
@@ -153,7 +141,7 @@ export default function PMProductionPage() {
                     </div>
 
                     {/* Meta Specifications Grid */}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 text-xs">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 text-xs">
                         <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/60">
                             <span className="block text-slate-400 font-bold uppercase text-[10px] tracking-wider mb-1">Product</span>
                             <span className="font-bold text-slate-900 truncate block" title={pMemoData?.material_name}>
@@ -164,12 +152,6 @@ export default function PMProductionPage() {
                             <span className="block text-slate-400 font-bold uppercase text-[10px] tracking-wider mb-1">Item Code</span>
                             <span className="font-bold font-mono text-slate-800">
                                 {pMemoData?.item_code || "—"}
-                            </span>
-                        </div>
-                        <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/60">
-                            <span className="block text-slate-400 font-bold uppercase text-[10px] tracking-wider mb-1">Machine</span>
-                            <span className="font-bold text-slate-800">
-                                {pMemoData?.machine_name || "—"}
                             </span>
                         </div>
                         <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/60">

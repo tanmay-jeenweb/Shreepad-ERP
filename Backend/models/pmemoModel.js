@@ -106,7 +106,6 @@ const getPMemoByWorkOrderItemId = async (workOrderItemId) => {
             pm.p_memo_no,
             pm.date AS p_memo_date,
             pm.is_final_submitted,
-            mac.name AS machine_name,
             m.material_name,
             m.material_code AS item_code,
             bom.product_weight AS unit_weight,
@@ -117,7 +116,6 @@ const getPMemoByWorkOrderItemId = async (workOrderItemId) => {
         FROM work_order_items woi
         LEFT JOIN work_orders wo ON woi.work_order_id = wo.id
         LEFT JOIN production_memos pm ON woi.id = pm.work_order_item_id
-        LEFT JOIN machines mac ON woi.machine_id = mac.id
         LEFT JOIN materials m ON woi.material_id = m.id
         LEFT JOIN bill_of_materials bom ON m.id = bom.material_id
         WHERE woi.id = ?
@@ -133,19 +131,15 @@ const getPMemoRmIssues = async (pmemoId) => {
             pri.pmemo_id,
             pri.lot,
             pri.date,
-            pri.remark,
             pri.material_id,
             m.material_name AS rm_type_name,
-            pri.grade,
             pri.internal_batch_number,
             pri.grn_item_id,
             pri.ma_item_id,
             pri.rm_return_id,
             pri.stock_issue_id,
             pri.qty,
-            pri.total_quantity,
-            COALESCE(ss.mfi, '') AS mfi,
-            '' AS supplier_batch_number
+            pri.total_quantity
         FROM pmemo_rm_issues pri
         JOIN materials m ON pri.material_id = m.id
         LEFT JOIN stock_status ss ON pri.internal_batch_number = ss.internal_batch_number
@@ -156,15 +150,13 @@ const getPMemoRmIssues = async (pmemoId) => {
     return rows;
 };
 
-const getAvailableBatches = async (materialId, grade) => {
+const getAvailableBatches = async (materialId) => {
     const query = `
         SELECT 
             ss.internal_batch_number,
             NULL AS grn_item_id,
             mai.id AS ma_item_id,
             r.id AS rm_return_id,
-            '' AS supplier_batch_number,
-            COALESCE(ss.mfi, '') AS mfi,
             (COALESCE(r.quantity, ss.total_kg) - COALESCE(issue_ma_agg.issued_qty, issue_rtr_agg.issued_qty, 0)) AS available_qty
         FROM stock_status ss
         LEFT JOIN material_add_items mai ON ss.internal_batch_number = mai.internal_batch_number AND ss.ma_id IS NOT NULL
@@ -179,10 +171,10 @@ const getAvailableBatches = async (materialId, grade) => {
             FROM stock_issues WHERE rm_return_id IS NOT NULL
             GROUP BY rm_return_id
         ) issue_rtr_agg ON r.id = issue_rtr_agg.rm_return_id
-        WHERE ss.material_id = ? AND (ss.rm_grade = ? OR ? = '')
+        WHERE ss.material_id = ?
         HAVING available_qty > 0
     `;
-    const [rows] = await db.execute(query, [materialId, grade || '', grade || '']);
+    const [rows] = await db.execute(query, [materialId]);
     return rows;
 };
 
@@ -266,6 +258,7 @@ const createPMemo = async (workOrderItemId, date, optionsOrFinalSubmitted = 0, r
 
             const formattedMemoNo = `PM-${String(memoNo).padStart(4, '0')}`;
             for (const issue of issuesToProcess) {
+                const issueQty = Number(issue.qty) || 0;
                 const insertStockIssueQuery = `
                     INSERT INTO stock_issues (
                         ma_item_id, rm_return_id, issue_quantity, p_memo_number, issue_date, remarks, removal_type, added_by
@@ -274,10 +267,10 @@ const createPMemo = async (workOrderItemId, date, optionsOrFinalSubmitted = 0, r
                 const [stockIssueResult] = await connection.execute(insertStockIssueQuery, [
                     issue.ma_item_id || null,
                     issue.rm_return_id || null,
-                    Math.floor(Number(issue.lot) || 0) * (Number(issue.qty) || 0),
+                    issueQty,
                     formattedMemoNo,
                     issue.date || date,
-                    issue.remark || null,
+                    null,
                     userAddedBy || null
                 ]);
                 const stockIssueId = stockIssueResult.insertId;
@@ -289,18 +282,18 @@ const createPMemo = async (workOrderItemId, date, optionsOrFinalSubmitted = 0, r
                 `;
                 await connection.execute(insertPmRmIssueQuery, [
                     pmemoId,
-                    Number(issue.lot) || 0,
+                    Number(issue.lot) || 1,
                     issue.date || date,
-                    issue.remark || null,
+                    null,
                     Number(issue.material_id),
-                    issue.grade || '',
+                    '',
                     issue.internal_batch_number,
                     null,
                     issue.ma_item_id || null,
                     issue.rm_return_id || null,
                     stockIssueId,
-                    Number(issue.qty) || 0,
-                    Math.floor(Number(issue.lot) || 0) * (Number(issue.qty) || 0)
+                    issueQty,
+                    issueQty
                 ]);
             }
         }
@@ -331,9 +324,11 @@ const ensurePMemoRmIssuesColumns = async () => {
             console.log(`Added column rm_return_id to pmemo_rm_issues`);
         }
 
-        // Ensure grade is nullable or defaults to empty string
+        // Ensure grade and remark are nullable with safe defaults
         try {
             await db.execute(`ALTER TABLE pmemo_rm_issues MODIFY COLUMN grade VARCHAR(100) NULL DEFAULT ''`);
+            await db.execute(`ALTER TABLE pmemo_rm_issues MODIFY COLUMN remark TEXT NULL DEFAULT NULL`);
+            await db.execute(`ALTER TABLE pmemo_rm_issues MODIFY COLUMN lot DECIMAL(15,4) NULL DEFAULT 1`);
         } catch (e) {
             // Ignore if already modified
         }

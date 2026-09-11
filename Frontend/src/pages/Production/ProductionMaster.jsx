@@ -95,18 +95,6 @@ export default function ProductionMaster() {
         )
       },
       {
-        key: "machine_name",
-        label: "Machine",
-        minWidth: "130px",
-        render: row => row.machine_name ? (
-          <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 text-xs font-semibold">
-            {row.machine_name}
-          </span>
-        ) : (
-          <span className="text-slate-400 italic text-xs">Not Set</span>
-        )
-      },
-      {
         key: "production_quantity",
         label: "Prod Qty",
         minWidth: "110px",

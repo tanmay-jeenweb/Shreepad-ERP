@@ -156,7 +156,6 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Job of Party</th>
                                                 <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Order Qty</th>
                                                 <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Prod Qty</th>
-                                                <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Machine</th>
                                                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Exp. Delivery</th>
                                                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Actual Delivery</th>
                                                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Batch No.</th>
@@ -176,15 +175,6 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                                     </td>
                                                     <td className="px-3 py-2 text-sm text-slate-800 text-right font-medium">{item.quantity}</td>
                                                     <td className="px-3 py-2 text-sm font-bold text-[#369ACF] text-right">{item.production_quantity}</td>
-                                                    <td className="px-3 py-2 text-sm text-slate-800">
-                                                        {item.machine_name ? (
-                                                            <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs font-medium">
-                                                                {item.machine_name}
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-slate-400 italic text-xs">Not Set</span>
-                                                        )}
-                                                    </td>
                                                     <td className="px-3 py-2 text-sm text-slate-700 whitespace-nowrap font-mono text-xs">
                                                         {formatDate(item.exp_delivery_date)}
                                                     </td>

@@ -129,14 +129,13 @@ const createRmReturn = async (data, addedBy) => {
                 return_no, return_date, material_id, material_name, 
                 grade, location_id, location_name, 
                 quantity, internal_batch_number, added_by, pmemo_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)
         `;
         const [result] = await connection.execute(insertQuery, [
             returnNo,
             data.return_date,
             data.material_id,
             materialName,
-            data.grade || null,
             data.location_id,
             locationName,
             data.quantity,
@@ -152,7 +151,7 @@ const createRmReturn = async (data, addedBy) => {
             internal_batch_number: internalBatchNumber,
             material_id: data.material_id,
             material_name: materialName,
-            grade: data.grade || null,
+            grade: null,
             location_name: locationName,
             quantity: data.quantity
         });

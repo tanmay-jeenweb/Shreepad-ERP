@@ -15,7 +15,6 @@ export default function PMRmIssuePage() {
     // P Memo Header details (needed to preserve when saving)
     const [pMemoNo, setPMemoNo] = useState("");
     const [date, setDate] = useState("");
-    const [machineName, setMachineName] = useState("");
     const [materialName, setMaterialName] = useState("");
     const [itemCode, setItemCode] = useState("");
     const [rawMaterialName, setRawMaterialName] = useState("");
@@ -38,27 +37,10 @@ export default function PMRmIssuePage() {
     // New state for submitted chits
     const [submittedChits, setSubmittedChits] = useState([]);
 
-    // Global Lot and Date for all RM issues
-    const [issueLot, setIssueLot] = useState("1");
+    // Date for RM issues
     const [issueDate, setIssueDate] = useState(new Date().toISOString().split("T")[0]);
 
-    const handleLotChange = (val) => {
-        setIssueLot(val);
-        const lotVal = parseFloat(val) > 0 ? parseFloat(val) : (val === "" ? 1 : 0);
-
-        setRmIssues(prev => prev.map((item, idx) => {
-            const rowQty = parseFloat(item.qty) || 0;
-            const totalRequired = lotVal * rowQty;
-            if (totalRequired > item.available_qty) {
-                toast.error(`Row ${idx + 1}: Total quantity (${totalRequired.toFixed(3)} kg) exceeds available stock (${item.available_qty} kg). Adjusting row quantity.`);
-                return {
-                    ...item,
-                    qty: lotVal > 0 ? (item.available_qty / lotVal).toFixed(3) : ""
-                };
-            }
-            return item;
-        }));
-    };    const handlePrint = (lotId) => {
+    const handlePrint = (lotId) => {
         const element = document.getElementById(`chit-${lotId}`);
         if (!element) return;
 
@@ -122,7 +104,6 @@ export default function PMRmIssuePage() {
                         setDate(new Date().toISOString().split("T")[0]);
                     }
 
-                    setMachineName(data.machine_name || "—");
                     setMaterialName(data.material_name || "—");
                     setItemCode(data.item_code || "—");
                     setRawMaterialName(data.raw_material_name || "—");
@@ -136,8 +117,6 @@ export default function PMRmIssuePage() {
                     const computedRequired = uWeight * prodQty;
                     setRmRequired(computedRequired);
 
-                    // Default issueLot to next lot number (starts at 1)
-                    setIssueLot("1");
                     setIssueDate(new Date().toISOString().split("T")[0]);
 
                     // Group saved RM issues by lot to construct submittedChits
@@ -148,30 +127,23 @@ export default function PMRmIssuePage() {
                             grouped[lotNum] = {
                                 lot: lotNum,
                                 date: issue.date ? new Date(issue.date).toISOString().split("T")[0] : "",
-                                remark: issue.remark || "",
                                 rows: []
                             };
                         }
                         grouped[lotNum].rows.push({
-                            remark: issue.remark || "",
                             material_id: issue.material_id || "",
-                            grade: issue.grade || "",
                             internal_batch_number: issue.internal_batch_number || "",
                             grn_item_id: issue.grn_item_id || null,
                             ma_item_id: issue.ma_item_id || null,
                             rm_return_id: issue.rm_return_id || null,
                             qty: issue.qty || "",
                             available_qty: Number(issue.total_quantity) || 0,
-                            mfi: issue.mfi || "",
-                            supplier_batch_number: issue.supplier_batch_number || "",
                             batches: [{
                                 internal_batch_number: issue.internal_batch_number,
                                 available_qty: Number(issue.total_quantity),
                                 grn_item_id: issue.grn_item_id,
                                 ma_item_id: issue.ma_item_id,
-                                rm_return_id: issue.rm_return_id || null,
-                                mfi: issue.mfi || "",
-                                supplier_batch_number: issue.supplier_batch_number || ""
+                                rm_return_id: issue.rm_return_id || null
                             }],
                             loadingBatches: false
                         });
@@ -179,7 +151,6 @@ export default function PMRmIssuePage() {
                     const chits = Object.values(grouped).sort((a, b) => a.lot - b.lot);
                     setSubmittedChits(chits);
                     setRmIssues([]); // Start the active form blank!
-                    setIssueLot(String(chits.length + 1));
 
                     // Display ONLY raw materials configured in the BOM for this product
                     const bomMaterials = data.bomRawMaterials || [];
@@ -208,17 +179,13 @@ export default function PMRmIssuePage() {
         setRmIssues(prev => [
             ...prev,
             {
-                remark: "",
                 material_id: "",
-                grade: "",
                 internal_batch_number: "",
                 grn_item_id: null,
                 ma_item_id: null,
                 rm_return_id: null,
                 qty: "",
                 available_qty: 0,
-                mfi: "",
-                supplier_batch_number: "",
                 batches: [],
                 loadingBatches: false
             }
@@ -236,15 +203,12 @@ export default function PMRmIssuePage() {
         item[field] = value;
 
         if (field === "material_id") {
-            item.grade = "";
             item.internal_batch_number = "";
             item.grn_item_id = null;
             item.ma_item_id = null;
             item.rm_return_id = null;
             item.qty = "";
             item.available_qty = 0;
-            item.mfi = "";
-            item.supplier_batch_number = "";
             item.batches = [];
 
             if (value) {
@@ -252,7 +216,7 @@ export default function PMRmIssuePage() {
                 updated[idx] = item;
                 setRmIssues([...updated]);
                 try {
-                    const res = await getAvailableBatches(value, "");
+                    const res = await getAvailableBatches(value);
                     if (res.data?.success) {
                         item.batches = res.data.data || [];
                     }
@@ -273,8 +237,6 @@ export default function PMRmIssuePage() {
                 item.ma_item_id = null;
                 item.rm_return_id = null;
                 item.available_qty = 0;
-                item.mfi = "";
-                item.supplier_batch_number = "";
                 item.qty = "";
             } else {
                 const batch = item.batches.find(b => b.internal_batch_number === value);
@@ -283,15 +245,11 @@ export default function PMRmIssuePage() {
                     item.ma_item_id = batch.ma_item_id || null;
                     item.rm_return_id = batch.rm_return_id || null;
                     item.available_qty = Number(batch.available_qty) || 0;
-                    item.mfi = batch.mfi || "";
-                    item.supplier_batch_number = batch.supplier_batch_number || "";
                 } else {
                     item.grn_item_id = null;
                     item.ma_item_id = null;
                     item.rm_return_id = null;
                     item.available_qty = 0;
-                    item.mfi = "";
-                    item.supplier_batch_number = "";
                 }
                 item.qty = "";
             }
@@ -299,11 +257,9 @@ export default function PMRmIssuePage() {
 
         if (field === "qty") {
             const val = parseFloat(value) || 0;
-            const currentLot = parseFloat(issueLot) > 0 ? parseFloat(issueLot) : 1;
-            const totalRequired = currentLot * val;
-            if (totalRequired > item.available_qty) {
-                toast.error(`Total quantity (${totalRequired.toFixed(3)} kg) exceeds available stock (${item.available_qty} kg)`);
-                item.qty = currentLot > 0 ? (item.available_qty / currentLot).toFixed(3) : "";
+            if (val > item.available_qty) {
+                toast.error(`Quantity (${val.toFixed(3)} kg) exceeds available stock (${item.available_qty} kg)`);
+                item.qty = item.available_qty > 0 ? String(item.available_qty) : "";
             } else {
                 item.qty = value;
             }
@@ -314,10 +270,6 @@ export default function PMRmIssuePage() {
     };
 
     const validateRmIssues = () => {
-        if (!issueLot || isNaN(parseFloat(issueLot)) || parseFloat(issueLot) <= 0) {
-            toast.error("Please enter a valid Issue Lot.");
-            return false;
-        }
         if (!issueDate) {
             toast.error("Please enter a valid Issue Date.");
             return false;
@@ -343,9 +295,8 @@ export default function PMRmIssuePage() {
                 toast.error(`Row ${i + 1}: Please enter a valid Qty.`);
                 return false;
             }
-            const totalRequired = (parseFloat(issueLot) || 0) * (parseFloat(item.qty) || 0);
-            if (totalRequired > parseFloat(item.available_qty)) {
-                toast.error(`Row ${i + 1}: Total Quantity (${totalRequired.toFixed(3)} kg) exceeds available stock (${item.available_qty} kg).`);
+            if (parseFloat(item.qty) > parseFloat(item.available_qty)) {
+                toast.error(`Row ${i + 1}: Quantity (${parseFloat(item.qty).toFixed(3)} kg) exceeds available stock (${item.available_qty} kg).`);
                 return false;
             }
         }
@@ -375,13 +326,11 @@ export default function PMRmIssuePage() {
             setSaving(true);
 
             // Build cumulative list: previous chits' issues + current active form issues
-            const previousIssues = submittedChits.flatMap(chit => 
+            const previousIssues = submittedChits.flatMap((chit, cIdx) => 
                 chit.rows.map(row => ({
-                    lot: Number(chit.lot),
+                    lot: Number(chit.lot) || (cIdx + 1),
                     date: chit.date,
-                    remark: row.remark || null,
                     material_id: Number(row.material_id),
-                    grade: row.grade || '',
                     internal_batch_number: row.internal_batch_number,
                     grn_item_id: row.grn_item_id || null,
                     ma_item_id: row.ma_item_id || null,
@@ -390,17 +339,12 @@ export default function PMRmIssuePage() {
                 }))
             );
 
-            const intLot = Math.floor(Number(issueLot));
-            const existingForLot = submittedChits.filter(c => Math.floor(Number(c.lot)) === intLot);
-            const nextSuffix = (existingForLot.length + 1) * 0.0001;
-            const uniqueLot = Number((intLot + nextSuffix).toFixed(4));
+            const nextLotNumber = submittedChits.length + 1;
 
             const newIssues = rmIssues.map(item => ({
-                lot: uniqueLot,
+                lot: nextLotNumber,
                 date: issueDate,
-                remark: item.remark || null,
                 material_id: Number(item.material_id),
-                grade: item.grade || '',
                 internal_batch_number: item.internal_batch_number,
                 grn_item_id: item.grn_item_id || null,
                 ma_item_id: item.ma_item_id || null,
@@ -418,20 +362,18 @@ export default function PMRmIssuePage() {
             });
 
             if (target === "final") {
-                toast.success(`Chit for Lot ${intLot} issued successfully!`);
+                toast.success(`Chit #${nextLotNumber} issued successfully!`);
                 // Append new chit to state
                 setSubmittedChits(prev => [
                     ...prev,
                     {
-                        lot: uniqueLot,
+                        lot: nextLotNumber,
                         date: issueDate,
-                        remark: rmIssues[0]?.remark || "",
                         rows: rmIssues.map(item => ({ ...item }))
                     }
                 ]);
                 // Reset form fields
                 setRmIssues([]);
-                setIssueLot(String(submittedChits.length + 2));
                 setIssueDate(new Date().toISOString().split("T")[0]);
             } else {
                 toast.success("Raw Material Issues updated successfully");
@@ -446,8 +388,7 @@ export default function PMRmIssuePage() {
     };
 
     const grandTotalIssuedQty = rmIssues.reduce((sum, item) => {
-        const lotMultiplier = parseFloat(issueLot) > 0 ? parseFloat(issueLot) : (issueLot === "" ? 1 : 0);
-        return sum + (lotMultiplier * (parseFloat(item.qty) || 0));
+        return sum + (parseFloat(item.qty) || 0);
     }, 0);
 
     if (loading) {
@@ -501,14 +442,10 @@ export default function PMRmIssuePage() {
                     )}
 
                     {/* Read-Only Header Summary */}
-                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <span className="block text-[10px] font-bold text-slate-400 uppercase">Item Name</span>
                             <span className="text-xs font-semibold text-slate-700">{materialName}</span>
-                        </div>
-                        <div>
-                            <span className="block text-[10px] font-bold text-slate-400 uppercase">Machine</span>
-                            <span className="text-xs font-semibold text-slate-700">{machineName}</span>
                         </div>
                         <div>
                             <span className="block text-[10px] font-bold text-slate-400 uppercase">Total Qty (Required)</span>
@@ -532,36 +469,18 @@ export default function PMRmIssuePage() {
                                 )}
                             </div>
 
-                            {/* Global Lot and Date Inputs */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
-                                <div>
-                                    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">
-                                        Issue Lot
-                                    </label>
-                                    <input
-                                        type="number"
-                                        step="1"
-                                        min="0"
-                                        value={issueLot}
-                                        onChange={(e) => handleLotChange(e.target.value)}
-                                        disabled={isFinalSubmitted}
-                                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#369ACF]/20 bg-white disabled:bg-slate-50 disabled:text-slate-400"
-                                        placeholder="Enter Lot quantity"
-                                        required
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">
-                                        Issue Date
-                                    </label>
-                                    <DateInput
-                                        value={issueDate}
-                                        min={new Date().toISOString().split("T")[0]}
-                                        onChange={(e) => setIssueDate(e.target.value)}
-                                        disabled={isFinalSubmitted}
-                                        required
-                                    />
-                                </div>
+                            {/* Date Input */}
+                            <div className="max-w-xs bg-slate-50/50 p-4 rounded-xl border border-slate-100">
+                                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">
+                                    Issue Date
+                                </label>
+                                <DateInput
+                                    value={issueDate}
+                                    min={new Date().toISOString().split("T")[0]}
+                                    onChange={(e) => setIssueDate(e.target.value)}
+                                    disabled={isFinalSubmitted}
+                                    required
+                                />
                             </div>
 
                             {rmIssues.length > 0 && (
@@ -570,131 +489,91 @@ export default function PMRmIssuePage() {
                                         <thead>
                                             <tr className="bg-blue-900 border-blue-800">
                                                 <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white whitespace-nowrap w-6">#</th>
-                                                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white whitespace-nowrap min-w-[150px]">Remark</th>
-                                                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white whitespace-nowrap min-w-[180px]">Raw Material</th>
-                                                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white whitespace-nowrap min-w-[150px]">I-Batch</th>
-                                                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white whitespace-nowrap min-w-[120px]">S-Batch</th>
-                                                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white whitespace-nowrap min-w-[90px]">MFI</th>
-                                                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white whitespace-nowrap min-w-[100px]">Qty (kg)</th>
-                                                <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wide text-white whitespace-nowrap min-w-[110px]">Total Qty</th>
+                                                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white whitespace-nowrap min-w-[200px]">Raw Material</th>
+                                                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white whitespace-nowrap min-w-[180px]">I-Batch</th>
+                                                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white whitespace-nowrap min-w-[120px]">Qty (kg)</th>
                                                 <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-white whitespace-nowrap w-10"></th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {rmIssues.map((item, idx) => {
-                                                const lotMultiplier = parseFloat(issueLot) > 0 ? parseFloat(issueLot) : (issueLot === "" ? 1 : 0);
-                                                const totalQty = lotMultiplier * (parseFloat(item.qty) || 0);
-
-                                                return (
-                                                    <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors group">
-                                                        <td className="px-3 py-2.5 text-slate-400 font-mono text-[11px]">{idx + 1}</td>
-                                                        <td className="px-3 py-2.5">
-                                                            <input
-                                                                type="text"
-                                                                value={item.remark}
-                                                                onChange={(e) => handleRowChange(idx, "remark", e.target.value)}
-                                                                readOnly={isFinalSubmitted}
-                                                                className="w-full px-2.5 py-2 border border-slate-200 rounded-lg text-xs bg-white text-slate-800 focus:outline-none font-medium disabled:bg-slate-50 disabled:text-slate-600"
-                                                                placeholder="Remark"
-                                                            />
-                                                        </td>
-                                                        <td className="px-3 py-2.5">
+                                            {rmIssues.map((item, idx) => (
+                                                <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors group">
+                                                    <td className="px-3 py-2.5 text-slate-400 font-mono text-[11px]">{idx + 1}</td>
+                                                    <td className="px-3 py-2.5">
+                                                        <select
+                                                            value={item.material_id}
+                                                            onChange={(e) => handleRowChange(idx, "material_id", e.target.value)}
+                                                            disabled={isFinalSubmitted}
+                                                            className="w-full px-2.5 py-2 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#369ACF]/20 bg-white cursor-pointer disabled:bg-slate-50 disabled:text-slate-400"
+                                                            required
+                                                        >
+                                                            <option value="">
+                                                                {uniqueRmTypes.length === 0 ? "— No BOM materials found —" : "— Select Raw Material —"}
+                                                            </option>
+                                                            {uniqueRmTypes.map(rm => (
+                                                                <option key={rm.material_id} value={rm.material_id}>
+                                                                    {rm.material_name}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    </td>
+                                                    <td className="px-3 py-2.5">
+                                                        <div className="relative">
                                                             <select
-                                                                value={item.material_id}
-                                                                onChange={(e) => handleRowChange(idx, "material_id", e.target.value)}
-                                                                disabled={isFinalSubmitted}
+                                                                value={item.internal_batch_number}
+                                                                onChange={(e) => handleRowChange(idx, "internal_batch_number", e.target.value)}
+                                                                disabled={isFinalSubmitted || !item.material_id || item.loadingBatches}
                                                                 className="w-full px-2.5 py-2 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#369ACF]/20 bg-white cursor-pointer disabled:bg-slate-50 disabled:text-slate-400"
                                                                 required
                                                             >
-                                                                <option value="">
-                                                                    {uniqueRmTypes.length === 0 ? "— No BOM materials found —" : "— Select Raw Material —"}
-                                                                </option>
-                                                                {uniqueRmTypes.map(rm => (
-                                                                    <option key={rm.material_id} value={rm.material_id}>
-                                                                        {rm.material_name}
-                                                                    </option>
-                                                                ))}
-                                                            </select>
-                                                        </td>
-                                                        <td className="px-3 py-2.5">
-                                                            <div className="relative">
-                                                                <select
-                                                                    value={item.internal_batch_number}
-                                                                    onChange={(e) => handleRowChange(idx, "internal_batch_number", e.target.value)}
-                                                                    disabled={isFinalSubmitted || !item.material_id || item.loadingBatches}
-                                                                    className="w-full px-2.5 py-2 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#369ACF]/20 bg-white cursor-pointer disabled:bg-slate-50 disabled:text-slate-400"
-                                                                    required
-                                                                >
-                                                                    {item.loadingBatches ? (
-                                                                        <option value="">Loading...</option>
-                                                                    ) : item.batches.length === 0 ? (
-                                                                        <option value="">No stock</option>
-                                                                    ) : (
-                                                                        <>
-                                                                            <option value="">— Batch —</option>
-                                                                            {item.batches.map((batch, bIdx) => (
-                                                                                <option key={bIdx} value={batch.internal_batch_number}>
-                                                                                    {batch.internal_batch_number} ({Number(batch.available_qty).toFixed(3)} kg)
-                                                                                </option>
-                                                                            ))}
-                                                                        </>
-                                                                    )}
-                                                                </select>
-                                                                {item.material_id && !item.loadingBatches && item.batches.length === 0 && (
-                                                                    <span className="absolute -bottom-4 left-0.5 text-[9px] text-rose-500 font-semibold">
-                                                                        Not Available in Stock
-                                                                    </span>
+                                                                {item.loadingBatches ? (
+                                                                    <option value="">Loading...</option>
+                                                                ) : item.batches.length === 0 ? (
+                                                                    <option value="">No stock</option>
+                                                                ) : (
+                                                                    <>
+                                                                        <option value="">— Batch —</option>
+                                                                        {item.batches.map((batch, bIdx) => (
+                                                                            <option key={bIdx} value={batch.internal_batch_number}>
+                                                                                {batch.internal_batch_number} ({Number(batch.available_qty).toFixed(3)} kg)
+                                                                            </option>
+                                                                        ))}
+                                                                    </>
                                                                 )}
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-3 py-2.5">
-                                                            <input
-                                                                type="text"
-                                                                value={item.supplier_batch_number}
-                                                                readOnly
-                                                                className="w-full px-2.5 py-2 border border-slate-200 rounded-lg text-xs bg-slate-50 text-slate-600 focus:outline-none font-medium"
-                                                                placeholder="-"
-                                                            />
-                                                        </td>
-                                                        <td className="px-3 py-2.5">
-                                                            <input
-                                                                type="text"
-                                                                value={item.mfi}
-                                                                readOnly
-                                                                className="w-full px-2.5 py-2 border border-slate-200 rounded-lg text-xs bg-slate-50 text-slate-600 focus:outline-none font-medium"
-                                                                placeholder="-"
-                                                            />
-                                                        </td>
-                                                        <td className="px-3 py-2.5">
-                                                            <input
-                                                                type="number"
-                                                                step="0.001"
-                                                                min="0"
-                                                                value={item.qty}
-                                                                onChange={(e) => handleRowChange(idx, "qty", e.target.value)}
-                                                                disabled={isFinalSubmitted || !item.internal_batch_number}
-                                                                className="w-full px-2.5 py-2 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#369ACF]/20 bg-white disabled:bg-slate-50 disabled:text-slate-400"
-                                                                placeholder={item.available_qty ? `Max ${Number(item.available_qty).toFixed(3)}` : "Qty"}
-                                                                required
-                                                            />
-                                                        </td>
-                                                        <td className="px-3 py-2.5 text-right font-bold text-slate-800 tabular-nums">
-                                                            {totalQty.toFixed(3)}
-                                                        </td>
-                                                        <td className="px-3 py-2.5 text-center">
-                                                            {!isFinalSubmitted && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => removeItem(idx)}
-                                                                    className="w-7 h-7 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-50 cursor-pointer transition-all mx-auto"
-                                                                >
-                                                                    <i className="fa-solid fa-xmark text-xs"></i>
-                                                                </button>
+                                                            </select>
+                                                            {item.material_id && !item.loadingBatches && item.batches.length === 0 && (
+                                                                <span className="absolute -bottom-4 left-0.5 text-[9px] text-rose-500 font-semibold">
+                                                                    Not Available in Stock
+                                                                </span>
                                                             )}
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-3 py-2.5">
+                                                        <input
+                                                            type="number"
+                                                            step="0.001"
+                                                            min="0"
+                                                            value={item.qty}
+                                                            onChange={(e) => handleRowChange(idx, "qty", e.target.value)}
+                                                            disabled={isFinalSubmitted || !item.internal_batch_number}
+                                                            className="w-full px-2.5 py-2 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#369ACF]/20 bg-white disabled:bg-slate-50 disabled:text-slate-400"
+                                                            placeholder={item.available_qty ? `Max ${Number(item.available_qty).toFixed(3)}` : "Qty"}
+                                                            required
+                                                        />
+                                                    </td>
+                                                    <td className="px-3 py-2.5 text-center">
+                                                        {!isFinalSubmitted && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => removeItem(idx)}
+                                                                className="w-7 h-7 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-50 cursor-pointer transition-all mx-auto"
+                                                            >
+                                                                <i className="fa-solid fa-xmark text-xs"></i>
+                                                            </button>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))}
                                         </tbody>
                                     </table>
                                 </div>

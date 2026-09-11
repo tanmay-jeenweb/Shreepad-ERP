@@ -44,29 +44,16 @@ const getPMemoDetails = async (req, res) => {
                         r.material_id,
                         r.material_name,
                         NULL AS job_party_name,
-                        r.grade,
                         r.location_id,
                         r.location_name,
                         r.quantity,
-                        r.internal_batch_number,
-                        COALESCE(ss.mfi, '') AS mfi,
-                        COALESCE(gi.supplier_batch_number, '') AS supplier_batch_number
+                        r.internal_batch_number
                      FROM rm_returns r
-                     LEFT JOIN stock_status ss ON r.internal_batch_number = ss.internal_batch_number
-                     LEFT JOIN grn_items gi ON ss.internal_batch_number = gi.internal_batch_number AND ss.grn_id IS NOT NULL
                      WHERE r.pmemo_id = ?
                      ORDER BY r.id ASC`,
                     [pmemoId]
                 );
                 rmReturns = returnRows;
-
-                // Fetch Production Shifts and Hourly Logs
-                try {
-                    const { getShiftsByPMemoId } = require('../models/workshopEntryModel.js');
-                    shifts = await getShiftsByPMemoId(pmemoId);
-                } catch (shiftErr) {
-                    console.error('Error fetching shifts for P Memo:', shiftErr);
-                }
             }
         }
 
@@ -171,12 +158,12 @@ const addPMemo = async (req, res) => {
 
 const getAvailableBatchesController = async (req, res) => {
     try {
-        const { material_id, grade } = req.query;
+        const { material_id } = req.query;
         if (!material_id) {
             return res.status(400).json({ success: false, message: 'Material ID is required' });
         }
         const { getAvailableBatches } = require('../models/pmemoModel.js');
-        const batches = await getAvailableBatches(Number(material_id), grade || '');
+        const batches = await getAvailableBatches(Number(material_id));
         res.status(200).json({ success: true, data: batches });
     } catch (error) {
         console.error('Error fetching available batches:', error);

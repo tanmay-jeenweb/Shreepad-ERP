@@ -350,6 +350,20 @@ export default function Navbar({ title }) {
 
     const currentMaster = availableMasters.find(m => m.path === location.pathname) || availableMasters[0];
 
+    const isLinkActive = (itemPath, allLinks) => {
+        const isMatch = location.pathname === itemPath || location.pathname.startsWith(itemPath + "/");
+        if (!isMatch) return false;
+
+        const hasMoreSpecificMatch = allLinks.some(
+            other =>
+                other.path !== itemPath &&
+                other.path.length > itemPath.length &&
+                (location.pathname === other.path || location.pathname.startsWith(other.path + "/"))
+        );
+
+        return !hasMoreSpecificMatch;
+    };
+
     const activeCount = [
         true,
         availableMasters.length > 0,
@@ -560,7 +574,7 @@ export default function Navbar({ title }) {
                                     <div className="absolute left-0 top-full mt-1.5 w-72 bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200">
                                         <div className="flex flex-col gap-1.5">
                                             {availableStoreLinks.map((m, idx) => {
-                                                const isActive = location.pathname.startsWith(m.path);
+                                                const isActive = isLinkActive(m.path, availableStoreLinks);
                                                 return (
                                                     <button
                                                         key={idx}
@@ -621,7 +635,7 @@ export default function Navbar({ title }) {
                                     <div className="absolute left-0 top-full mt-1.5 w-72 bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200">
                                         <div className="flex flex-col gap-1.5">
                                             {availableProductionLinks.map((m, idx) => {
-                                                const isActive = location.pathname.startsWith(m.path);
+                                                const isActive = isLinkActive(m.path, availableProductionLinks);
                                                 return (
                                                     <button
                                                         key={idx}
@@ -682,7 +696,7 @@ export default function Navbar({ title }) {
                                     <div className="absolute left-0 top-full mt-1.5 w-72 bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200">
                                         <div className="flex flex-col gap-1.5">
                                             {availableSalesLinks.map((m, idx) => {
-                                                const isActive = location.pathname.startsWith(m.path);
+                                                const isActive = isLinkActive(m.path, availableSalesLinks);
                                                 return (
                                                     <button
                                                         key={idx}
@@ -742,7 +756,7 @@ export default function Navbar({ title }) {
                                     <div className="absolute left-0 top-full mt-1.5 w-72 bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200">
                                         <div className="flex flex-col gap-1.5">
                                             {availableApprovalLinks.map((m, idx) => {
-                                                const isActive = location.pathname.startsWith(m.path);
+                                                const isActive = isLinkActive(m.path, availableApprovalLinks);
                                                 return (
                                                     <button
                                                         key={idx}
@@ -802,7 +816,7 @@ export default function Navbar({ title }) {
                                     <div className="absolute right-0 top-full mt-1.5 w-72 bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200">
                                         <div className="flex flex-col gap-1.5">
                                             {availableReportsLinks.map((m, idx) => {
-                                                const isActive = location.pathname.startsWith(m.path);
+                                                const isActive = isLinkActive(m.path, availableReportsLinks);
                                                 return (
                                                     <button
                                                         key={idx}

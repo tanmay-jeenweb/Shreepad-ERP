@@ -104,7 +104,7 @@ export default function WorkshopEntryMaster() {
           data={items}
           columns={columns}
           loading={loading}
-          searchPlaceholder="Search P-Memo, Work Order, Material, Machine..."
+          searchPlaceholder="Search P-Memo, Work Order, Material..."
         />
       </main>
     </div>

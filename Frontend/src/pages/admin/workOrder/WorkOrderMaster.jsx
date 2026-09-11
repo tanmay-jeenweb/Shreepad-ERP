@@ -119,18 +119,6 @@ export default function WorkOrderMaster() {
         render: row => (
           <span className="font-semibold text-indigo-700">{row.production_quantity}</span>
         )
-      },
-      {
-        key: "machine_name",
-        label: "Machine",
-        minWidth: "120px",
-        render: row => row.machine_name ? (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs font-medium">
-            {row.machine_name}
-          </span>
-        ) : (
-          <span className="text-slate-400 italic">Not Set</span>
-        )
       }
     ];
 

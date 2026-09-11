@@ -15,7 +15,6 @@ export default function PMemoPage() {
     // P Memo Header states
     const [pMemoNo, setPMemoNo] = useState("");
     const [date, setDate] = useState("");
-    const [machineName, setMachineName] = useState("");
     const [materialName, setMaterialName] = useState("");
     const [rawMaterialName, setRawMaterialName] = useState("");
     const [unitWeight, setUnitWeight] = useState("");
@@ -100,7 +99,6 @@ export default function PMemoPage() {
                         setDate(new Date().toISOString().split("T")[0]);
                     }
 
-                    setMachineName(data.machine_name || "—");
                     setMaterialName(data.material_name || "—");
                     setItemCode(data.item_code || "—");
                     setRawMaterialName(data.raw_material_name || "—");
@@ -118,30 +116,23 @@ export default function PMemoPage() {
                             grouped[lotNum] = {
                                 lot: lotNum,
                                 date: issue.date ? new Date(issue.date).toISOString().split("T")[0] : "",
-                                remark: issue.remark || "",
                                 rows: []
                             };
                         }
                         grouped[lotNum].rows.push({
-                            remark: issue.remark || "",
                             material_id: issue.material_id || "",
-                            grade: issue.grade || "",
                             internal_batch_number: issue.internal_batch_number || "",
                             grn_item_id: issue.grn_item_id || null,
                             ma_item_id: issue.ma_item_id || null,
                             rm_return_id: issue.rm_return_id || null,
                             qty: issue.qty || "",
                             available_qty: Number(issue.total_quantity) || 0,
-                            mfi: issue.mfi || "",
-                            supplier_batch_number: issue.supplier_batch_number || "",
                             batches: [{
                                 internal_batch_number: issue.internal_batch_number,
                                 available_qty: Number(issue.total_quantity),
                                 grn_item_id: issue.grn_item_id,
                                 ma_item_id: issue.ma_item_id,
-                                rm_return_id: issue.rm_return_id || null,
-                                mfi: issue.mfi || "",
-                                supplier_batch_number: issue.supplier_batch_number || ""
+                                rm_return_id: issue.rm_return_id || null
                             }],
                             loadingBatches: false
                         });
@@ -407,7 +398,6 @@ export default function PMemoPage() {
                                             chit={chit}
                                             rawMaterialsList={rawMaterialsList}
                                             materialName={materialName}
-                                            machineName={machineName}
                                             itemCode={itemCode}
                                             color={color}
                                             batch={batch}
@@ -558,7 +548,7 @@ export default function PMemoPage() {
     );
 }
 
-function RmIssueChit({ chit, rawMaterialsList, materialName, machineName, itemCode, color, batch, pMemoNo, onPrint }) {
+function RmIssueChit({ chit, rawMaterialsList, materialName, itemCode, color, batch, pMemoNo, onPrint }) {
     // Helper to get raw material name by id
     const getRmName = (id) => {
         const found = rawMaterialsList.find(r => r.id === Number(id) || r.material_id === Number(id));
@@ -567,11 +557,6 @@ function RmIssueChit({ chit, rawMaterialsList, materialName, machineName, itemCo
 
     // Calculate total quantities
     const totalQty = chit.rows.reduce((sum, row) => sum + (parseFloat(row.qty) || 0), 0);
-    const totalTotalRequired = chit.rows.reduce((sum, row) => {
-        const lotVal = Math.floor(parseFloat(chit.lot) || 0);
-        const qtyVal = parseFloat(row.qty) || 0;
-        return sum + (lotVal * qtyVal);
-    }, 0);
 
     return (
         <div id={`chit-${chit.lot}`} className="bg-white border border-slate-300 rounded-xl p-6 shadow-sm mx-auto my-4 text-xs font-sans text-slate-800 relative hover:border-slate-400 transition-all">
@@ -588,18 +573,6 @@ function RmIssueChit({ chit, rawMaterialsList, materialName, machineName, itemCo
                     {/* Item Name */}
                     <div className="col-span-3 border-r border-slate-400 p-2 font-bold bg-slate-50 text-slate-500 uppercase tracking-wider text-[10px]">Item Name</div>
                     <div className="col-span-3 border-r border-slate-400 p-2 font-semibold text-slate-800">{materialName}</div>
-
-                    {/* Machine Name */}
-                    <div className="col-span-3 border-r border-slate-400 p-2 font-bold bg-slate-50 text-slate-500 uppercase tracking-wider text-[10px]">Machine Name.</div>
-                    <div className="col-span-3 p-2 font-semibold text-slate-800">{machineName}</div>
-                </div>
-
-                <div className="grid grid-cols-12 border-b border-slate-400">
-                    {/* M/C No. */}
-                    <div className="col-span-3 border-r border-slate-400 p-2 font-bold bg-slate-50 text-slate-500 uppercase tracking-wider text-[10px]">M/C No.</div>
-                    <div className="col-span-3 border-r border-slate-400 p-2 font-semibold text-slate-800">
-                        {machineName?.split('&')?.[1]?.trim() || machineName || "—"}
-                    </div>
 
                     {/* Item Code */}
                     <div className="col-span-3 border-r border-slate-400 p-2 font-bold bg-slate-50 text-slate-500 uppercase tracking-wider text-[10px]">Item Code</div>
@@ -626,43 +599,35 @@ function RmIssueChit({ chit, rawMaterialsList, materialName, machineName, itemCo
 
                 <div className="grid grid-cols-12 border-b border-slate-400 bg-slate-100/50">
                     <div className="col-span-6 border-r border-slate-400 p-2 font-bold text-slate-600 text-[10px] uppercase tracking-wider text-center">Material Specifications</div>
-                    <div className="col-span-6 p-2 font-bold text-slate-700 text-center">Lot No: <span className="text-rose-600 font-extrabold text-sm ml-1.5">{Math.floor(Number(chit.lot))}</span></div>
+                    <div className="col-span-6 p-2 font-bold text-slate-700 text-center">Chit No: <span className="text-rose-600 font-extrabold text-sm ml-1.5">{Math.floor(Number(chit.lot))}</span></div>
                 </div>
 
                 {/* Table Header */}
                 <table className="w-full text-left text-xs border-collapse">
                     <thead>
                         <tr className="bg-slate-50 border-b border-slate-400 font-semibold text-slate-500 text-[10px] uppercase tracking-wider">
-                            <th className="border-r border-slate-400 p-2 w-20">Qty/kg</th>
-                            <th className="border-r border-slate-400 p-2 w-24">Total/kg</th>
-                            <th className="border-r border-slate-400 p-2 min-w-[120px]">RM Type</th>
-                            <th className="border-r border-slate-400 p-2 min-w-[120px]">S Batch</th>
-                            <th className="border-r border-slate-400 p-2 min-w-[120px]">I Batch</th>
-                            <th className="p-2 w-16">MFI</th>
+                            <th className="border-r border-slate-400 p-2 w-10 text-center">#</th>
+                            <th className="border-r border-slate-400 p-2 min-w-[150px]">RM Type</th>
+                            <th className="border-r border-slate-400 p-2 min-w-[150px]">I Batch</th>
+                            <th className="p-2 w-28 text-right">Qty (kg)</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {chit.rows.map((row, rIdx) => {
-                            const totalRequired = Math.floor(parseFloat(chit.lot) || 0) * (parseFloat(row.qty) || 0);
-                            return (
-                                <tr key={rIdx} className="border-b border-slate-300 hover:bg-slate-50/50 text-slate-700">
-                                    <td className="border-r border-slate-400 p-2 font-medium bg-emerald-50/20">{Number(row.qty).toFixed(3)}</td>
-                                    <td className="border-r border-slate-400 p-2 font-bold bg-amber-50/20">{totalRequired.toFixed(3)}</td>
-                                    <td className="border-r border-slate-400 p-2 font-bold text-slate-800">{getRmName(row.material_id)}</td>
-                                    <td className="border-r border-slate-400 p-2 font-mono text-[11px]">{row.supplier_batch_number || "—"}</td>
-                                    <td className="border-r border-slate-400 p-2 font-mono text-[11px] font-semibold text-slate-800">{row.internal_batch_number}</td>
-                                    <td className="p-2 font-mono">{row.mfi || "0.00"}</td>
-                                </tr>
-                            );
-                        })}
+                        {chit.rows.map((row, rIdx) => (
+                            <tr key={rIdx} className="border-b border-slate-300 hover:bg-slate-50/50 text-slate-700">
+                                <td className="border-r border-slate-400 p-2 text-center text-slate-400">{rIdx + 1}</td>
+                                <td className="border-r border-slate-400 p-2 font-bold text-slate-800">{getRmName(row.material_id)}</td>
+                                <td className="border-r border-slate-400 p-2 font-mono text-[11px] font-semibold text-slate-800">{row.internal_batch_number}</td>
+                                <td className="p-2 font-bold text-right bg-emerald-50/20">{Number(row.qty).toFixed(3)}</td>
+                            </tr>
+                        ))}
                     </tbody>
                     <tfoot>
                         <tr className="bg-slate-100 font-bold text-slate-800 border-t border-slate-400">
-                            <td className="border-r border-slate-400 p-2 bg-emerald-50/30">{totalQty.toFixed(3)}</td>
-                            <td className="border-r border-slate-400 p-2 bg-amber-50/30">{totalTotalRequired.toFixed(3)}</td>
-                            <td colSpan="4" className="p-2 text-left uppercase tracking-wider text-[10px] text-slate-500 font-bold">
+                            <td colSpan="3" className="border-r border-slate-400 p-2 text-left uppercase tracking-wider text-[10px] text-slate-500 font-bold">
                                 Total Quantity
                             </td>
+                            <td className="p-2 font-bold text-right bg-emerald-50/30">{totalQty.toFixed(3)} kg</td>
                         </tr>
                     </tfoot>
                 </table>
@@ -705,20 +670,18 @@ function RmReturnChit({ chit, onPrint }) {
                         <tr className="bg-slate-50 border-b border-slate-400 font-semibold text-slate-700">
                             <th className="border-r border-slate-400 p-2">Date</th>
                             <th className="border-r border-slate-400 p-2">RM Type</th>
-                            <th className="border-r border-slate-400 p-2">Grade</th>
                             <th className="border-r border-slate-400 p-2">Location</th>
                             <th className="border-r border-slate-400 p-2">Ibatch</th>
-                            <th className="p-2">kg</th>
+                            <th className="p-2 text-right">kg</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr className="text-slate-800">
                             <td className="border-r border-slate-400 p-2">{formatDate(chit.return_date)}</td>
                             <td className="border-r border-slate-400 p-2 font-bold">{chit.material_name || "—"}</td>
-                            <td className="border-r border-slate-400 p-2 font-medium">{chit.grade || "—"}</td>
                             <td className="border-r border-slate-400 p-2 font-medium">{chit.location_name || "—"}</td>
                             <td className="border-r border-slate-400 p-2 font-mono font-semibold">{chit.internal_batch_number || "—"}</td>
-                            <td className="p-2 font-bold text-slate-850">{Number(chit.quantity).toFixed(3)}</td>
+                            <td className="p-2 font-bold text-right text-slate-850">{Number(chit.quantity).toFixed(3)}</td>
                         </tr>
                     </tbody>
                 </table>

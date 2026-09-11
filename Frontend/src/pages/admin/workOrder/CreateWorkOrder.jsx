@@ -4,7 +4,6 @@ import Navbar from "../../../components/Navbar";
 import { createWorkOrder, getNextWorkOrderNo, getMaterialStock } from "../../../api/workOrderApi";
 import { getAllCustomers } from "../../../api/customerApi";
 import { getMaterials } from "../../../api/materialApi";
-import { getAllMachines } from "../../../api/machineApi";
 import { getBOMs, getBOMByMaterialId } from "../../../api/bomApi";
 import { getJobParties } from "../../../api/jobPartyApi";
 import toast from "react-hot-toast";
@@ -16,7 +15,6 @@ export default function CreateWorkOrder() {
   const [nextWONo, setNextWONo] = useState("");
   const [customers, setCustomers] = useState([]);
   const [materials, setMaterials] = useState([]);
-  const [machines, setMachines] = useState([]);
   const [boms, setBoms] = useState([]);
   const [jobParties, setJobParties] = useState([]);
 
@@ -48,10 +46,9 @@ export default function CreateWorkOrder() {
         const noRes = await getNextWorkOrderNo();
         setNextWONo(`WO-${String(noRes.data.nextNo).padStart(4, "0")}`);
 
-        const [custRes, matRes, machineRes, bomRes, jobPartiesRes] = await Promise.all([
+        const [custRes, matRes, bomRes, jobPartiesRes] = await Promise.all([
           getAllCustomers(),
           getMaterials(),
-          getAllMachines(),
           getBOMs(),
           getJobParties()
         ]);
@@ -74,8 +71,6 @@ export default function CreateWorkOrder() {
         });
         setMaterials(filteredMat);
 
-        const machinesList = Array.isArray(machineRes.data) ? machineRes.data : (machineRes.data?.data || []);
-        setMachines(machinesList);
         setJobParties(jobPartiesRes.data?.data || []);
 
         // Start with one empty row
@@ -89,7 +84,6 @@ export default function CreateWorkOrder() {
           batch_no: "",
           actual_delivery_date: "",
           remarks: "",
-          machine_id: "",
           job_party_id: ""
         }]);
       } catch (err) {
@@ -110,7 +104,6 @@ export default function CreateWorkOrder() {
         material_id: "",
         material_name: "",
         material_code: "",
-        machine_id: "",
         job_party_id: "",
         exp_delivery_date: "",
         batch_no: "",
@@ -127,7 +120,6 @@ export default function CreateWorkOrder() {
       material_id: materialId,
       material_name: material ? material.material_name : "",
       material_code: material ? material.material_code : "",
-      machine_id: "",
       job_party_id: "",
       exp_delivery_date: "",
       batch_no: "",
@@ -201,7 +193,6 @@ export default function CreateWorkOrder() {
       batch_no: "",
       actual_delivery_date: "",
       remarks: "",
-      machine_id: "",
       job_party_id: ""
     }]);
   };
@@ -376,7 +367,6 @@ export default function CreateWorkOrder() {
           batch_no: it.batch_no || null,
           actual_delivery_date: it.actual_delivery_date || null,
           remarks: it.remarks || null,
-          machine_id: it.machine_id ? Number(it.machine_id) : null,
           job_party_id: it.job_party_id ? Number(it.job_party_id) : null
         });
 
@@ -393,7 +383,6 @@ export default function CreateWorkOrder() {
                 batch_no: it.batch_no || null,
                 actual_delivery_date: it.actual_delivery_date || null,
                 remarks: `Allocated raw material for ${it.material_name} (${it.material_code})`,
-                machine_id: it.machine_id ? Number(it.machine_id) : null,
                 job_party_id: it.job_party_id ? Number(it.job_party_id) : null
               });
             }
@@ -525,8 +514,6 @@ export default function CreateWorkOrder() {
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                   {items.map((item, idx) => {
-                    const machineName = machines.find(m => String(m.id) === String(item.machine_id))?.name || "";
-
                     return (
                       <tr key={idx} className="hover:bg-slate-50/50">
                         <td className="px-6 py-4">

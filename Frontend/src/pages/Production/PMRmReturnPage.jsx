@@ -20,8 +20,7 @@ export default function PMRmReturnPage() {
     // Form inputs state
     const [returnDate, setReturnDate] = useState(new Date().toISOString().split("T")[0]);
     const [workOrderNo, setWorkOrderNo] = useState("");
-    const [selectedRmName, setSelectedRmName] = useState("");
-    const [selectedGrade, setSelectedGrade] = useState("");
+    const [selectedMaterialId, setSelectedMaterialId] = useState("");
     const [selectedLocationId, setSelectedLocationId] = useState("");
     const [quantity, setQuantity] = useState("");
 
@@ -63,36 +62,13 @@ export default function PMRmReturnPage() {
         }
     }, [workOrderItemId]);
 
-    // Filter unique material names
-    const uniqueRmNames = useMemo(() => {
-        const names = new Set();
-        rawMaterialsList.forEach(rm => {
-            if (rm.material_name) {
-                names.add(rm.material_name);
-            }
-        });
-        return Array.from(names).sort();
-    }, [rawMaterialsList]);
-
-    // Filter grades based on the selected material name
-    const gradesForSelectedRm = useMemo(() => {
-        if (!selectedRmName) return [];
-        const grades = new Set();
-        rawMaterialsList.forEach(rm => {
-            if (rm.material_name === selectedRmName && rm.grade) {
-                grades.add(rm.grade);
-            }
-        });
-        return Array.from(grades).sort();
-    }, [selectedRmName, rawMaterialsList]);
-
-    // Map selected name and grade to raw material_id
+    // Map selected material ID to raw material object
     const selectedMaterial = useMemo(() => {
-        if (!selectedRmName || !selectedGrade) return null;
+        if (!selectedMaterialId) return null;
         return rawMaterialsList.find(
-            rm => rm.material_name === selectedRmName && rm.grade === selectedGrade
+            rm => String(rm.material_id) === String(selectedMaterialId)
         ) || null;
-    }, [selectedRmName, selectedGrade, rawMaterialsList]);
+    }, [selectedMaterialId, rawMaterialsList]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -101,11 +77,8 @@ export default function PMRmReturnPage() {
         }
 
         // Standard validation
-        if (!selectedRmName) {
+        if (!selectedMaterialId) {
             return toast.error("Please select a Material Name.");
-        }
-        if (!selectedGrade) {
-            return toast.error("Please select a Grade.");
         }
         if (!selectedLocationId) {
             return toast.error("Please select a Location.");
@@ -124,15 +97,13 @@ export default function PMRmReturnPage() {
                 pmemo_id: pmemoId,
                 return_date: returnDate,
                 material_id: selectedMaterial.material_id,
-                grade: selectedGrade,
                 location_id: Number(selectedLocationId),
                 quantity: qty
             });
 
             toast.success("Raw Material Return recorded successfully!");
             // Reset form fields to allow consecutive submissions
-            setSelectedRmName("");
-            setSelectedGrade("");
+            setSelectedMaterialId("");
             setSelectedLocationId("");
             setQuantity("");
             setReturnDate(new Date().toISOString().split("T")[0]);
@@ -233,39 +204,15 @@ export default function PMRmReturnPage() {
                                 </label>
                                 <select
                                     required
-                                    value={selectedRmName}
-                                    onChange={(e) => {
-                                        setSelectedRmName(e.target.value);
-                                        setSelectedGrade("");
-                                    }}
+                                    value={selectedMaterialId}
+                                    onChange={(e) => setSelectedMaterialId(e.target.value)}
                                     disabled={isFinalSubmitted}
                                     className="h-10 px-3 border border-slate-355 rounded-lg text-sm bg-white text-slate-800 outline-none focus:border-[#369ACF] focus:ring-2 focus:ring-[#369ACF]/10 transition-all cursor-pointer font-semibold disabled:bg-slate-50 disabled:text-slate-400"
                                 >
                                     <option value="">— Select Material —</option>
-                                    {uniqueRmNames.map(name => (
-                                        <option key={name} value={name}>
-                                            {name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            {/* Grade */}
-                            <div className="flex flex-col gap-1.5">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                                    Grade *
-                                </label>
-                                <select
-                                    required
-                                    disabled={isFinalSubmitted || !selectedRmName}
-                                    value={selectedGrade}
-                                    onChange={(e) => setSelectedGrade(e.target.value)}
-                                    className="h-10 px-3 border border-slate-355 rounded-lg text-sm bg-white text-slate-800 outline-none focus:border-[#369ACF] focus:ring-2 focus:ring-[#369ACF]/10 transition-all cursor-pointer disabled:bg-slate-50 disabled:text-slate-400 disabled:border-slate-200 font-semibold"
-                                >
-                                    <option value="">— Select Grade —</option>
-                                    {gradesForSelectedRm.map(grade => (
-                                        <option key={grade} value={grade}>
-                                            {grade}
+                                    {rawMaterialsList.map(rm => (
+                                        <option key={rm.material_id} value={rm.material_id}>
+                                            {rm.material_name}{rm.material_code ? ` (${rm.material_code})` : ""}
                                         </option>
                                     ))}
                                 </select>
