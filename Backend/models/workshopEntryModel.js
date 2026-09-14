@@ -112,6 +112,7 @@ const ensureWorkshopEntryColumns = async () => {
             WHERE TABLE_SCHEMA = DATABASE() 
               AND TABLE_NAME = 'workshop_entries' 
               AND COLUMN_NAME = 'work_order_item_id'
+              AND NON_UNIQUE = 0
         `);
 
         if (indices.length === 0) {

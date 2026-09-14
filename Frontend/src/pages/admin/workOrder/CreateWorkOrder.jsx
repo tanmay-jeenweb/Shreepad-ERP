@@ -224,7 +224,7 @@ export default function CreateWorkOrder() {
               ...rm,
               productionAmount: req,
               calculatedMinSupply: calcMin,
-              minSupplyNeeded: (rm.minSupplyNeeded !== undefined && rm.minSupplyNeeded !== "" && Number(rm.minSupplyNeeded) >= calcMin)
+              minSupplyNeeded: (rm.minSupplyNeeded !== undefined && rm.minSupplyNeeded !== "" && !isNaN(Number(rm.minSupplyNeeded)))
                 ? rm.minSupplyNeeded
                 : calcMin
             };
@@ -261,17 +261,22 @@ export default function CreateWorkOrder() {
       const nextRMs = [...(targetItem.rawMaterials || [])];
       const rawVal = nextRMs[rmIdx]?.minSupplyNeeded;
       const currentVal = Number(rawVal);
-      if (rawVal === "" || isNaN(currentVal) || currentVal < minVal) {
-        toast.error(`Minimum supply cannot be less than ${minVal}`);
+      if (rawVal === "" || isNaN(currentVal) || currentVal < 0) {
         nextRMs[rmIdx] = {
           ...nextRMs[rmIdx],
-          minSupplyNeeded: minVal
+          minSupplyNeeded: 0
         };
       } else {
         nextRMs[rmIdx] = {
           ...nextRMs[rmIdx],
           minSupplyNeeded: currentVal
         };
+        if (currentVal < minVal) {
+          toast(
+            `Notice: Entered supply is less than available quantity shortfall in system (${minVal}).`,
+            { icon: "⚠️" }
+          );
+        }
       }
       targetItem.rawMaterials = nextRMs;
       next[itemIdx] = targetItem;
@@ -333,7 +338,7 @@ export default function CreateWorkOrder() {
             ...rm,
             productionAmount: req,
             calculatedMinSupply: calcMin,
-            minSupplyNeeded: (rm.minSupplyNeeded !== undefined && rm.minSupplyNeeded !== "" && Number(rm.minSupplyNeeded) >= calcMin)
+            minSupplyNeeded: (rm.minSupplyNeeded !== undefined && rm.minSupplyNeeded !== "" && !isNaN(Number(rm.minSupplyNeeded)))
               ? rm.minSupplyNeeded
               : calcMin
           };
@@ -346,14 +351,7 @@ export default function CreateWorkOrder() {
   };
 
   const submitWorkOrder = async () => {
-    for (const rm of allRawMaterials) {
-      const minVal = Number(rm.calculatedMinSupply) || 0;
-      const val = Number(rm.minSupplyNeeded);
-      if (rm.minSupplyNeeded === "" || isNaN(val) || val < minVal) {
-        toast.error(`Minimum supply for ${rm.materialName || "material"} cannot be less than ${minVal} ${rm.unitName || ""}`);
-        return;
-      }
-    }
+    // Note: Raw materials are not issued at this stage, so stock shortfalls do not block work order creation.
     setLoading(true);
     try {
       const flattenedItems = [];
@@ -723,6 +721,15 @@ export default function CreateWorkOrder() {
                   </p>
                 </div>
 
+                {allRawMaterials.some(rm => (Number(rm.minSupplyNeeded) || 0) < rm.calculatedMinSupply || rm.availableStock < rm.requiredProdQty) && (
+                  <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2.5 text-amber-800 text-xs">
+                    <i className="fa-solid fa-triangle-exclamation text-amber-500 mt-0.5 text-sm shrink-0"></i>
+                    <div>
+                      <span className="font-semibold">Notice:</span> Available quantity in system is less than the required production quantity. You can proceed with saving the work order as materials are not issued at this stage.
+                    </div>
+                  </div>
+                )}
+
                 <div className="overflow-x-auto border border-slate-200 rounded-xl shadow-sm bg-white">
                   <table className="w-full text-left text-xs text-slate-600 border-collapse">
                     <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
@@ -776,8 +783,8 @@ export default function CreateWorkOrder() {
                                       }}
                                       placeholder={String(rm.calculatedMinSupply)}
                                       className={`w-28 px-2.5 py-1 text-right text-xs font-mono font-semibold border rounded-lg focus:outline-none transition-colors bg-white ${
-                                        (rm.minSupplyNeeded === "" || Number(rm.minSupplyNeeded) < rm.calculatedMinSupply)
-                                          ? "border-rose-400 text-rose-600 focus:border-rose-500"
+                                        (rm.minSupplyNeeded !== "" && Number(rm.minSupplyNeeded) < rm.calculatedMinSupply)
+                                          ? "border-amber-400 text-amber-900 focus:border-amber-500"
                                           : "border-slate-200 text-slate-800 focus:border-indigo-500"
                                       }`}
                                     />
@@ -785,9 +792,9 @@ export default function CreateWorkOrder() {
                                       {rm.unitName}
                                     </span>
                                   </div>
-                                  {(rm.minSupplyNeeded === "" || Number(rm.minSupplyNeeded) < rm.calculatedMinSupply) && (
-                                    <span className="text-[10px] text-rose-500 font-medium">
-                                      Min: {rm.calculatedMinSupply} {rm.unitName}
+                                  {(rm.minSupplyNeeded !== "" && Number(rm.minSupplyNeeded) < rm.calculatedMinSupply) && (
+                                    <span className="text-[10px] text-amber-600 font-medium">
+                                      Shortfall: {rm.calculatedMinSupply} {rm.unitName}
                                     </span>
                                   )}
                                 </div>

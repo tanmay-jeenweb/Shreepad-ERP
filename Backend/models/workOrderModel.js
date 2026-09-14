@@ -318,8 +318,19 @@ const getAllWorkOrders = async (includeHeld = false) => {
         LEFT JOIN materials m ON woi.material_id = m.id
         LEFT JOIN machines mac ON woi.machine_id = mac.id
         LEFT JOIN users u ON wo.added_by = u.id
-        LEFT JOIN bill_of_materials bom ON m.id = bom.material_id
-        LEFT JOIN workshop_entries we ON woi.id = we.work_order_item_id
+        LEFT JOIN (
+            SELECT material_id, MAX(product_weight) AS product_weight
+            FROM bill_of_materials
+            GROUP BY material_id
+        ) bom ON m.id = bom.material_id
+        LEFT JOIN (
+            SELECT 
+                work_order_item_id,
+                MAX(id) AS id,
+                MAX(status) AS status
+            FROM workshop_entries
+            GROUP BY work_order_item_id
+        ) we ON woi.id = we.work_order_item_id
         LEFT JOIN (
             SELECT 
                 work_order_item_id,
