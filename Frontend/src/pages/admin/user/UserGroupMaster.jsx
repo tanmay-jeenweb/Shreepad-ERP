@@ -45,6 +45,7 @@ const MODULE_GROUPS = [
     description: "Store material add, removal, stock status, and stock book.",
     masters: [
       { key: "material_add",            label: "Material Add" },
+      { key: "material_issue_return",   label: "Material Issue & Return" },
       { key: "stock_status",            label: "Stock Status", allowedPerms: ["canRead"] },
       { key: "stock_book",              label: "Stock Book", allowedPerms: ["canRead"] },
     ]

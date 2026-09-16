@@ -309,11 +309,15 @@ export default function Navbar({ title }) {
 
     const availableStoreLinks = [
         { name: "Material Add", path: "/store/material-add", icon: "fa-solid fa-box-open", masterKey: "material_add" },
-        { name: "Material Remove", path: "/store/material-remove", icon: "fa-solid fa-trash-can", masterKey: "stock_book" }
+        { name: "Material Remove", path: "/store/material-remove", icon: "fa-solid fa-trash-can", masterKey: "stock_book" },
+        { name: "Material Issue & Return", path: "/store/material-issue-return", icon: "fa-solid fa-right-left", masterKey: "material_issue_return" }
     ].filter(m => {
         if (isAdmin) return true;
         if (m.name === "Material Remove") {
             return hasPermission("stock_book", "read") || hasPermission("rm_stock_book", "read") || hasPermission("general_stock_book", "read");
+        }
+        if (m.name === "Material Issue & Return") {
+            return hasPermission("material_issue_return", "read") || hasPermission("workshop_entry", "read") || hasPermission("material_add", "read") || hasPermission("stock_book", "read");
         }
         return hasPermission(m.masterKey, "read");
     });

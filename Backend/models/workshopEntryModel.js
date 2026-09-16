@@ -886,6 +886,38 @@ const deleteWorkshopProductionLog = async (logId) => {
     }
 };
 
+const getAllWorkshopRmIssues = async () => {
+    const query = `
+        SELECT 
+            wri.id,
+            wri.work_order_item_id,
+            wri.lot,
+            wri.date,
+            wri.remark,
+            wri.material_id,
+            m.material_name AS rm_type_name,
+            m.material_code,
+            wri.internal_batch_number,
+            wri.qty,
+            wri.total_quantity,
+            wo.work_order_no,
+            wo.work_order_date,
+            prod_m.material_name AS product_name,
+            prod_m.material_code AS product_code,
+            woi.batch_no,
+            c.customer_name
+        FROM workshop_rm_issues wri
+        JOIN work_order_items woi ON wri.work_order_item_id = woi.id
+        JOIN work_orders wo ON woi.work_order_id = wo.id
+        JOIN materials m ON wri.material_id = m.id
+        LEFT JOIN materials prod_m ON woi.material_id = prod_m.id
+        LEFT JOIN customer_master c ON wo.customer_id = c.id
+        ORDER BY wri.id DESC
+    `;
+    const [rows] = await db.execute(query);
+    return rows;
+};
+
 module.exports = {
     createWorkshopEntriesTable,
     createWorkshopRmIssuesTable,
@@ -896,8 +928,10 @@ module.exports = {
     getWorkshopEntryByWorkOrderItemId,
     getAvailableBatches,
     issueWorkshopRawMaterials,
+    getAllWorkshopRmIssues,
     addWorkshopProductionLog,
     revertWorkshopProductionLog,
     deleteWorkshopProductionLog,
     calculateStageBalances
 };
+

@@ -36,6 +36,8 @@ import StockStatus from "./pages/Store/StockStatus";
 import MaterialRemove from "./pages/Store/MaterialRemove";
 import MaterialAddMaster from "./pages/Store/MaterialAddMaster";
 import CreateMaterialAdd from "./pages/Store/CreateMaterialAdd";
+import MaterialIssueReturnMaster from "./pages/Store/MaterialIssueReturnMaster";
+import MaterialIssueReturn from "./pages/Store/MaterialIssueReturn";
 
 import WorkOrderMaster from "./pages/admin/workOrder/WorkOrderMaster";
 import CreateWorkOrder from "./pages/admin/workOrder/CreateWorkOrder";
@@ -301,6 +303,10 @@ export default function AppRoutes() {
             </Route>
             <Route element={<ProtectedRoute allowedRole="admin" />}>
                 <Route path="/store/material-add/edit/:id" element={<CreateMaterialAdd />} />
+            </Route>
+            <Route element={<ProtectedRoute allowedRole="admin" />}>
+                <Route path="/store/material-issue-return" element={<MaterialIssueReturnMaster />} />
+                <Route path="/store/material-issue-return/:workOrderItemId" element={<MaterialIssueReturn />} />
             </Route>
 
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="work_order" requiredAction="read" />}>

@@ -4,6 +4,7 @@ const {
     getWorkshopEntryDetailsController,
     issueWorkshopRmController,
     getAvailableBatchesController,
+    getAllWorkshopRmIssuesController,
     addWorkshopProductionLogController,
     revertWorkshopProductionLogController,
     deleteWorkshopProductionLogController
@@ -13,6 +14,7 @@ const { verifyToken } = require('../middleware/authMiddleware.js');
 const router = express.Router();
 
 router.get('/', verifyToken, getAllWorkshopEntriesController);
+router.get('/all-rm-issues', verifyToken, getAllWorkshopRmIssuesController);
 router.get('/stock-batches', verifyToken, getAvailableBatchesController);
 router.post('/rm-issue', verifyToken, issueWorkshopRmController);
 router.post('/production-log', verifyToken, addWorkshopProductionLogController);

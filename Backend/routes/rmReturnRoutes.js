@@ -8,7 +8,7 @@ const {
 
 router.use(verifyToken);
 
-router.post('/add', verifyPermission('bom', 'write'), createRmReturnHandler);
-router.get('/all', verifyPermission('bom', 'read'), getAllRmReturnsHandler);
+router.post('/add', createRmReturnHandler);
+router.get('/all', getAllRmReturnsHandler);
 
 module.exports = router;

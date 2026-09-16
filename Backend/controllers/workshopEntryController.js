@@ -3,6 +3,7 @@ const {
     getWorkshopEntryByWorkOrderItemId,
     getAvailableBatches,
     issueWorkshopRawMaterials,
+    getAllWorkshopRmIssues,
     addWorkshopProductionLog,
     revertWorkshopProductionLog,
     deleteWorkshopProductionLog
@@ -300,12 +301,30 @@ const revertWorkshopProductionLogController = async (req, res) => {
     }
 };
 
+const getAllWorkshopRmIssuesController = async (req, res) => {
+    try {
+        const issues = await getAllWorkshopRmIssues();
+        res.status(200).json({
+            success: true,
+            data: issues
+        });
+    } catch (error) {
+        console.error('Error fetching all workshop RM issues:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Failed to fetch RM issues'
+        });
+    }
+};
+
 module.exports = {
     getAllWorkshopEntriesController,
     getWorkshopEntryDetailsController,
     issueWorkshopRmController,
     getAvailableBatchesController,
+    getAllWorkshopRmIssuesController,
     addWorkshopProductionLogController,
     revertWorkshopProductionLogController,
     deleteWorkshopProductionLogController
 };
+
