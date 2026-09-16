@@ -68,6 +68,7 @@ const createWorkshopProductionLogsTable = async () => {
             step_order INT NOT NULL,
             to_bom_process_id INT DEFAULT NULL,
             quantity DECIMAL(15,4) NOT NULL,
+            movement_type VARCHAR(20) NOT NULL DEFAULT 'forward',
             log_date DATE NOT NULL,
             remarks TEXT DEFAULT NULL,
             added_by INT NOT NULL,
@@ -80,6 +81,25 @@ const createWorkshopProductionLogsTable = async () => {
     `;
     await db.execute(query);
     console.log('Workshop Production Logs table ready');
+};
+
+const ensureWorkshopProductionLogColumns = async () => {
+    try {
+        const [col] = await db.execute(`
+            SELECT COLUMN_NAME 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+              AND TABLE_NAME = 'workshop_production_logs' 
+              AND COLUMN_NAME = 'movement_type'
+        `);
+
+        if (col.length === 0) {
+            await db.execute(`ALTER TABLE workshop_production_logs ADD COLUMN movement_type VARCHAR(20) NOT NULL DEFAULT 'forward'`);
+            console.log('Added movement_type column to workshop_production_logs');
+        }
+    } catch (err) {
+        console.error('Error ensuring workshop_production_logs columns:', err.message || err);
+    }
 };
 
 const ensureWorkshopEntryColumns = async () => {
@@ -311,6 +331,7 @@ const getWorkshopEntryByWorkOrderItemId = async (workOrderItemId) => {
                 wpl.to_bom_process_id,
                 to_pm.process_name AS to_process_name,
                 wpl.quantity,
+                COALESCE(wpl.movement_type, 'forward') AS movement_type,
                 wpl.log_date,
                 wpl.remarks,
                 wpl.added_by,
@@ -527,29 +548,14 @@ const addWorkshopProductionLog = async ({
 
         // 3. Get all existing production logs for this item
         const [existingLogs] = await connection.execute(`
-            SELECT bom_process_id, step_order, quantity
+            SELECT bom_process_id, to_bom_process_id, step_order, quantity, movement_type
             FROM workshop_production_logs
             WHERE work_order_item_id = ?
         `, [work_order_item_id]);
 
-        // Calculate available qty for each stage
-        let prevCompleted = targetQty;
-        const stageStats = procRows.map((proc, idx) => {
-            const completed = existingLogs
-                .filter(l => Number(l.bom_process_id) === Number(proc.id))
-                .reduce((sum, l) => sum + Number(l.quantity), 0);
-            const input = idx === 0 ? targetQty : prevCompleted;
-            const available = Math.max(0, input - completed);
-            prevCompleted = completed;
-            return {
-                id: proc.id,
-                input,
-                completed,
-                available
-            };
-        });
-
-        const currentStat = stageStats[stageIndex];
+        // Calculate available qty for each stage using unified balance helper
+        const stageBalances = calculateStageBalances(procRows, targetQty, existingLogs);
+        const currentStat = stageBalances[stageIndex];
         if (moveQty > currentStat.available) {
             throw new Error(`Cannot move ${moveQty} units. Only ${currentStat.available} units available in ${currentStage.process_name}.`);
         }
@@ -563,11 +569,12 @@ const addWorkshopProductionLog = async ({
                 step_order,
                 to_bom_process_id,
                 quantity,
+                movement_type,
                 log_date,
                 remarks,
                 added_by,
                 device_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, 'forward', ?, ?, ?, ?)
         `;
 
         const [insertResult] = await connection.execute(insertQuery, [
@@ -620,6 +627,189 @@ const addWorkshopProductionLog = async ({
     }
 };
 
+const revertWorkshopProductionLog = async ({
+    work_order_item_id,
+    from_bom_process_id,
+    to_bom_process_id,
+    quantity,
+    log_date,
+    remarks,
+    added_by,
+    device_id
+}) => {
+    const revertQty = Number(quantity);
+    if (isNaN(revertQty) || revertQty <= 0) {
+        throw new Error('Quantity must be greater than 0');
+    }
+
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        // 1. Get work order item details & target quantity
+        const [woiRows] = await connection.execute(`
+            SELECT woi.id, woi.work_order_id, woi.production_quantity, woi.quantity, woi.material_id, woi.batch_no,
+                   m.material_name, m.material_type, wo.work_order_no, c.customer_name
+            FROM work_order_items woi
+            JOIN work_orders wo ON woi.work_order_id = wo.id
+            JOIN materials m ON woi.material_id = m.id
+            LEFT JOIN customer_master c ON wo.customer_id = c.id
+            WHERE woi.id = ?
+        `, [work_order_item_id]);
+
+        if (woiRows.length === 0) {
+            throw new Error('Work Order item not found');
+        }
+
+        const targetQty = Number(woiRows[0].production_quantity || woiRows[0].quantity) || 0;
+        const materialId = woiRows[0].material_id;
+
+        // 2. Get BOM processes in order
+        const [procRows] = await connection.execute(`
+            SELECT bp.id, bp.process_id, pm.process_name
+            FROM bill_of_materials bom
+            JOIN bom_processes bp ON bom.id = bp.bom_id
+            JOIN process_masters pm ON bp.process_id = pm.id
+            WHERE bom.material_id = ?
+            ORDER BY bp.id ASC
+        `, [materialId]);
+
+        if (procRows.length === 0) {
+            throw new Error('No BOM processes configured for this product');
+        }
+
+        const fromStageIndex = procRows.findIndex(p => Number(p.id) === Number(from_bom_process_id));
+        if (fromStageIndex === -1) {
+            throw new Error('Source process stage does not belong to this product BOM');
+        }
+
+        if (fromStageIndex === 0) {
+            throw new Error('Initial process cannot be reverted back to a previous process stage. For raw materials, please use RM Return.');
+        }
+
+        const toStageIndex = procRows.findIndex(p => Number(p.id) === Number(to_bom_process_id));
+        if (toStageIndex === -1) {
+            throw new Error('Destination process stage does not belong to this product BOM');
+        }
+
+        if (toStageIndex >= fromStageIndex) {
+            throw new Error('Destination process must be an earlier process stage than the source process');
+        }
+
+        const fromStage = procRows[fromStageIndex];
+        const toStage = procRows[toStageIndex];
+
+        // 3. Get existing production logs
+        const [existingLogs] = await connection.execute(`
+            SELECT bom_process_id, to_bom_process_id, step_order, quantity, movement_type
+            FROM workshop_production_logs
+            WHERE work_order_item_id = ?
+        `, [work_order_item_id]);
+
+        // 4. Calculate stage balances
+        const stageBalances = calculateStageBalances(procRows, targetQty, existingLogs);
+        const fromStageBalance = stageBalances[fromStageIndex].available;
+
+        if (revertQty > fromStageBalance) {
+            throw new Error(`Cannot revert ${revertQty} units. Only ${fromStageBalance} units available in ${fromStage.process_name}.`);
+        }
+
+        // 5. Insert revert log (strictly movement_type = 'revert')
+        const insertQuery = `
+            INSERT INTO workshop_production_logs (
+                work_order_item_id,
+                bom_process_id,
+                process_id,
+                step_order,
+                to_bom_process_id,
+                quantity,
+                movement_type,
+                log_date,
+                remarks,
+                added_by,
+                device_id
+            ) VALUES (?, ?, ?, ?, ?, ?, 'revert', ?, ?, ?, ?)
+        `;
+
+        const [insertResult] = await connection.execute(insertQuery, [
+            work_order_item_id,
+            fromStage.id,
+            fromStage.process_id,
+            fromStageIndex + 1,
+            toStage.id,
+            revertQty,
+            log_date || new Date().toISOString().split('T')[0],
+            remarks || null,
+            added_by,
+            device_id || null
+        ]);
+
+        // 6. Update touch record in workshop_entries
+        await connection.execute(`
+            INSERT INTO workshop_entries (work_order_item_id, added_by)
+            VALUES (?, ?)
+            ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP
+        `, [work_order_item_id, added_by || 1]);
+
+        await connection.commit();
+
+        return {
+            id: insertResult.insertId,
+            from_process_name: fromStage.process_name,
+            to_process_name: toStage.process_name,
+            quantity: revertQty
+        };
+    } catch (err) {
+        await connection.rollback();
+        throw err;
+    } finally {
+        connection.release();
+    }
+};
+
+const calculateStageBalances = (procRows, targetQty, logs) => {
+    return procRows.map((proc, idx) => {
+        // Forward logs leaving this stage
+        const forwardOut = logs
+            .filter(l => Number(l.bom_process_id) === Number(proc.id) && l.movement_type !== 'revert')
+            .reduce((sum, l) => sum + (parseFloat(l.quantity) || 0), 0);
+
+        // Revert logs leaving this stage (moving back to an earlier stage)
+        const revertOut = logs
+            .filter(l => Number(l.bom_process_id) === Number(proc.id) && l.movement_type === 'revert')
+            .reduce((sum, l) => sum + (parseFloat(l.quantity) || 0), 0);
+
+        // Forward logs entering this stage
+        const forwardIn = idx === 0
+            ? targetQty
+            : logs
+                .filter(l => Number(l.to_bom_process_id) === Number(proc.id) && l.movement_type !== 'revert')
+                .reduce((sum, l) => sum + (parseFloat(l.quantity) || 0), 0);
+
+        // Revert logs entering this stage (reverted back from downstream)
+        const revertIn = logs
+            .filter(l => Number(l.to_bom_process_id) === Number(proc.id) && l.movement_type === 'revert')
+            .reduce((sum, l) => sum + (parseFloat(l.quantity) || 0), 0);
+
+        const totalIn = forwardIn + revertIn;
+        const totalOut = forwardOut + revertOut;
+        const available = totalIn - totalOut;
+
+        return {
+            id: proc.id,
+            process_id: proc.process_id,
+            process_name: proc.process_name,
+            forwardIn,
+            revertIn,
+            forwardOut,
+            revertOut,
+            totalIn,
+            totalOut,
+            available
+        };
+    });
+};
+
 const deleteWorkshopProductionLog = async (logId) => {
     const connection = await db.getConnection();
     try {
@@ -660,30 +850,23 @@ const deleteWorkshopProductionLog = async (logId) => {
 
         // Get existing logs excluding the one being deleted
         const [remainingLogs] = await connection.execute(`
-            SELECT bom_process_id, step_order, quantity
+            SELECT bom_process_id, to_bom_process_id, step_order, quantity, movement_type
             FROM workshop_production_logs
             WHERE work_order_item_id = ? AND id != ?
         `, [workOrderItemId, logId]);
 
         // Check if any stage would have negative available inventory
-        let prevCompleted = targetQty;
-        for (let idx = 0; idx < procRows.length; idx++) {
-            const proc = procRows[idx];
-            const completed = remainingLogs
-                .filter(l => Number(l.bom_process_id) === Number(proc.id))
-                .reduce((sum, l) => sum + Number(l.quantity), 0);
-            const input = idx === 0 ? targetQty : prevCompleted;
-            const available = input - completed;
-            if (available < 0) {
+        const balances = calculateStageBalances(procRows, targetQty, remainingLogs);
+        for (const stage of balances) {
+            if (stage.available < 0) {
                 throw new Error(
-                    `Cannot delete this log: subsequent process '${proc.process_name}' has already processed items from this movement. Please reverse subsequent processes first.`
+                    `Cannot delete this log: it would cause stage '${stage.process_name}' available inventory to become negative (${stage.available} Nos). Please adjust subsequent movements first.`
                 );
             }
-            prevCompleted = completed;
         }
 
-        // If this log moved to Finished Goods, roll back stock_status
-        if (!targetLog.to_bom_process_id && batchNo) {
+        // If this log moved forward to Finished Goods, roll back stock_status
+        if (targetLog.movement_type !== 'revert' && !targetLog.to_bom_process_id && batchNo) {
             await rollbackStockStatusForFinishedGoods(connection, {
                 batch_no: batchNo,
                 quantity: targetLog.quantity
@@ -707,11 +890,14 @@ module.exports = {
     createWorkshopEntriesTable,
     createWorkshopRmIssuesTable,
     createWorkshopProductionLogsTable,
+    ensureWorkshopProductionLogColumns,
     ensureWorkshopEntryColumns,
     getAllWorkshopEntries,
     getWorkshopEntryByWorkOrderItemId,
     getAvailableBatches,
     issueWorkshopRawMaterials,
     addWorkshopProductionLog,
-    deleteWorkshopProductionLog
+    revertWorkshopProductionLog,
+    deleteWorkshopProductionLog,
+    calculateStageBalances
 };

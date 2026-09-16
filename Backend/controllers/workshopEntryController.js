@@ -4,6 +4,7 @@ const {
     getAvailableBatches,
     issueWorkshopRawMaterials,
     addWorkshopProductionLog,
+    revertWorkshopProductionLog,
     deleteWorkshopProductionLog
 } = require('../models/workshopEntryModel.js');
 const { createAuditLog } = require('../models/auditLogModel.js');
@@ -235,11 +236,76 @@ const deleteWorkshopProductionLogController = async (req, res) => {
     }
 };
 
+const revertWorkshopProductionLogController = async (req, res) => {
+    try {
+        const addedBy = req.user.id;
+        const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
+        const {
+            work_order_item_id,
+            from_bom_process_id,
+            to_bom_process_id,
+            quantity,
+            log_date,
+            remarks
+        } = req.body;
+
+        if (!work_order_item_id || !from_bom_process_id || !to_bom_process_id || !quantity) {
+            return res.status(400).json({
+                success: false,
+                message: 'Work order item ID, source stage ID, destination stage ID, and quantity are required'
+            });
+        }
+
+        const result = await revertWorkshopProductionLog({
+            work_order_item_id: Number(work_order_item_id),
+            from_bom_process_id: Number(from_bom_process_id),
+            to_bom_process_id: Number(to_bom_process_id),
+            quantity: Number(quantity),
+            log_date,
+            remarks,
+            added_by: addedBy,
+            device_id: deviceId
+        });
+
+        await createAuditLog(
+            addedBy,
+            req.user?.name || req.user?.username || 'Unknown',
+            deviceId,
+            'Workshop Entry',
+            'production_movement_reverted',
+            null,
+            {
+                work_order_item_id,
+                from_bom_process_id,
+                to_bom_process_id,
+                quantity,
+                from_process: result.from_process_name,
+                to_process: result.to_process_name,
+                reason: remarks,
+                added_by: addedBy
+            }
+        );
+
+        res.status(201).json({
+            success: true,
+            message: `Successfully reverted ${quantity} units from ${result.from_process_name} back to ${result.to_process_name}`,
+            data: result
+        });
+    } catch (error) {
+        console.error('Error reverting production movement log:', error);
+        res.status(400).json({
+            success: false,
+            message: error.message || 'Failed to revert production movement'
+        });
+    }
+};
+
 module.exports = {
     getAllWorkshopEntriesController,
     getWorkshopEntryDetailsController,
     issueWorkshopRmController,
     getAvailableBatchesController,
     addWorkshopProductionLogController,
+    revertWorkshopProductionLogController,
     deleteWorkshopProductionLogController
 };

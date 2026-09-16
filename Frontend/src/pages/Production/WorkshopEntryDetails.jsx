@@ -6,6 +6,7 @@ import {
   getAvailableBatches,
   issueWorkshopRm,
   addProductionLog,
+  revertProductionLog,
   deleteProductionLog,
 } from "../../api/workshopEntryApi";
 import { getRawMaterials } from "../../api/rawMaterialApi";
@@ -46,6 +47,15 @@ export default function WorkshopEntryDetails() {
   const [moveRemarks, setMoveRemarks] = useState("");
   const [movingProduction, setMovingProduction] = useState(false);
   const [deletingLogId, setDeletingLogId] = useState(null);
+
+  // Revert Production Movement Form & Modal State
+  const [revertModalOpen, setRevertModalOpen] = useState(false);
+  const [revertFromStage, setRevertFromStage] = useState(null);
+  const [revertToStageId, setRevertToStageId] = useState("");
+  const [revertQuantity, setRevertQuantity] = useState("");
+  const [revertDate, setRevertDate] = useState(new Date().toISOString().split("T")[0]);
+  const [revertRemarks, setRevertRemarks] = useState("");
+  const [revertingProduction, setRevertingProduction] = useState(false);
 
   // Chit Printing Handler
   const handlePrint = (lotId) => {
@@ -323,28 +333,54 @@ export default function WorkshopEntryDetails() {
   const rmReturns = entryData?.rmReturns || [];
   const productionLogs = entryData?.productionLogs || [];
 
-  // Production Stage Accounting
+  // Production Stage Accounting (Accurate sequential accounting with revert support)
   const stageStats = useMemo(() => {
     if (!processes || processes.length === 0) return [];
-    let prevCompleted = prodQtyNumber;
     return processes.map((proc, index) => {
+      // Forward logs leaving this stage (bom_process_id == proc.id && movement_type !== 'revert')
+      const forwardLogs = productionLogs.filter(
+        (l) => Number(l.bom_process_id) === Number(proc.id) && l.movement_type !== "revert"
+      );
+      const forwardOut = forwardLogs.reduce((sum, l) => sum + (parseFloat(l.quantity) || 0), 0);
+
+      // Revert logs leaving this stage (bom_process_id == proc.id && movement_type === 'revert')
+      const revertOutLogs = productionLogs.filter(
+        (l) => Number(l.bom_process_id) === Number(proc.id) && l.movement_type === "revert"
+      );
+      const revertOut = revertOutLogs.reduce((sum, l) => sum + (parseFloat(l.quantity) || 0), 0);
+
+      // Forward logs entering this stage
+      const forwardIn = index === 0
+        ? prodQtyNumber
+        : productionLogs
+            .filter((l) => Number(l.to_bom_process_id) === Number(proc.id) && l.movement_type !== "revert")
+            .reduce((sum, l) => sum + (parseFloat(l.quantity) || 0), 0);
+
+      // Revert logs entering this stage (reverted back from downstream)
+      const revertIn = productionLogs
+        .filter((l) => Number(l.to_bom_process_id) === Number(proc.id) && l.movement_type === "revert")
+        .reduce((sum, l) => sum + (parseFloat(l.quantity) || 0), 0);
+
+      const totalIn = forwardIn + revertIn;
+      const totalOut = forwardOut + revertOut;
+      const available = Math.max(0, totalIn - totalOut);
+      const nextProc = index < processes.length - 1 ? processes[index + 1] : null;
+
+      // All logs where this stage was the source
       const logsForStage = productionLogs.filter(
         (l) => Number(l.bom_process_id) === Number(proc.id)
       );
-      const completed = logsForStage.reduce((sum, l) => sum + (parseFloat(l.quantity) || 0), 0);
-      const input = index === 0 ? prodQtyNumber : prevCompleted;
-      const available = Math.max(0, input - completed);
-      prevCompleted = completed;
-      const nextProc = index < processes.length - 1 ? processes[index + 1] : null;
 
       return {
         ...proc,
         stageNumber: index + 1,
-        inputQty: input,
-        completedQty: completed,
+        inputQty: totalIn,
+        completedQty: forwardOut,
+        revertedInQty: revertIn,
+        revertedOutQty: revertOut,
         availableQty: available,
         nextStageName: nextProc ? nextProc.process_name : "Finished Goods",
-        isComplete: input > 0 && available === 0,
+        isComplete: totalIn > 0 && available === 0,
         logs: logsForStage,
       };
     });
@@ -352,8 +388,12 @@ export default function WorkshopEntryDetails() {
 
   const finishedGoodsQty = useMemo(() => {
     if (stageStats.length === 0) return 0;
-    return stageStats[stageStats.length - 1].completedQty;
-  }, [stageStats]);
+    const lastStage = stageStats[stageStats.length - 1];
+    // Finished goods is strictly forward movements completed from the final stage (to_bom_process_id is null)
+    return productionLogs
+      .filter((l) => Number(l.bom_process_id) === Number(lastStage.id) && !l.to_bom_process_id && l.movement_type !== "revert")
+      .reduce((sum, l) => sum + (parseFloat(l.quantity) || 0), 0);
+  }, [stageStats, productionLogs]);
 
   const totalWipQty = useMemo(() => {
     if (stageStats.length === 0) return 0;
@@ -364,6 +404,17 @@ export default function WorkshopEntryDetails() {
     if (prodQtyNumber <= 0) return 0;
     return Math.min(100, Math.round((finishedGoodsQty / prodQtyNumber) * 100));
   }, [finishedGoodsQty, prodQtyNumber]);
+
+  // Eligible WIP stages for reverting (Only intermediate stages with stageNumber > 1. Stage 1 has no previous process, Finished Goods cannot move back)
+  const eligibleWipStages = useMemo(() => {
+    return stageStats.filter((s) => s.stageNumber > 1);
+  }, [stageStats]);
+
+  // Available previous stages for the currently selected revert source stage
+  const availablePreviousStages = useMemo(() => {
+    if (!revertFromStage) return [];
+    return stageStats.filter((s) => s.stageNumber < revertFromStage.stageNumber);
+  }, [revertFromStage, stageStats]);
 
   const handleOpenMoveModal = (stage) => {
     setSelectedStage(stage);
@@ -419,8 +470,97 @@ export default function WorkshopEntryDetails() {
     }
   };
 
-  const handleDeleteLog = async (logId, qty, fromName, toName) => {
-    const confirmMsg = `Are you sure you want to reverse this movement of ${qty} Nos from ${fromName} to ${toName || "Finished Goods"}?`;
+  // Revert Modal Handlers
+  const handleOpenRevertModal = (stage = null) => {
+    const initialFromStage =
+      stage ||
+      eligibleWipStages.find((s) => s.availableQty > 0) ||
+      eligibleWipStages[0] ||
+      null;
+
+    setRevertFromStage(initialFromStage);
+    if (initialFromStage) {
+      const prev = stageStats.find((s) => s.stageNumber === initialFromStage.stageNumber - 1);
+      setRevertToStageId(prev ? String(prev.id) : "");
+    } else {
+      setRevertToStageId("");
+    }
+    setRevertQuantity("");
+    setRevertDate(new Date().toISOString().split("T")[0]);
+    setRevertRemarks("");
+    setRevertModalOpen(true);
+  };
+
+  const handleCloseRevertModal = () => {
+    if (revertingProduction) return;
+    setRevertModalOpen(false);
+    setRevertFromStage(null);
+    setRevertToStageId("");
+  };
+
+  const handleSelectRevertFromStage = (stageId) => {
+    const stage = stageStats.find((s) => String(s.id) === String(stageId));
+    setRevertFromStage(stage);
+    if (stage) {
+      const prev = stageStats.find((s) => s.stageNumber === stage.stageNumber - 1);
+      setRevertToStageId(prev ? String(prev.id) : "");
+    } else {
+      setRevertToStageId("");
+    }
+    setRevertQuantity("");
+  };
+
+  const handleRevertSubmit = async (e) => {
+    e.preventDefault();
+    if (!revertFromStage) {
+      return toast.error("Please select a source process stage to revert from.");
+    }
+    if (!revertToStageId) {
+      return toast.error("Please select a destination previous process stage.");
+    }
+
+    const qtyNum = parseFloat(revertQuantity);
+    if (isNaN(qtyNum) || qtyNum <= 0) {
+      return toast.error("Please enter a valid revert quantity greater than 0.");
+    }
+    if (qtyNum > revertFromStage.availableQty) {
+      return toast.error(
+        `Revert quantity cannot exceed available in-process stock (${revertFromStage.availableQty} Nos) in ${revertFromStage.process_name}.`
+      );
+    }
+
+    try {
+      setRevertingProduction(true);
+      const res = await revertProductionLog({
+        work_order_item_id: Number(workOrderItemId),
+        from_bom_process_id: revertFromStage.id,
+        to_bom_process_id: Number(revertToStageId),
+        quantity: qtyNum,
+        log_date: revertDate,
+        remarks: revertRemarks.trim(),
+      });
+
+      toast.success(res.data?.message || "Quantity reverted successfully!");
+      handleCloseRevertModal();
+
+      // Reload workshop data
+      const updated = await getWorkshopEntryDetails(workOrderItemId);
+      if (updated.data?.success) {
+        setEntryData(updated.data.data);
+      }
+    } catch (err) {
+      console.error("Failed to revert production movement:", err);
+      toast.error(err.response?.data?.message || "Failed to revert production movement");
+    } finally {
+      setRevertingProduction(false);
+    }
+  };
+
+  const handleDeleteLog = async (logId, qty, fromName, toName, movementType = "forward") => {
+    const isRevert = movementType === "revert";
+    const confirmMsg = isRevert
+      ? `Are you sure you want to cancel / reverse this revert movement of ${qty} Nos from ${fromName} back to ${toName}?`
+      : `Are you sure you want to reverse this forward movement of ${qty} Nos from ${fromName} to ${toName || "Finished Goods"}?`;
     if (!window.confirm(confirmMsg)) return;
 
     try {
@@ -1072,9 +1212,21 @@ export default function WorkshopEntryDetails() {
                     Move quantities sequentially from stage to stage. When products finish the final stage, they become Finished Goods.
                   </p>
                 </div>
-                <span className="text-xs font-bold text-slate-600 bg-slate-100 border border-slate-200 px-3 py-1 rounded-full self-start sm:self-auto">
-                  {stageStats.length} {stageStats.length === 1 ? "Stage" : "Stages"} Defined
-                </span>
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenRevertModal(null)}
+                    disabled={!stageStats.some((s) => s.stageNumber > 1 && s.availableQty > 0)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 transition shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Revert in-process WIP products back to an earlier process stage"
+                  >
+                    <i className="fa-solid fa-arrow-rotate-left text-[11px]"></i>
+                    <span>Revert Process</span>
+                  </button>
+                  <span className="text-xs font-bold text-slate-600 bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-xl">
+                    {stageStats.length} {stageStats.length === 1 ? "Stage" : "Stages"} Defined
+                  </span>
+                </div>
               </div>
 
               {stageStats.length === 0 ? (
@@ -1147,8 +1299,8 @@ export default function WorkshopEntryDetails() {
                           </div>
                         </div>
 
-                        {/* Stage Action Button */}
-                        <div>
+                        {/* Stage Action Buttons */}
+                        <div className="space-y-2">
                           <button
                             type="button"
                             onClick={() => handleOpenMoveModal(stage)}
@@ -1173,6 +1325,24 @@ export default function WorkshopEntryDetails() {
                               </>
                             )}
                           </button>
+
+                          {/* Revert Button: Available for stages > 1 (Stage 1 has no previous process stage) */}
+                          {stage.stageNumber > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenRevertModal(stage)}
+                              disabled={stage.availableQty <= 0}
+                              className={`w-full py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer border ${
+                                stage.availableQty > 0
+                                  ? "bg-amber-50/70 hover:bg-amber-100 text-amber-800 border-amber-200/80 shadow-2xs"
+                                  : "bg-slate-50 text-slate-300 border-slate-200/40 cursor-not-allowed"
+                              }`}
+                              title={`Take products back from ${stage.process_name} to a previous stage`}
+                            >
+                              <i className="fa-solid fa-arrow-rotate-left text-[11px]"></i>
+                              <span>Revert to Previous Process</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
@@ -1217,63 +1387,85 @@ export default function WorkshopEntryDetails() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {productionLogs.map((log, idx) => (
-                        <tr key={log.id || idx} className="hover:bg-slate-50/60 transition">
-                          <td className="py-2.5 px-3 text-center font-semibold text-slate-400">
-                            {idx + 1}
-                          </td>
-                          <td className="py-2.5 px-3 font-semibold text-slate-700 whitespace-nowrap">
-                            {log.log_date ? new Date(log.log_date).toLocaleDateString() : "—"}
-                          </td>
-                          <td className="py-2.5 px-3 font-bold text-slate-800">
-                            {log.from_process_name || `Stage ${log.step_order}`}
-                          </td>
-                          <td className="py-2.5 px-3 text-center text-slate-400">
-                            <i className="fa-solid fa-arrow-right text-[10px]"></i>
-                          </td>
-                          <td className="py-2.5 px-3 font-bold">
-                            {log.to_process_name ? (
-                              <span className="text-slate-800">{log.to_process_name}</span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-emerald-700 font-black">
-                                <i className="fa-solid fa-circle-check text-[11px]"></i>
-                                Finished Goods
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-black text-indigo-700">
-                            {Number(log.quantity).toLocaleString()}
-                          </td>
-                          <td className="py-2.5 px-3 text-slate-600 max-w-[200px] truncate" title={log.remarks || ""}>
-                            {log.remarks || "—"}
-                          </td>
-                          <td className="py-2.5 px-3 text-slate-500 font-medium">
-                            {log.added_by_name || "Unknown"}
-                          </td>
-                          <td className="py-2.5 px-3 text-center">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleDeleteLog(
-                                  log.id,
-                                  log.quantity,
-                                  log.from_process_name,
-                                  log.to_process_name
-                                )
-                              }
-                              disabled={deletingLogId === log.id}
-                              title="Delete / Reverse Movement"
-                              className="w-7 h-7 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 flex items-center justify-center transition cursor-pointer mx-auto disabled:opacity-50"
-                            >
-                              {deletingLogId === log.id ? (
-                                <div className="w-3.5 h-3.5 border-2 border-rose-500 border-t-transparent rounded-full animate-spin"></div>
+                      {productionLogs.map((log, idx) => {
+                        const isRevert = log.movement_type === "revert";
+                        return (
+                          <tr
+                            key={log.id || idx}
+                            className={`transition ${
+                              isRevert ? "bg-amber-50/40 hover:bg-amber-50/70" : "hover:bg-slate-50/60"
+                            }`}
+                          >
+                            <td className="py-2.5 px-3 text-center font-semibold text-slate-400">
+                              {idx + 1}
+                            </td>
+                            <td className="py-2.5 px-3 font-semibold text-slate-700 whitespace-nowrap">
+                              {log.log_date ? new Date(log.log_date).toLocaleDateString() : "—"}
+                            </td>
+                            <td className="py-2.5 px-3 font-bold text-slate-800">
+                              {log.from_process_name || `Stage ${log.step_order}`}
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              {isRevert ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-300">
+                                  <i className="fa-solid fa-arrow-left text-[9px]"></i>
+                                  Revert
+                                </span>
                               ) : (
-                                <i className="fa-regular fa-trash-can text-xs"></i>
+                                <i className="fa-solid fa-arrow-right text-[10px] text-slate-400"></i>
                               )}
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                            <td className="py-2.5 px-3 font-bold">
+                              {log.to_process_name ? (
+                                <span className={isRevert ? "text-amber-900 font-extrabold" : "text-slate-800"}>
+                                  {log.to_process_name}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-emerald-700 font-black">
+                                  <i className="fa-solid fa-circle-check text-[11px]"></i>
+                                  Finished Goods
+                                </span>
+                              )}
+                            </td>
+                            <td
+                              className={`py-2.5 px-3 text-right font-black ${
+                                isRevert ? "text-amber-800" : "text-indigo-700"
+                              }`}
+                            >
+                              {Number(log.quantity).toLocaleString()}
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-600 max-w-[200px] truncate" title={log.remarks || ""}>
+                              {log.remarks || "—"}
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-500 font-medium">
+                              {log.added_by_name || "Unknown"}
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleDeleteLog(
+                                    log.id,
+                                    log.quantity,
+                                    log.from_process_name,
+                                    log.to_process_name,
+                                    log.movement_type
+                                  )
+                                }
+                                disabled={deletingLogId === log.id}
+                                title={isRevert ? "Delete Revert Movement" : "Delete / Reverse Movement"}
+                                className="w-7 h-7 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 flex items-center justify-center transition cursor-pointer mx-auto disabled:opacity-50"
+                              >
+                                {deletingLogId === log.id ? (
+                                  <div className="w-3.5 h-3.5 border-2 border-rose-500 border-t-transparent rounded-full animate-spin"></div>
+                                ) : (
+                                  <i className="fa-regular fa-trash-can text-xs"></i>
+                                )}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1282,16 +1474,16 @@ export default function WorkshopEntryDetails() {
 
             {/* Move Products Modal */}
             {moveModalOpen && selectedStage && (
-              <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-                <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+              <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+                <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[92vh] flex flex-col border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-auto">
                   {/* Modal Header */}
-                  <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                  <div className="px-5 sm:px-6 py-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70 flex-shrink-0">
                     <div>
                       <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
                         <i className="fa-solid fa-arrows-turn-to-dots text-indigo-600"></i>
                         <span>Move Product Quantity</span>
                       </h3>
-                      <p className="text-xs text-slate-500 mt-0.5">
+                      <p className="text-[11px] text-slate-500 mt-0.5">
                         Stage {selectedStage.stageNumber}: {selectedStage.process_name}
                       </p>
                     </div>
@@ -1306,99 +1498,101 @@ export default function WorkshopEntryDetails() {
                   </div>
 
                   {/* Modal Body Form */}
-                  <form onSubmit={handleMoveSubmit} className="p-6 space-y-4 text-xs">
-                    {/* Destination Banner */}
-                    <div className="p-3 rounded-xl bg-indigo-50/60 border border-indigo-100 flex items-center justify-between">
-                      <div>
-                        <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block">
-                          Moving To:
-                        </span>
-                        <span className="text-sm font-black text-indigo-950">
-                          {selectedStage.nextStageName}
-                        </span>
+                  <form onSubmit={handleMoveSubmit} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-3.5 text-xs flex flex-col justify-between">
+                    <div className="space-y-3.5">
+                      {/* Destination Banner */}
+                      <div className="p-3 rounded-xl bg-indigo-50/60 border border-indigo-100 flex items-center justify-between">
+                        <div>
+                          <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block">
+                            Moving To:
+                          </span>
+                          <span className="text-xs sm:text-sm font-black text-indigo-950">
+                            {selectedStage.nextStageName}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                            Available in Queue
+                          </span>
+                          <span className="text-xs sm:text-sm font-black text-slate-900">
+                            {selectedStage.availableQty.toLocaleString()} Nos
+                          </span>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                          Available in Queue
-                        </span>
-                        <span className="text-sm font-black text-slate-900">
-                          {selectedStage.availableQty.toLocaleString()} Nos
-                        </span>
+
+                      {/* Quantity Input with Quick Presets */}
+                      <div className="space-y-1">
+                        <label className="block font-bold text-slate-700 text-[11px]">
+                          Quantity to Move (Nos) <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          min="1"
+                          max={selectedStage.availableQty}
+                          value={moveQuantity}
+                          onChange={(e) => setMoveQuantity(e.target.value)}
+                          placeholder={`Enter quantity (max ${selectedStage.availableQty})`}
+                          required
+                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition"
+                        />
+
+                        {/* Quick preset buttons */}
+                        <div className="flex items-center gap-1.5 pt-0.5">
+                          <span className="text-[10px] text-slate-400">Presets:</span>
+                          <button
+                            type="button"
+                            onClick={() => setMoveQuantity(String(Math.floor(selectedStage.availableQty * 0.25) || 1))}
+                            className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 transition cursor-pointer"
+                          >
+                            25%
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setMoveQuantity(String(Math.floor(selectedStage.availableQty * 0.5) || 1))}
+                            className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 transition cursor-pointer"
+                          >
+                            50%
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setMoveQuantity(String(selectedStage.availableQty))}
+                            className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition cursor-pointer"
+                          >
+                            All ({selectedStage.availableQty})
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Movement Date Input */}
+                      <div className="space-y-1">
+                        <label className="block font-bold text-slate-700 text-[11px]">
+                          Movement Date <span className="text-rose-500">*</span>
+                        </label>
+                        <DateInput
+                          value={moveDate}
+                          onChange={(e) => setMoveDate(e.target.value)}
+                          required
+                        />
+                      </div>
+
+                      {/* Remarks Input */}
+                      <div className="space-y-1">
+                        <label className="block font-bold text-slate-700 text-[11px]">
+                          Remarks / Notes <span className="text-slate-400 font-normal">(Optional)</span>
+                        </label>
+                        <textarea
+                          rows="2"
+                          value={moveRemarks}
+                          onChange={(e) => setMoveRemarks(e.target.value)}
+                          placeholder="Enter any notes or remarks..."
+                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition resize-none"
+                        ></textarea>
                       </div>
                     </div>
 
-                    {/* Quantity Input with Quick Presets */}
-                    <div className="space-y-1.5">
-                      <label className="block font-bold text-slate-700">
-                        Quantity to Move (Nos) <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        type="number"
-                        step="any"
-                        min="1"
-                        max={selectedStage.availableQty}
-                        value={moveQuantity}
-                        onChange={(e) => setMoveQuantity(e.target.value)}
-                        placeholder={`Enter quantity (max ${selectedStage.availableQty})`}
-                        required
-                        className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition"
-                      />
-
-                      {/* Quick preset buttons */}
-                      <div className="flex items-center gap-2 pt-1">
-                        <span className="text-[10px] font-semibold text-slate-400">Presets:</span>
-                        <button
-                          type="button"
-                          onClick={() => setMoveQuantity(String(Math.floor(selectedStage.availableQty * 0.25) || 1))}
-                          className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 transition cursor-pointer"
-                        >
-                          25%
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setMoveQuantity(String(Math.floor(selectedStage.availableQty * 0.5) || 1))}
-                          className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 transition cursor-pointer"
-                        >
-                          50%
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setMoveQuantity(String(selectedStage.availableQty))}
-                          className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition cursor-pointer"
-                        >
-                          All ({selectedStage.availableQty})
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Movement Date Input */}
-                    <div className="space-y-1.5">
-                      <label className="block font-bold text-slate-700">
-                        Movement Date <span className="text-rose-500">*</span>
-                      </label>
-                      <DateInput
-                        value={moveDate}
-                        onChange={(e) => setMoveDate(e.target.value)}
-                        required
-                      />
-                    </div>
-
-                    {/* Remarks Input */}
-                    <div className="space-y-1.5">
-                      <label className="block font-bold text-slate-700">
-                        Remarks / Notes <span className="text-slate-400 font-normal">(Optional)</span>
-                      </label>
-                      <textarea
-                        rows="2"
-                        value={moveRemarks}
-                        onChange={(e) => setMoveRemarks(e.target.value)}
-                        placeholder="Enter any notes or remarks..."
-                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition resize-none"
-                      ></textarea>
-                    </div>
-
-                    {/* Modal Actions */}
-                    <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                    {/* Modal Actions (Sticky bottom footer) */}
+                    <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 flex-shrink-0 mt-2">
                       <button
                         type="button"
                         onClick={handleCloseMoveModal}
@@ -1421,6 +1615,220 @@ export default function WorkshopEntryDetails() {
                           <>
                             <i className="fa-solid fa-check"></i>
                             <span>Confirm & Move</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* Revert Products Modal */}
+            {revertModalOpen && (
+              <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+                <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[92vh] flex flex-col border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-auto">
+                  {/* Modal Header */}
+                  <div className="px-5 sm:px-6 py-3.5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-amber-50/70 to-slate-50 flex-shrink-0">
+                    <div>
+                      <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                        <i className="fa-solid fa-arrow-rotate-left text-amber-600"></i>
+                        <span>Revert to Previous Process</span>
+                      </h3>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Move in-process products back for rework or correction
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCloseRevertModal}
+                      disabled={revertingProduction}
+                      className="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer"
+                    >
+                      <i className="fa-solid fa-xmark text-sm"></i>
+                    </button>
+                  </div>
+
+                  {/* Guard Notice Banner */}
+                  <div className="bg-amber-50/80 border-b border-amber-200/60 px-5 sm:px-6 py-2 flex items-center gap-2.5 text-[11px] text-amber-900 font-medium flex-shrink-0">
+                    <i className="fa-solid fa-triangle-exclamation text-amber-600 text-xs flex-shrink-0"></i>
+                    <span>Only active WIP products can be moved back. Finished Goods cannot be reverted.</span>
+                  </div>
+
+                  {/* Modal Body Form */}
+                  <form onSubmit={handleRevertSubmit} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-3.5 text-xs flex flex-col justify-between">
+                    <div className="space-y-3.5">
+                      {/* Grid for Stages: Source and Destination side-by-side on sm screens */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* Source Stage Selection */}
+                        <div className="space-y-1">
+                          <label className="block font-bold text-slate-700 text-[11px]">
+                            From Stage (WIP) <span className="text-rose-500">*</span>
+                          </label>
+                          <select
+                            value={revertFromStage ? String(revertFromStage.id) : ""}
+                            onChange={(e) => handleSelectRevertFromStage(e.target.value)}
+                            required
+                            className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-600 transition"
+                          >
+                            <option value="" disabled>Select WIP Stage</option>
+                            {eligibleWipStages.map((st) => (
+                              <option key={st.id} value={st.id}>
+                                Stage {st.stageNumber}: {st.process_name} ({st.availableQty} Nos)
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Destination Previous Stage Selection */}
+                        <div className="space-y-1">
+                          <label className="block font-bold text-slate-700 text-[11px]">
+                            To Previous Stage <span className="text-rose-500">*</span>
+                          </label>
+                          <select
+                            value={revertToStageId}
+                            onChange={(e) => setRevertToStageId(e.target.value)}
+                            required
+                            disabled={availablePreviousStages.length === 0}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-600 transition disabled:bg-slate-100 disabled:text-slate-400"
+                          >
+                            {availablePreviousStages.length === 0 ? (
+                              <option value="">No preceding stages</option>
+                            ) : (
+                              availablePreviousStages.map((st) => (
+                                <option key={st.id} value={st.id}>
+                                  Stage {st.stageNumber}: {st.process_name}
+                                </option>
+                              ))
+                            )}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Destination & Available Info Banner */}
+                      {revertFromStage && (
+                        <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/80 flex items-center justify-between">
+                          <div>
+                            <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">
+                              Reverting From:
+                            </span>
+                            <span className="text-xs font-black text-slate-900">
+                              Stage {revertFromStage.stageNumber}: {revertFromStage.process_name}
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                              Available in Queue
+                            </span>
+                            <span className="text-xs font-black text-amber-900">
+                              {revertFromStage.availableQty.toLocaleString()} Nos
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Quantity & Date Grid */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* Quantity Input with Quick Presets */}
+                        <div className="space-y-1">
+                          <label className="block font-bold text-slate-700 text-[11px]">
+                            Quantity to Revert (Nos) <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="number"
+                            step="any"
+                            min="1"
+                            max={revertFromStage?.availableQty || 1}
+                            value={revertQuantity}
+                            onChange={(e) => setRevertQuantity(e.target.value)}
+                            placeholder={`Max ${revertFromStage?.availableQty ?? 0}`}
+                            required
+                            disabled={!revertFromStage || revertFromStage.availableQty <= 0}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-600 transition disabled:bg-slate-100 disabled:text-slate-400"
+                          />
+
+                          {/* Quick preset buttons */}
+                          {revertFromStage && revertFromStage.availableQty > 0 && (
+                            <div className="flex items-center gap-1.5 pt-0.5">
+                              <span className="text-[10px] text-slate-400">Presets:</span>
+                              <button
+                                type="button"
+                                onClick={() => setRevertQuantity(String(Math.floor(revertFromStage.availableQty * 0.25) || 1))}
+                                className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 hover:bg-amber-50 hover:text-amber-700 border border-slate-200 transition cursor-pointer"
+                              >
+                                25%
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setRevertQuantity(String(Math.floor(revertFromStage.availableQty * 0.5) || 1))}
+                                className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 hover:bg-amber-50 hover:text-amber-700 border border-slate-200 transition cursor-pointer"
+                              >
+                                50%
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setRevertQuantity(String(revertFromStage.availableQty))}
+                                className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 hover:bg-amber-200 border border-amber-300 transition cursor-pointer"
+                              >
+                                All ({revertFromStage.availableQty})
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Revert Date Input */}
+                        <div className="space-y-1">
+                          <label className="block font-bold text-slate-700 text-[11px]">
+                            Revert Date <span className="text-rose-500">*</span>
+                          </label>
+                          <DateInput
+                            value={revertDate}
+                            onChange={(e) => setRevertDate(e.target.value)}
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      {/* Remarks Input */}
+                      <div className="space-y-1">
+                        <label className="block font-bold text-slate-700 text-[11px]">
+                          Reason / Remarks for Revert <span className="text-rose-500">*</span>
+                        </label>
+                        <textarea
+                          rows="2"
+                          value={revertRemarks}
+                          onChange={(e) => setRevertRemarks(e.target.value)}
+                          placeholder="State reason (e.g. Defect in turning, rework required, operator adjustment)..."
+                          required
+                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-600 transition resize-none"
+                        ></textarea>
+                      </div>
+                    </div>
+
+                    {/* Modal Actions (Sticky bottom footer) */}
+                    <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 flex-shrink-0 mt-2">
+                      <button
+                        type="button"
+                        onClick={handleCloseRevertModal}
+                        disabled={revertingProduction}
+                        className="px-4 py-2 border border-slate-200 rounded-xl text-slate-700 font-bold hover:bg-slate-50 transition cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={revertingProduction || !revertQuantity || !revertFromStage || revertFromStage.availableQty <= 0}
+                        className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold shadow-xs transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        {revertingProduction ? (
+                          <>
+                            <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            <span>Reverting...</span>
+                          </>
+                        ) : (
+                          <>
+                            <i className="fa-solid fa-arrow-rotate-left"></i>
+                            <span>Confirm & Revert</span>
                           </>
                         )}
                       </button>

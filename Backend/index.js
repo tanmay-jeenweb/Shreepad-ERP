@@ -59,7 +59,7 @@ const { createStockStatusTable, ensureStockStatusColumns } = require("./models/s
 const { createMaterialAddTables, ensureMaterialAddColumns } = require("./models/materialAddModel.js");
 const { createWorkOrdersTable, ensureWorkOrderColumns, ensureSortOrderColumn, ensureIsOnHoldColumn, ensurePlannedDateColumns, ensureDelayColumns, ensurePriorityColumn } = require("./models/workOrderModel.js");
 const { createRmReturnsTable } = require("./models/rmReturnModel.js");
-const { createWorkshopEntriesTable, createWorkshopRmIssuesTable, createWorkshopProductionLogsTable, ensureWorkshopEntryColumns } = require("./models/workshopEntryModel.js");
+const { createWorkshopEntriesTable, createWorkshopRmIssuesTable, createWorkshopProductionLogsTable, ensureWorkshopEntryColumns, ensureWorkshopProductionLogColumns } = require("./models/workshopEntryModel.js");
 
 
 const app = express();
@@ -200,6 +200,7 @@ const startServer = async () => {
         await ensureWorkshopEntryColumns();
         await createWorkshopRmIssuesTable();
         await createWorkshopProductionLogsTable();
+        await ensureWorkshopProductionLogColumns();
 
 
         console.log("All database tables are initialized and ready.");
