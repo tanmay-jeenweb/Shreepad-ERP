@@ -176,6 +176,7 @@ const getAllWorkshopEntries = async () => {
         ) issue_summary ON woi.id = issue_summary.work_order_item_id
         WHERE COALESCE(woi.is_on_hold, 0) = 0 
           AND COALESCE(woi.production_quantity, 0) > 0
+          AND wo.status = 'Started'
         ORDER BY wo.work_order_no DESC, woi.id DESC
     `;
     const [rows] = await db.execute(query);
@@ -193,6 +194,7 @@ const getWorkshopEntryByWorkOrderItemId = async (workOrderItemId) => {
             woi.production_time_hours,
             wo.work_order_no,
             wo.work_order_date,
+            COALESCE(wo.status, 'Draft') AS work_order_status,
             m.id AS material_id,
             m.material_name,
             m.material_code,
@@ -394,7 +396,7 @@ const issueWorkshopRawMaterials = async ({
 
         // 1. Get Work Order Number
         const [woRows] = await connection.execute(`
-            SELECT wo.work_order_no
+            SELECT wo.work_order_no, COALESCE(wo.status, 'Draft') AS status
             FROM work_order_items woi
             JOIN work_orders wo ON woi.work_order_id = wo.id
             WHERE woi.id = ?
@@ -402,6 +404,10 @@ const issueWorkshopRawMaterials = async ({
 
         if (woRows.length === 0) {
             throw new Error('Work Order item not found');
+        }
+
+        if (woRows[0].status !== 'Started') {
+            throw new Error('Cannot issue raw materials: Work Order has not been started yet. Please start it in the Work Order master.');
         }
 
         const workOrderNo = woRows[0].work_order_no;

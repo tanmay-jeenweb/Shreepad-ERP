@@ -146,7 +146,7 @@ export default function MaterialIssueReturnMaster() {
               Material Issue & Return
             </h1>
             <p className="text-sm text-slate-500 mt-1.5 font-medium">
-              Select a work order to issue raw materials, generate & print Chit labels, or record returns.
+              Select an active Started work order to issue raw materials, generate & print Chit labels, or record returns.
             </p>
           </div>
         </div>
@@ -155,7 +155,7 @@ export default function MaterialIssueReturnMaster() {
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
           <DataTable
             tableId="store_material_issue_master_table"
-            title="Work Orders for Material Issue & Return"
+            title="Active Work Orders for Material Issue & Return"
             data={displayItems}
             columns={columns}
             loading={loading}

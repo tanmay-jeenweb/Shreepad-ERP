@@ -228,6 +228,9 @@ export default function WorkshopEntryDetails() {
 
   const handleIssueSubmit = async (e) => {
     e.preventDefault();
+    if (entryData?.work_order_status !== 'Started') {
+      return toast.error("Cannot issue raw materials: Work Order has not been started yet. Please start it in Work Order Master.");
+    }
     if (rmIssues.length === 0) {
       return toast.error("Please add at least one raw material to issue.");
     }
@@ -660,8 +663,29 @@ export default function WorkshopEntryDetails() {
               <i className="fa-solid fa-file-lines text-[10px]"></i>
               {workOrderFormattedNo}
             </span>
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
+              entryData?.work_order_status === 'Started'
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                : 'bg-amber-50 text-amber-700 border border-amber-200'
+            }`}>
+              {entryData?.work_order_status === 'Started' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>}
+              {entryData?.work_order_status || 'Draft'}
+            </span>
           </div>
         </div>
+
+        {/* Unstarted Notice Banner */}
+        {entryData?.work_order_status !== 'Started' && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3 text-amber-900 shadow-2xs">
+            <i className="fa-solid fa-triangle-exclamation text-amber-600 text-xl shrink-0"></i>
+            <div>
+              <p className="text-sm font-bold">This Work Order is not started ({entryData?.work_order_status || 'Draft'}).</p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                Raw material issuing, chit printing, and production stage movements are locked until the Work Order is started from the Work Order Master.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Work Order & Product Specifications Card */}
         <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs p-6 space-y-5">
@@ -899,7 +923,8 @@ export default function WorkshopEntryDetails() {
                 <button
                   type="button"
                   onClick={handleAddIssueRow}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition cursor-pointer border border-indigo-200"
+                  disabled={entryData?.work_order_status !== 'Started'}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition cursor-pointer border border-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <i className="fa-solid fa-plus text-xs"></i>
                   <span>Add Material</span>

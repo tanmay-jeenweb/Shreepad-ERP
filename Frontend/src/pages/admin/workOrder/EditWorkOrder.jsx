@@ -26,6 +26,7 @@ export default function EditWorkOrder() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [workOrder, setWorkOrder] = useState(null);
+  const [workOrderStatus, setWorkOrderStatus] = useState("Draft");
   const [workOrderDate, setWorkOrderDate] = useState("");
   const [items, setItems] = useState([]);
 
@@ -51,12 +52,13 @@ export default function EditWorkOrder() {
 
         const woData = woRes.data?.data;
         if (!woData) {
-          toast.error("Work Order not found");
+          toast.error("Work order not found");
           navigate("/sales/work-orders");
           return;
         }
 
         setWorkOrder(woData);
+        setWorkOrderStatus(woData.status || "Draft");
         setWorkOrderDate(woData.work_order_date ? woData.work_order_date.substring(0, 10) : "");
         
         const bomsList = bomRes.data?.data || [];
@@ -237,6 +239,10 @@ export default function EditWorkOrder() {
   };
 
   const addItemRow = () => {
+    if (workOrderStatus === "Started") {
+      toast.error("Cannot add new material rows: Work Order is already Started.");
+      return;
+    }
     setItems([...items, {
       material_id: "",
       material_name: "",
@@ -252,6 +258,10 @@ export default function EditWorkOrder() {
   };
 
   const removeItemRow = (index) => {
+    if (workOrderStatus === "Started") {
+      toast.error("Cannot delete material rows: Work Order is already Started.");
+      return;
+    }
     if (items.length > 1) {
       setItems(items.filter((_, idx) => idx !== index));
     } else {
@@ -476,8 +486,16 @@ export default function EditWorkOrder() {
         {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-slate-800 tracking-tight">
-              Edit Work Order - WO-{String(workOrder?.work_order_no).padStart(4, "0")}
+            <h1 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-3">
+              <span>Edit Work Order - WO-{String(workOrder?.work_order_no).padStart(4, "0")}</span>
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
+                workOrderStatus === 'Started'
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : 'bg-amber-50 text-amber-700 border border-amber-200'
+              }`}>
+                {workOrderStatus === 'Started' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>}
+                {workOrderStatus || 'Draft'}
+              </span>
             </h1>
             <p className="text-sm text-slate-500 mt-1">
               Modify work order date or items configuration.
@@ -490,6 +508,16 @@ export default function EditWorkOrder() {
             Cancel
           </button>
         </div>
+
+        {/* Started Work Order Notice */}
+        {workOrderStatus === 'Started' && (
+          <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl p-4 flex items-center gap-3 text-emerald-900 mb-6">
+            <i className="fa-solid fa-circle-info text-emerald-600 text-lg shrink-0"></i>
+            <div className="text-xs text-emerald-800">
+              <span className="font-bold">Active Started Work Order:</span> This work order has been started and is active in Workshop Entry. Adding or deleting material item rows is locked to preserve production and inventory tracking.
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Card: Header details */}
@@ -543,13 +571,19 @@ export default function EditWorkOrder() {
                 <i className="fa-solid fa-boxes-stacked text-[#369ACF]"></i>
                 Work Order Items
               </h2>
-              <button
-                type="button"
-                onClick={addItemRow}
-                className="text-sm font-semibold text-[#369ACF] hover:text-[#2583b4] flex items-center gap-1 cursor-pointer"
-              >
-                <i className="fa-solid fa-plus text-xs"></i> Add Item Row
-              </button>
+              {workOrderStatus === 'Started' ? (
+                <span className="text-xs font-semibold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200 flex items-center gap-1.5">
+                  <i className="fa-solid fa-lock text-[10px]"></i> Material rows locked (Work Order Started)
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={addItemRow}
+                  className="text-sm font-semibold text-[#369ACF] hover:text-[#2583b4] flex items-center gap-1 cursor-pointer"
+                >
+                  <i className="fa-solid fa-plus text-xs"></i> Add Item Row
+                </button>
+              )}
             </div>
 
             <div className="overflow-x-auto">
@@ -606,8 +640,9 @@ export default function EditWorkOrder() {
                             <button
                               type="button"
                               onClick={() => removeItemRow(idx)}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-250 bg-rose-50 text-rose-600 hover:bg-rose-100 cursor-pointer"
-                              title="Delete Row"
+                              disabled={workOrderStatus === 'Started'}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-250 bg-rose-50 text-rose-600 hover:bg-rose-100 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                              title={workOrderStatus === 'Started' ? "Cannot delete item from a Started Work Order" : "Delete Row"}
                             >
                               <i className="fa-solid fa-trash-can text-sm"></i>
                             </button>

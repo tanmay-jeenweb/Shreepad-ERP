@@ -123,6 +123,19 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                         <p className="text-sm text-slate-800 font-medium">{workOrder.added_by_name || "N/A"}</p>
                                     </div>
                                     <div>
+                                        <p className="text-xs text-slate-400 font-medium mb-1">Status</p>
+                                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
+                                            workOrder.status === 'Started'
+                                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                                : workOrder.status === 'Completed'
+                                                ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                                                : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                        }`}>
+                                            {workOrder.status === 'Started' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>}
+                                            {workOrder.status || 'Draft'}
+                                        </span>
+                                    </div>
+                                    <div>
                                         <p className="text-xs text-slate-400 font-medium mb-1">Created On</p>
                                         <p className="text-sm text-slate-700 font-mono text-xs">
                                             {formatDateTime(workOrder.created_at)}
@@ -187,18 +200,28 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                                     </td>
                                                     <td className="px-3 py-2 text-sm whitespace-nowrap text-center">
                                                         {canReadBOM ? (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    onClose();
-                                                                    navigate(`/production/workshop-entry/${item.id}`);
-                                                                }}
-                                                                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-all cursor-pointer"
-                                                                title="Open Workshop Entry"
-                                                            >
-                                                                <i className="fa-solid fa-screwdriver-wrench text-[10px]"></i>
-                                                                Workshop Entry
-                                                            </button>
+                                                            (workOrder.status === 'Started' || workOrder.status === 'Completed') ? (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        onClose();
+                                                                        navigate(`/production/workshop-entry/${item.id}`);
+                                                                    }}
+                                                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-all cursor-pointer"
+                                                                    title="Open Workshop Entry"
+                                                                >
+                                                                    <i className="fa-solid fa-screwdriver-wrench text-[10px]"></i>
+                                                                    Workshop Entry
+                                                                </button>
+                                                            ) : (
+                                                                <span
+                                                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-500 border border-slate-200"
+                                                                    title="Work order must be started to open Workshop Entry"
+                                                                >
+                                                                    <i className="fa-regular fa-clock text-[10px]"></i>
+                                                                    Unstarted
+                                                                </span>
+                                                            )
                                                         ) : (
                                                             <span className="text-slate-400 italic text-xs">No Permission</span>
                                                         )}

@@ -41,3 +41,7 @@ export const updateWorkOrderItemRemarks = async (id, data) => {
 export const updateWorkOrder = async (id, data) => {
     return await apiClient.put(`/work-orders/update/${id}`, data);
 };
+
+export const startWorkOrder = async (id) => {
+    return await apiClient.put(`/work-orders/start/${id}`);
+};

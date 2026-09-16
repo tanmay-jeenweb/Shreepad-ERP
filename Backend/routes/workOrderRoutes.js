@@ -10,7 +10,8 @@ const {
     updateWorkOrderItemDelayController,
     updateWorkOrderItemPriorityController,
     updateWorkOrderItemRemarksController,
-    updateWorkOrderController
+    updateWorkOrderController,
+    startWorkOrderController
 } = require("../controllers/workOrderController.js");
 
 const router = express.Router();
@@ -24,6 +25,7 @@ router.put("/item/:id/delay", verifyToken, verifyPermission("work_order", "updat
 router.put("/item/:id/priority", verifyToken, verifyPermission("work_order", "update"), updateWorkOrderItemPriorityController);
 router.put("/item/:id/remarks", verifyToken, verifyPermission("work_order", "update"), updateWorkOrderItemRemarksController);
 router.put("/update/:id", verifyToken, verifyPermission("work_order", "update"), updateWorkOrderController);
+router.put("/start/:id", verifyToken, verifyPermission("work_order", "update"), startWorkOrderController);
 router.delete("/delete/:id", verifyToken, verifyPermission("work_order", "delete"), deleteWorkOrderController);
 
 module.exports = router;

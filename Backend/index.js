@@ -57,7 +57,7 @@ const { createBatchSequenceTable } = require("./models/batchSequenceModel.js");
 const { createStockIssuesTable, ensureStockIssuesColumns } = require("./models/stockBookModel.js");
 const { createStockStatusTable, ensureStockStatusColumns } = require("./models/stockStatusModel.js");
 const { createMaterialAddTables, ensureMaterialAddColumns } = require("./models/materialAddModel.js");
-const { createWorkOrdersTable, ensureWorkOrderColumns, ensureSortOrderColumn, ensureIsOnHoldColumn, ensurePlannedDateColumns, ensureDelayColumns, ensurePriorityColumn } = require("./models/workOrderModel.js");
+const { createWorkOrdersTable, ensureWorkOrderColumns, ensureSortOrderColumn, ensureIsOnHoldColumn, ensurePlannedDateColumns, ensureDelayColumns, ensurePriorityColumn, ensureWorkOrderStatusColumns } = require("./models/workOrderModel.js");
 const { createRmReturnsTable } = require("./models/rmReturnModel.js");
 const { createWorkshopEntriesTable, createWorkshopRmIssuesTable, createWorkshopProductionLogsTable, ensureWorkshopEntryColumns, ensureWorkshopProductionLogColumns } = require("./models/workshopEntryModel.js");
 
@@ -196,6 +196,7 @@ const startServer = async () => {
         await ensurePlannedDateColumns();
         await ensureDelayColumns();
         await ensurePriorityColumn();
+        await ensureWorkOrderStatusColumns();
         await createWorkshopEntriesTable();
         await ensureWorkshopEntryColumns();
         await createWorkshopRmIssuesTable();

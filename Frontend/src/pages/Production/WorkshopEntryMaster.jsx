@@ -136,9 +136,21 @@ export default function WorkshopEntryMaster() {
           </div>
         )}
 
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2.5">
+              <i className="fa-solid fa-screwdriver-wrench text-indigo-600 text-xl"></i>
+              Workshop Entry
+            </h1>
+            <p className="text-sm text-slate-500 mt-1 font-medium">
+              Displays active Started work orders for floor execution, raw material issues, and process tracking.
+            </p>
+          </div>
+        </div>
+
         <DataTable
           tableId="workshop_entry_master"
-          title="Workshop Entry"
+          title="Active Workshop Orders"
           data={displayItems}
           columns={columns}
           loading={loading}
