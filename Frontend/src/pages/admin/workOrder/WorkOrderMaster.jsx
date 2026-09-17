@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import Navbar from "../../../components/Navbar";
-import { getAllWorkOrders, deleteWorkOrder } from "../../../api/workOrderApi";
+import { getAllWorkOrders, deleteWorkOrder, startWorkOrder } from "../../../api/workOrderApi";
 import DataTable from "../../../components/DataTable";
 import toast from "react-hot-toast";
 import { usePermission } from "../../../context/PermissionContext";
@@ -12,6 +12,7 @@ export default function WorkOrderMaster() {
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState([]);
   const [error, setError] = useState("");
+  const [startingId, setStartingId] = useState(null);
   
   // View modal state
   const [viewWorkOrderId, setViewWorkOrderId] = useState(null);
@@ -35,6 +36,24 @@ export default function WorkOrderMaster() {
   useEffect(() => {
     loadData();
   }, []);
+
+  const handleStartWorkOrder = async (row) => {
+    const woNumber = `WO-${String(row.work_order_no).padStart(4, '0')}`;
+    if (!window.confirm(`Are you sure you want to START Work Order ${woNumber}?\n\nOnce started, this work order will become active and visible in Workshop Entry and Material Issue & Return.`)) {
+      return;
+    }
+    setStartingId(row.work_order_id);
+    try {
+      await startWorkOrder(row.work_order_id);
+      toast.success(`Work Order ${woNumber} started successfully! It is now active in Workshop Entry.`);
+      await loadData();
+    } catch (err) {
+      console.error("Failed to start work order:", err);
+      toast.error(err?.response?.data?.message || "Failed to start work order");
+    } finally {
+      setStartingId(null);
+    }
+  };
 
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this work order?")) return;
@@ -121,16 +140,34 @@ export default function WorkOrderMaster() {
         )
       },
       {
-        key: "machine_name",
-        label: "Machine",
+        key: "work_order_status",
+        label: "Status",
         minWidth: "120px",
-        render: row => row.machine_name ? (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs font-medium">
-            {row.machine_name}
-          </span>
-        ) : (
-          <span className="text-slate-400 italic">Not Set</span>
-        )
+        render: row => {
+          const status = row.work_order_status || "Draft";
+          if (status === "Started") {
+            return (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                Started
+              </span>
+            );
+          }
+          if (status === "Completed") {
+            return (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                <i className="fa-solid fa-check text-[10px]"></i>
+                Completed
+              </span>
+            );
+          }
+          return (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+              <i className="fa-regular fa-clock text-[10px]"></i>
+              Draft
+            </span>
+          );
+        }
       }
     ];
 
@@ -141,15 +178,33 @@ export default function WorkOrderMaster() {
       key: "actions",
       label: "Actions",
       sortable: false,
-      minWidth: "140px",
+      minWidth: "180px",
       render: (row) => (
         <div className="flex items-center gap-2">
+          {/* Start Work Order Button (for Draft / unstarted work orders) */}
+          {canUpdate && (row.work_order_status === "Draft" || !row.work_order_status) && (
+            <button
+              type="button"
+              onClick={() => handleStartWorkOrder(row)}
+              disabled={startingId === row.work_order_id}
+              className="flex h-8 items-center gap-1.5 px-2.5 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-400 cursor-pointer font-bold text-xs transition-all shadow-2xs active:scale-95 disabled:opacity-50"
+              title="Start Work Order (Releases to Workshop Entry)"
+            >
+              {startingId === row.work_order_id ? (
+                <div className="w-3.5 h-3.5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <i className="fa-solid fa-play text-[10px]"></i>
+              )}
+              <span>Start</span>
+            </button>
+          )}
+
           {/* View Work Order Details */}
           <button
             type="button"
             onClick={() => setViewWorkOrderId(row.work_order_id)}
             className="flex h-8 w-8 items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-600 hover:bg-sky-100 cursor-pointer"
-            title="View Work Order Details & P Memo"
+            title="View Work Order Details & Workshop Entry"
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="h-4 w-4">
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.964-7.178z" />
@@ -198,7 +253,7 @@ export default function WorkOrderMaster() {
     });
 
     return cols;
-  }, [hasPermission, navigate]);
+  }, [hasPermission, navigate, startingId]);
 
   const canWrite = hasPermission("work_order", "write");
 

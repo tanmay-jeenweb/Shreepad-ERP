@@ -224,6 +224,48 @@ const updateWorkOrderController = async (req, res) => {
     }
 };
 
+const startWorkOrderController = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user.id;
+
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: "Work Order ID is required."
+            });
+        }
+
+        const workOrder = await workOrderModel.getWorkOrderById(id);
+        if (!workOrder) {
+            return res.status(404).json({
+                success: false,
+                message: "Work Order not found."
+            });
+        }
+
+        if (workOrder.status === 'Started') {
+            return res.status(400).json({
+                success: false,
+                message: "Work Order is already started."
+            });
+        }
+
+        await workOrderModel.startWorkOrder(id, userId);
+
+        return res.status(200).json({
+            success: true,
+            message: `Work Order WO-${String(workOrder.work_order_no).padStart(4, '0')} has been started successfully.`
+        });
+    } catch (error) {
+        console.error("Error in startWorkOrderController:", error);
+        return res.status(500).json({
+            success: false,
+            message: error.message || "Internal Server Error"
+        });
+    }
+};
+
 module.exports = {
     addWorkOrder,
     getAllWorkOrdersController,
@@ -234,5 +276,6 @@ module.exports = {
     updateWorkOrderItemDelayController,
     updateWorkOrderItemPriorityController,
     updateWorkOrderItemRemarksController,
-    updateWorkOrderController
+    updateWorkOrderController,
+    startWorkOrderController
 };

@@ -1,7 +1,12 @@
 const {
     getAllWorkshopEntries,
-    getWorkshopEntryByPMemoId,
-    saveWorkshopEntry
+    getWorkshopEntryByWorkOrderItemId,
+    getAvailableBatches,
+    issueWorkshopRawMaterials,
+    getAllWorkshopRmIssues,
+    addWorkshopProductionLog,
+    revertWorkshopProductionLog,
+    deleteWorkshopProductionLog
 } = require('../models/workshopEntryModel.js');
 const { createAuditLog } = require('../models/auditLogModel.js');
 
@@ -27,15 +32,15 @@ const getWorkshopEntryDetailsController = async (req, res) => {
         if (!id) {
             return res.status(400).json({
                 success: false,
-                message: 'P-Memo ID or Work Order Item ID is required'
+                message: 'Work Order Item ID is required'
             });
         }
 
-        const entry = await getWorkshopEntryByPMemoId(id);
+        const entry = await getWorkshopEntryByWorkOrderItemId(id);
         if (!entry) {
             return res.status(404).json({
                 success: false,
-                message: 'Workshop entry not found'
+                message: 'Workshop entry details not found'
             });
         }
 
@@ -52,31 +57,110 @@ const getWorkshopEntryDetailsController = async (req, res) => {
     }
 };
 
-const saveWorkshopEntryController = async (req, res) => {
+const issueWorkshopRmController = async (req, res) => {
     try {
         const addedBy = req.user.id;
         const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
         const {
-            pmemo_id,
-            machine_id,
-            packing_method,
-            status,
-            remarks
+            work_order_item_id,
+            issues,
+            date
         } = req.body;
 
-        if (!pmemo_id) {
+        if (!work_order_item_id || !Array.isArray(issues) || issues.length === 0) {
             return res.status(400).json({
                 success: false,
-                message: 'Production Memo ID is required'
+                message: 'Work Order Item ID and at least one RM issue item are required'
             });
         }
 
-        const result = await saveWorkshopEntry({
-            pmemo_id,
-            machine_id: machine_id ? Number(machine_id) : null,
-            packing_method: packing_method !== undefined ? packing_method : null,
-            status: status || 'Pending',
-            remarks: remarks || null,
+        const result = await issueWorkshopRawMaterials({
+            work_order_item_id: Number(work_order_item_id),
+            issues,
+            date,
+            added_by: addedBy
+        });
+
+        await createAuditLog(
+            addedBy,
+            req.user?.name || req.user?.username || 'Unknown',
+            deviceId,
+            'Workshop Entry',
+            'rm_issued',
+            null,
+            {
+                work_order_item_id,
+                lot: result.lot,
+                count: result.count,
+                ref_no: result.ref_no,
+                added_by: addedBy,
+                device_id: deviceId
+            }
+        );
+
+        res.status(201).json({
+            success: true,
+            message: `Chit #${result.lot} issued successfully!`,
+            data: result
+        });
+    } catch (error) {
+        console.error('Error issuing workshop raw materials:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Failed to issue raw materials'
+        });
+    }
+};
+
+const getAvailableBatchesController = async (req, res) => {
+    try {
+        const { material_id } = req.query;
+        if (!material_id) {
+            return res.status(400).json({
+                success: false,
+                message: 'Material ID is required'
+            });
+        }
+
+        const batches = await getAvailableBatches(Number(material_id));
+        res.status(200).json({
+            success: true,
+            data: batches
+        });
+    } catch (error) {
+        console.error('Error fetching available batches for workshop:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch available batches'
+        });
+    }
+};
+
+const addWorkshopProductionLogController = async (req, res) => {
+    try {
+        const addedBy = req.user.id;
+        const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
+        const {
+            work_order_item_id,
+            bom_process_id,
+            quantity,
+            log_date,
+            remarks
+        } = req.body;
+
+        if (!work_order_item_id || !bom_process_id || !quantity) {
+            return res.status(400).json({
+                success: false,
+                message: 'Work order item ID, process stage ID, and quantity are required'
+            });
+        }
+
+        const result = await addWorkshopProductionLog({
+            work_order_item_id: Number(work_order_item_id),
+            bom_process_id: Number(bom_process_id),
+            quantity: Number(quantity),
+            log_date,
+            remarks,
             added_by: addedBy,
             device_id: deviceId
         });
@@ -86,136 +170,149 @@ const saveWorkshopEntryController = async (req, res) => {
             req.user?.name || req.user?.username || 'Unknown',
             deviceId,
             'Workshop Entry',
-            'saved',
+            'production_movement_logged',
             null,
             {
-                pmemo_id,
-                machine_id,
-                packing_method,
-                status,
-                added_by: addedBy,
-                device_id: deviceId
+                work_order_item_id,
+                bom_process_id,
+                quantity,
+                from_process: result.from_process_name,
+                to_process: result.to_process_name,
+                added_by: addedBy
+            }
+        );
+
+        res.status(201).json({
+            success: true,
+            message: `Successfully moved ${quantity} units from ${result.from_process_name} to ${result.to_process_name}`,
+            data: result
+        });
+    } catch (error) {
+        console.error('Error adding production movement log:', error);
+        res.status(400).json({
+            success: false,
+            message: error.message || 'Failed to record production movement'
+        });
+    }
+};
+
+const deleteWorkshopProductionLogController = async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: 'Log ID is required'
+            });
+        }
+
+        const addedBy = req.user.id;
+        const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
+
+        await deleteWorkshopProductionLog(Number(id));
+
+        await createAuditLog(
+            addedBy,
+            req.user?.name || req.user?.username || 'Unknown',
+            deviceId,
+            'Workshop Entry',
+            'production_movement_deleted',
+            null,
+            {
+                log_id: id,
+                added_by: addedBy
             }
         );
 
         res.status(200).json({
             success: true,
-            message: 'Workshop details saved successfully',
-            data: result
+            message: 'Production movement log deleted successfully'
         });
     } catch (error) {
-        console.error('Error saving workshop entry:', error);
-        res.status(500).json({
+        console.error('Error deleting production movement log:', error);
+        res.status(400).json({
             success: false,
-            message: error.message || 'Failed to save workshop entry'
+            message: error.message || 'Failed to delete production movement log'
         });
     }
 };
 
-const getShiftsController = async (req, res) => {
-    try {
-        const { pmemoId } = req.params;
-        const { getShiftsByPMemoId } = require('../models/workshopEntryModel.js');
-        const shifts = await getShiftsByPMemoId(pmemoId);
-        res.status(200).json({
-            success: true,
-            data: shifts
-        });
-    } catch (error) {
-        console.error('Error fetching workshop shifts:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch workshop shifts'
-        });
-    }
-};
-
-const saveShiftController = async (req, res) => {
+const revertWorkshopProductionLogController = async (req, res) => {
     try {
         const addedBy = req.user.id;
         const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
-        const { pmemoId } = req.params;
-        const { saveWorkshopShift } = require('../models/workshopEntryModel.js');
+        const {
+            work_order_item_id,
+            from_bom_process_id,
+            to_bom_process_id,
+            quantity,
+            log_date,
+            remarks
+        } = req.body;
 
-        const result = await saveWorkshopShift({
-            ...req.body,
-            pmemo_id: req.body.pmemo_id || pmemoId,
+        if (!work_order_item_id || !from_bom_process_id || !to_bom_process_id || !quantity) {
+            return res.status(400).json({
+                success: false,
+                message: 'Work order item ID, source stage ID, destination stage ID, and quantity are required'
+            });
+        }
+
+        const result = await revertWorkshopProductionLog({
+            work_order_item_id: Number(work_order_item_id),
+            from_bom_process_id: Number(from_bom_process_id),
+            to_bom_process_id: Number(to_bom_process_id),
+            quantity: Number(quantity),
+            log_date,
+            remarks,
             added_by: addedBy,
             device_id: deviceId
         });
 
-        res.status(200).json({
+        await createAuditLog(
+            addedBy,
+            req.user?.name || req.user?.username || 'Unknown',
+            deviceId,
+            'Workshop Entry',
+            'production_movement_reverted',
+            null,
+            {
+                work_order_item_id,
+                from_bom_process_id,
+                to_bom_process_id,
+                quantity,
+                from_process: result.from_process_name,
+                to_process: result.to_process_name,
+                reason: remarks,
+                added_by: addedBy
+            }
+        );
+
+        res.status(201).json({
             success: true,
-            message: 'Shift saved successfully',
+            message: `Successfully reverted ${quantity} units from ${result.from_process_name} back to ${result.to_process_name}`,
             data: result
         });
     } catch (error) {
-        console.error('Error saving shift:', error);
-        res.status(500).json({
+        console.error('Error reverting production movement log:', error);
+        res.status(400).json({
             success: false,
-            message: error.message || 'Failed to save shift'
+            message: error.message || 'Failed to revert production movement'
         });
     }
 };
 
-const deleteShiftController = async (req, res) => {
+const getAllWorkshopRmIssuesController = async (req, res) => {
     try {
-        const { shiftId } = req.params;
-        const { deleteWorkshopShift } = require('../models/workshopEntryModel.js');
-        await deleteWorkshopShift(shiftId);
+        const issues = await getAllWorkshopRmIssues();
         res.status(200).json({
             success: true,
-            message: 'Shift deleted successfully'
+            data: issues
         });
     } catch (error) {
-        console.error('Error deleting shift:', error);
+        console.error('Error fetching all workshop RM issues:', error);
         res.status(500).json({
             success: false,
-            message: 'Failed to delete shift'
-        });
-    }
-};
-
-const saveShiftLogController = async (req, res) => {
-    try {
-        const addedBy = req.user.id;
-        const { shiftId } = req.params;
-        const { saveShiftHourlyLog } = require('../models/workshopEntryModel.js');
-
-        const result = await saveShiftHourlyLog({
-            ...req.body,
-            shift_id: shiftId,
-            added_by: addedBy
-        });
-
-        res.status(200).json({
-            success: true,
-            message: 'Hourly log saved successfully',
-            data: result
-        });
-    } catch (error) {
-        console.error('Error saving shift hourly log:', error);
-        res.status(500).json({
-            success: false,
-            message: error.message || 'Failed to save shift log'
-        });
-    }
-};
-
-const deleteShiftLogController = async (req, res) => {
-    try {
-        const { logId } = req.params;
-        const { deleteShiftHourlyLog } = require('../models/workshopEntryModel.js');
-        await deleteShiftHourlyLog(logId);
-        res.status(200).json({
-            success: true,
-            message: 'Hourly log deleted successfully'
-        });
-    } catch (error) {
-        console.error('Error deleting shift log:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to delete shift log'
+            message: error.message || 'Failed to fetch RM issues'
         });
     }
 };
@@ -223,10 +320,11 @@ const deleteShiftLogController = async (req, res) => {
 module.exports = {
     getAllWorkshopEntriesController,
     getWorkshopEntryDetailsController,
-    saveWorkshopEntryController,
-    getShiftsController,
-    saveShiftController,
-    deleteShiftController,
-    saveShiftLogController,
-    deleteShiftLogController
+    issueWorkshopRmController,
+    getAvailableBatchesController,
+    getAllWorkshopRmIssuesController,
+    addWorkshopProductionLogController,
+    revertWorkshopProductionLogController,
+    deleteWorkshopProductionLogController
 };
+

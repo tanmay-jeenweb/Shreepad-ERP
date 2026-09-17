@@ -202,6 +202,59 @@ const ensurePlannedDateColumns = async () => {
     }
 };
 
+const ensureWorkOrderStatusColumns = async () => {
+    try {
+        const [rowsStatus] = await db.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'work_orders' AND COLUMN_NAME = 'status'");
+        if (rowsStatus.length === 0) {
+            await db.execute("ALTER TABLE work_orders ADD COLUMN status VARCHAR(50) NOT NULL DEFAULT 'Draft'");
+            console.log('Added column status to work_orders');
+        }
+
+        const [rowsStartedAt] = await db.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'work_orders' AND COLUMN_NAME = 'started_at'");
+        if (rowsStartedAt.length === 0) {
+            await db.execute("ALTER TABLE work_orders ADD COLUMN started_at DATETIME DEFAULT NULL");
+            console.log('Added column started_at to work_orders');
+        }
+
+        const [rowsStartedBy] = await db.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'work_orders' AND COLUMN_NAME = 'started_by'");
+        if (rowsStartedBy.length === 0) {
+            await db.execute("ALTER TABLE work_orders ADD COLUMN started_by INT DEFAULT NULL");
+            console.log('Added column started_by to work_orders');
+            try {
+                await db.execute("ALTER TABLE work_orders ADD CONSTRAINT fk_work_orders_started_by FOREIGN KEY (started_by) REFERENCES users(id) ON DELETE SET NULL");
+            } catch (fkErr) {
+                console.warn('Foreign key notice for started_by:', fkErr.message);
+            }
+        }
+
+        // Migration: Mark existing work orders with active RM issues or production logs as 'Started'
+        try {
+            await db.execute(`
+                UPDATE work_orders wo
+                SET wo.status = 'Started'
+                WHERE (wo.status IS NULL OR wo.status = 'Draft')
+                  AND (
+                    EXISTS (
+                        SELECT 1 FROM work_order_items woi
+                        JOIN workshop_rm_issues wri ON woi.id = wri.work_order_item_id
+                        WHERE woi.work_order_id = wo.id
+                    )
+                    OR EXISTS (
+                        SELECT 1 FROM work_order_items woi
+                        JOIN workshop_production_logs wpl ON woi.id = wpl.work_order_item_id
+                        WHERE woi.work_order_id = wo.id
+                    )
+                  )
+            `);
+            console.log('Migrated active work orders with workshop logs to Started status');
+        } catch (migErr) {
+            console.warn('Notice during work order status migration:', migErr.message);
+        }
+    } catch (err) {
+        console.error('Error ensuring work order status columns:', err.message || err);
+    }
+};
+
 const getNextWorkOrderNo = async () => {
     const [rows] = await db.execute(
         `SELECT MAX(work_order_no) AS maxNo FROM work_orders`
@@ -218,8 +271,8 @@ const createWorkOrder = async (customerId, workOrderDate, addedBy, deviceId, ite
         const workOrderNo = await getNextWorkOrderNo();
 
         const insertQuery = `
-            INSERT INTO work_orders (work_order_no, customer_id, work_order_date, added_by, device_id)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO work_orders (work_order_no, customer_id, work_order_date, added_by, device_id, status)
+            VALUES (?, ?, ?, ?, ?, 'Draft')
         `;
         const [results] = await connection.execute(insertQuery, [
             workOrderNo,
@@ -304,22 +357,38 @@ const getAllWorkOrders = async (includeHeld = false) => {
             wo.id AS work_order_id,
             wo.work_order_no,
             wo.work_order_date,
+            COALESCE(wo.status, 'Draft') AS work_order_status,
+            wo.started_at,
+            wo.started_by,
+            starter.name AS started_by_name,
             mac.name AS machine_name,
             mac.machine_number,
             COALESCE(u.name, 'Unknown') AS added_by_name,
             bom.product_weight,
             sched.running_start_date,
             sched.running_end_date,
-            pm.p_memo_no AS p_memo_no,
-            pm.date AS p_memo_date
+            we.id AS workshop_entry_id,
+            COALESCE(we.status, 'Pending') AS workshop_status
         FROM work_orders wo
         JOIN work_order_items woi ON woi.work_order_id = wo.id
         LEFT JOIN customer_master c ON wo.customer_id = c.id
         LEFT JOIN materials m ON woi.material_id = m.id
         LEFT JOIN machines mac ON woi.machine_id = mac.id
         LEFT JOIN users u ON wo.added_by = u.id
-        LEFT JOIN bill_of_materials bom ON m.id = bom.material_id
-        LEFT JOIN production_memos pm ON woi.id = pm.work_order_item_id
+        LEFT JOIN users starter ON wo.started_by = starter.id
+        LEFT JOIN (
+            SELECT material_id, MAX(product_weight) AS product_weight
+            FROM bill_of_materials
+            GROUP BY material_id
+        ) bom ON m.id = bom.material_id
+        LEFT JOIN (
+            SELECT 
+                work_order_item_id,
+                MAX(id) AS id,
+                MAX(status) AS status
+            FROM workshop_entries
+            GROUP BY work_order_item_id
+        ) we ON woi.id = we.work_order_item_id
         LEFT JOIN (
             SELECT 
                 work_order_item_id,
@@ -339,12 +408,15 @@ const getWorkOrderById = async (id) => {
     const query = `
         SELECT
             wo.*,
+            COALESCE(wo.status, 'Draft') AS status,
             c.customer_name,
             c.customer_code,
-            COALESCE(u.name, 'Unknown') AS added_by_name
+            COALESCE(u.name, 'Unknown') AS added_by_name,
+            starter.name AS started_by_name
         FROM work_orders wo
         LEFT JOIN customer_master c ON wo.customer_id = c.id
         LEFT JOIN users u ON wo.added_by = u.id
+        LEFT JOIN users starter ON wo.started_by = starter.id
         WHERE wo.id = ?
     `;
     const [rows] = await db.execute(query, [id]);
@@ -365,6 +437,18 @@ const getWorkOrderById = async (id) => {
     const [items] = await db.execute(itemsQuery, [id]);
     workOrder.items = items;
     return workOrder;
+};
+
+const startWorkOrder = async (workOrderId, userId) => {
+    const query = `
+        UPDATE work_orders
+        SET status = 'Started',
+            started_at = CURRENT_TIMESTAMP,
+            started_by = ?
+        WHERE id = ?
+    `;
+    const [result] = await db.execute(query, [userId || null, workOrderId]);
+    return result.affectedRows > 0;
 };
 
 const deleteWorkOrder = async (id) => {
@@ -610,10 +694,12 @@ module.exports = {
     createWorkOrder,
     getAllWorkOrders,
     getWorkOrderById,
+    startWorkOrder,
     deleteWorkOrder,
     getMaterialStock,
     updateWorkOrderItemDelay,
     updateWorkOrderItemPriority,
     updateWorkOrderItemRemarks,
-    updateWorkOrder
+    updateWorkOrder,
+    ensureWorkOrderStatusColumns
 };

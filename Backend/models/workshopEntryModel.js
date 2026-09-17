@@ -1,11 +1,15 @@
 const db = require('../config/db.js');
+const {
+    upsertStockStatusForFinishedGoods,
+    rollbackStockStatusForFinishedGoods
+} = require('./stockStatusModel.js');
 
 const createWorkshopEntriesTable = async () => {
     const query = `
         CREATE TABLE IF NOT EXISTS workshop_entries (
             id INT AUTO_INCREMENT PRIMARY KEY,
-            pmemo_id INT NOT NULL UNIQUE,
-            work_order_item_id INT NOT NULL,
+            work_order_item_id INT NOT NULL UNIQUE,
+            pmemo_id INT DEFAULT NULL,
             machine_id INT DEFAULT NULL,
             packing_method VARCHAR(255) DEFAULT NULL,
             status VARCHAR(50) DEFAULT 'Pending',
@@ -14,7 +18,6 @@ const createWorkshopEntriesTable = async () => {
             device_id VARCHAR(255) DEFAULT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (pmemo_id) REFERENCES production_memos(id) ON DELETE CASCADE,
             FOREIGN KEY (work_order_item_id) REFERENCES work_order_items(id) ON DELETE CASCADE,
             FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE SET NULL,
             FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE CASCADE
@@ -24,13 +27,130 @@ const createWorkshopEntriesTable = async () => {
     console.log('Workshop Entries table ready');
 };
 
+const createWorkshopRmIssuesTable = async () => {
+    const query = `
+        CREATE TABLE IF NOT EXISTS workshop_rm_issues (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            work_order_item_id INT NOT NULL,
+            workshop_entry_id INT DEFAULT NULL,
+            lot DECIMAL(15,4) NOT NULL DEFAULT 1,
+            date DATE NOT NULL,
+            remark TEXT DEFAULT NULL,
+            material_id INT NOT NULL,
+            grade VARCHAR(100) DEFAULT '',
+            internal_batch_number VARCHAR(100) NOT NULL,
+            grn_item_id INT DEFAULT NULL,
+            ma_item_id INT DEFAULT NULL,
+            rm_return_id INT DEFAULT NULL,
+            stock_issue_id INT DEFAULT NULL,
+            qty DECIMAL(15,4) NOT NULL,
+            total_quantity DECIMAL(15,4) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (work_order_item_id) REFERENCES work_order_items(id) ON DELETE CASCADE,
+            FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE CASCADE,
+            FOREIGN KEY (ma_item_id) REFERENCES material_add_items(id) ON DELETE SET NULL,
+            FOREIGN KEY (rm_return_id) REFERENCES rm_returns(id) ON DELETE SET NULL,
+            FOREIGN KEY (stock_issue_id) REFERENCES stock_issues(id) ON DELETE SET NULL
+        )
+    `;
+    await db.execute(query);
+    console.log('Workshop RM Issues table ready');
+};
+
+const createWorkshopProductionLogsTable = async () => {
+    const query = `
+        CREATE TABLE IF NOT EXISTS workshop_production_logs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            work_order_item_id INT NOT NULL,
+            bom_process_id INT NOT NULL,
+            process_id INT NOT NULL,
+            step_order INT NOT NULL,
+            to_bom_process_id INT DEFAULT NULL,
+            quantity DECIMAL(15,4) NOT NULL,
+            movement_type VARCHAR(20) NOT NULL DEFAULT 'forward',
+            log_date DATE NOT NULL,
+            remarks TEXT DEFAULT NULL,
+            added_by INT NOT NULL,
+            device_id VARCHAR(255) DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (work_order_item_id) REFERENCES work_order_items(id) ON DELETE CASCADE,
+            FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE CASCADE
+        )
+    `;
+    await db.execute(query);
+    console.log('Workshop Production Logs table ready');
+};
+
+const ensureWorkshopProductionLogColumns = async () => {
+    try {
+        const [col] = await db.execute(`
+            SELECT COLUMN_NAME 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+              AND TABLE_NAME = 'workshop_production_logs' 
+              AND COLUMN_NAME = 'movement_type'
+        `);
+
+        if (col.length === 0) {
+            await db.execute(`ALTER TABLE workshop_production_logs ADD COLUMN movement_type VARCHAR(20) NOT NULL DEFAULT 'forward'`);
+            console.log('Added movement_type column to workshop_production_logs');
+        }
+    } catch (err) {
+        console.error('Error ensuring workshop_production_logs columns:', err.message || err);
+    }
+};
+
+const ensureWorkshopEntryColumns = async () => {
+    try {
+        // Ensure work_order_item_id column exists
+        const [woiCol] = await db.execute(`
+            SELECT COLUMN_NAME 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+              AND TABLE_NAME = 'workshop_entries' 
+              AND COLUMN_NAME = 'work_order_item_id'
+        `);
+
+        if (woiCol.length === 0) {
+            await db.execute(`ALTER TABLE workshop_entries ADD COLUMN work_order_item_id INT NOT NULL`);
+            console.log('Added work_order_item_id column to workshop_entries');
+        }
+
+        // Make pmemo_id nullable if it was NOT NULL
+        try {
+            await db.execute(`ALTER TABLE workshop_entries MODIFY COLUMN pmemo_id INT NULL DEFAULT NULL`);
+        } catch (e) {
+            // ignore
+        }
+
+        // Ensure unique index on work_order_item_id
+        const [indices] = await db.execute(`
+            SELECT INDEX_NAME 
+            FROM INFORMATION_SCHEMA.STATISTICS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+              AND TABLE_NAME = 'workshop_entries' 
+              AND COLUMN_NAME = 'work_order_item_id'
+              AND NON_UNIQUE = 0
+        `);
+
+        if (indices.length === 0) {
+            try {
+                await db.execute(`ALTER TABLE workshop_entries ADD UNIQUE KEY uq_we_wo_item (work_order_item_id)`);
+                console.log('Added UNIQUE KEY uq_we_wo_item on workshop_entries(work_order_item_id)');
+            } catch (e) {
+                console.log('Index creation notice:', e.message);
+            }
+        }
+    } catch (err) {
+        console.error('Error ensuring workshop_entries columns:', err.message || err);
+    }
+};
+
 const getAllWorkshopEntries = async () => {
     const query = `
         SELECT 
-            pm.id AS pmemo_id,
-            pm.p_memo_no,
-            pm.date AS p_memo_date,
-            pm.is_final_submitted,
             woi.id AS work_order_item_id,
             woi.work_order_id,
             woi.batch_no,
@@ -42,37 +162,30 @@ const getAllWorkshopEntries = async () => {
             m.material_name,
             m.material_code,
             bom.product_weight AS unit_weight,
-            we.id AS workshop_entry_id,
-            COALESCE(we.machine_id, woi.machine_id) AS machine_id,
-            COALESCE(we_mac.name, woi_mac.name) AS machine_name,
-            COALESCE(we_mac.machine_number, woi_mac.machine_number) AS machine_number,
-            we.packing_method,
-            COALESCE(we.status, 'Pending') AS status,
-            we.remarks,
-            we.updated_at AS workshop_updated_at,
-            c.customer_name
-        FROM production_memos pm
-        JOIN work_order_items woi ON pm.work_order_item_id = woi.id
+            c.customer_name,
+            COALESCE(issue_summary.issued_rm_count, 0) AS issued_rm_count
+        FROM work_order_items woi
         JOIN work_orders wo ON woi.work_order_id = wo.id
         JOIN materials m ON woi.material_id = m.id
         LEFT JOIN customer_master c ON wo.customer_id = c.id
         LEFT JOIN bill_of_materials bom ON m.id = bom.material_id
-        LEFT JOIN workshop_entries we ON pm.id = we.pmemo_id
-        LEFT JOIN machines we_mac ON we.machine_id = we_mac.id
-        LEFT JOIN machines woi_mac ON woi.machine_id = woi_mac.id
-        ORDER BY pm.p_memo_no DESC, pm.created_at DESC
+        LEFT JOIN (
+            SELECT work_order_item_id, COUNT(*) AS issued_rm_count
+            FROM workshop_rm_issues
+            GROUP BY work_order_item_id
+        ) issue_summary ON woi.id = issue_summary.work_order_item_id
+        WHERE COALESCE(woi.is_on_hold, 0) = 0 
+          AND COALESCE(woi.production_quantity, 0) > 0
+          AND wo.status = 'Started'
+        ORDER BY wo.work_order_no DESC, woi.id DESC
     `;
     const [rows] = await db.execute(query);
     return rows;
 };
 
-const getWorkshopEntryByPMemoId = async (pmemoId) => {
+const getWorkshopEntryByWorkOrderItemId = async (workOrderItemId) => {
     const query = `
         SELECT 
-            pm.id AS pmemo_id,
-            pm.p_memo_no,
-            pm.date AS p_memo_date,
-            pm.is_final_submitted,
             woi.id AS work_order_item_id,
             woi.work_order_id,
             woi.batch_no,
@@ -81,39 +194,28 @@ const getWorkshopEntryByPMemoId = async (pmemoId) => {
             woi.production_time_hours,
             wo.work_order_no,
             wo.work_order_date,
+            COALESCE(wo.status, 'Draft') AS work_order_status,
             m.id AS material_id,
             m.material_name,
             m.material_code,
             bom.id AS bom_id,
             bom.product_weight AS unit_weight,
             bom.unit_weight_tolerance,
-            we.id AS workshop_entry_id,
-            COALESCE(we.machine_id, woi.machine_id) AS machine_id,
-            COALESCE(we_mac.name, woi_mac.name) AS machine_name,
-            COALESCE(we_mac.machine_number, woi_mac.machine_number) AS machine_number,
-            we.packing_method,
-            COALESCE(we.status, 'Pending') AS status,
-            we.remarks,
-            we.updated_at AS workshop_updated_at,
             c.customer_name
-        FROM production_memos pm
-        JOIN work_order_items woi ON pm.work_order_item_id = woi.id
+        FROM work_order_items woi
         JOIN work_orders wo ON woi.work_order_id = wo.id
         JOIN materials m ON woi.material_id = m.id
         LEFT JOIN customer_master c ON wo.customer_id = c.id
         LEFT JOIN bill_of_materials bom ON m.id = bom.material_id
-        LEFT JOIN workshop_entries we ON pm.id = we.pmemo_id
-        LEFT JOIN machines we_mac ON we.machine_id = we_mac.id
-        LEFT JOIN machines woi_mac ON woi.machine_id = woi_mac.id
-        WHERE pm.id = ? OR pm.p_memo_no = ? OR woi.id = ?
+        WHERE woi.id = ?
         LIMIT 1
     `;
-    const [rows] = await db.execute(query, [pmemoId, pmemoId, pmemoId]);
+    const [rows] = await db.execute(query, [workOrderItemId]);
     if (rows.length === 0) return null;
 
     const entry = rows[0];
 
-    // Fetch BOM raw materials
+    // 1. Fetch BOM raw materials
     let rawMaterials = [];
     let processes = [];
 
@@ -163,74 +265,226 @@ const getWorkshopEntryByPMemoId = async (pmemoId) => {
     entry.rawMaterials = rawMaterials;
     entry.processes = processes;
 
+    // 2. Fetch RM Issues for this work order item
+    let rmIssues = [];
+    try {
+        const [issueRows] = await db.execute(`
+            SELECT 
+                wri.id,
+                wri.work_order_item_id,
+                wri.lot,
+                wri.date,
+                wri.material_id,
+                m.material_name AS rm_type_name,
+                m.material_code,
+                wri.internal_batch_number,
+                wri.grn_item_id,
+                wri.ma_item_id,
+                wri.rm_return_id,
+                wri.stock_issue_id,
+                wri.qty,
+                wri.total_quantity
+            FROM workshop_rm_issues wri
+            JOIN materials m ON wri.material_id = m.id
+            WHERE wri.work_order_item_id = ?
+            ORDER BY wri.lot ASC, wri.id ASC
+        `, [workOrderItemId]);
+        rmIssues = issueRows;
+    } catch (issueErr) {
+        console.error("Error fetching workshop RM issues:", issueErr.message);
+    }
+    entry.rmIssues = rmIssues;
+
+    // 3. Fetch RM Returns for this work order item
+    let rmReturns = [];
+    try {
+        const [returnRows] = await db.execute(`
+            SELECT 
+                r.id,
+                r.return_no,
+                r.return_date,
+                r.material_id,
+                r.material_name,
+                r.location_id,
+                r.location_name,
+                r.quantity,
+                r.internal_batch_number
+            FROM rm_returns r
+            WHERE r.work_order_item_id = ?
+            ORDER BY r.id ASC
+        `, [workOrderItemId]);
+        rmReturns = returnRows;
+    } catch (returnErr) {
+        console.error("Error fetching RM returns:", returnErr.message);
+    }
+    entry.rmReturns = rmReturns;
+
+    // 4. Fetch Production Movement Logs for this work order item
+    let productionLogs = [];
+    try {
+        const [prodRows] = await db.execute(`
+            SELECT 
+                wpl.id,
+                wpl.work_order_item_id,
+                wpl.bom_process_id,
+                wpl.process_id,
+                from_pm.process_name AS from_process_name,
+                wpl.step_order,
+                wpl.to_bom_process_id,
+                to_pm.process_name AS to_process_name,
+                wpl.quantity,
+                COALESCE(wpl.movement_type, 'forward') AS movement_type,
+                wpl.log_date,
+                wpl.remarks,
+                wpl.added_by,
+                COALESCE(u.name, 'Unknown') AS added_by_name,
+                wpl.created_at
+            FROM workshop_production_logs wpl
+            JOIN process_masters from_pm ON wpl.process_id = from_pm.id
+            LEFT JOIN bom_processes to_bp ON wpl.to_bom_process_id = to_bp.id
+            LEFT JOIN process_masters to_pm ON to_bp.process_id = to_pm.id
+            LEFT JOIN users u ON wpl.added_by = u.id
+            WHERE wpl.work_order_item_id = ?
+            ORDER BY wpl.id DESC
+        `, [workOrderItemId]);
+        productionLogs = prodRows;
+    } catch (prodErr) {
+        console.error("Error fetching production logs:", prodErr.message);
+    }
+    entry.productionLogs = productionLogs;
+
     return entry;
 };
 
-const saveWorkshopEntry = async ({
-    pmemo_id,
-    machine_id,
-    packing_method,
-    status = 'Pending',
-    remarks = null,
-    added_by,
-    device_id = null
+const getAvailableBatches = async (materialId) => {
+    const query = `
+        SELECT 
+            ss.internal_batch_number,
+            NULL AS grn_item_id,
+            mai.id AS ma_item_id,
+            r.id AS rm_return_id,
+            (COALESCE(r.quantity, ss.total_kg) - COALESCE(issue_ma_agg.issued_qty, issue_rtr_agg.issued_qty, 0)) AS available_qty
+        FROM stock_status ss
+        LEFT JOIN material_add_items mai ON ss.internal_batch_number = mai.internal_batch_number AND ss.ma_id IS NOT NULL
+        LEFT JOIN rm_returns r ON ss.internal_batch_number = r.internal_batch_number AND ss.rm_return_id IS NOT NULL
+        LEFT JOIN (
+            SELECT ma_item_id, SUM(issue_quantity) AS issued_qty
+            FROM stock_issues WHERE ma_item_id IS NOT NULL
+            GROUP BY ma_item_id
+        ) issue_ma_agg ON mai.id = issue_ma_agg.ma_item_id
+        LEFT JOIN (
+            SELECT rm_return_id, SUM(issue_quantity) AS issued_qty
+            FROM stock_issues WHERE rm_return_id IS NOT NULL
+            GROUP BY rm_return_id
+        ) issue_rtr_agg ON r.id = issue_rtr_agg.rm_return_id
+        WHERE ss.material_id = ?
+        HAVING available_qty > 0
+    `;
+    const [rows] = await db.execute(query, [materialId]);
+    return rows;
+};
+
+const issueWorkshopRawMaterials = async ({
+    work_order_item_id,
+    issues,
+    date,
+    added_by
 }) => {
     const connection = await db.getConnection();
     try {
         await connection.beginTransaction();
 
-        // 1. Get work_order_item_id from production_memos
-        const [pMemoRows] = await connection.execute(
-            `SELECT id, work_order_item_id FROM production_memos WHERE id = ?`,
-            [pmemo_id]
-        );
-        if (pMemoRows.length === 0) {
-            throw new Error('Production Memo not found');
-        }
-        const workOrderItemId = pMemoRows[0].work_order_item_id;
+        // 1. Get Work Order Number
+        const [woRows] = await connection.execute(`
+            SELECT wo.work_order_no, COALESCE(wo.status, 'Draft') AS status
+            FROM work_order_items woi
+            JOIN work_orders wo ON woi.work_order_id = wo.id
+            WHERE woi.id = ?
+        `, [work_order_item_id]);
 
-        // 2. Upsert workshop_entries table
-        const upsertQuery = `
+        if (woRows.length === 0) {
+            throw new Error('Work Order item not found');
+        }
+
+        if (woRows[0].status !== 'Started') {
+            throw new Error('Cannot issue raw materials: Work Order has not been started yet. Please start it in the Work Order master.');
+        }
+
+        const workOrderNo = woRows[0].work_order_no;
+        const formattedRefNo = `WO-${String(workOrderNo).padStart(4, '0')}`;
+
+        // 2. Determine next lot number
+        const [lotRows] = await connection.execute(`
+            SELECT MAX(lot) AS max_lot FROM workshop_rm_issues WHERE work_order_item_id = ?
+        `, [work_order_item_id]);
+        const nextLot = (Number(lotRows[0]?.max_lot) || 0) + 1;
+
+        // 3. Process each issue
+        const createdIssues = [];
+        for (const item of issues) {
+            const issueQty = Number(item.qty) || 0;
+            if (issueQty <= 0) continue;
+
+            // Deduct stock in stock_issues
+            const insertStockIssueQuery = `
+                INSERT INTO stock_issues (
+                    ma_item_id, rm_return_id, issue_quantity, p_memo_number, issue_date, remarks, removal_type, added_by
+                ) VALUES (?, ?, ?, ?, ?, ?, 'issue', ?)
+            `;
+            const [stockIssueResult] = await connection.execute(insertStockIssueQuery, [
+                item.ma_item_id || null,
+                item.rm_return_id || null,
+                issueQty,
+                formattedRefNo,
+                date || new Date().toISOString().split('T')[0],
+                `Work Order #${workOrderNo} Chit #${nextLot}`,
+                added_by || null
+            ]);
+            const stockIssueId = stockIssueResult.insertId;
+
+            // Record in workshop_rm_issues
+            const insertWorkshopRmQuery = `
+                INSERT INTO workshop_rm_issues (
+                    work_order_item_id, lot, date, remark, material_id, grade, internal_batch_number, grn_item_id, ma_item_id, rm_return_id, stock_issue_id, qty, total_quantity
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `;
+            const [wriResult] = await connection.execute(insertWorkshopRmQuery, [
+                work_order_item_id,
+                nextLot,
+                date || new Date().toISOString().split('T')[0],
+                item.remark || null,
+                Number(item.material_id),
+                item.grade || '',
+                item.internal_batch_number,
+                null,
+                item.ma_item_id || null,
+                item.rm_return_id || null,
+                stockIssueId,
+                issueQty,
+                issueQty
+            ]);
+
+            createdIssues.push({
+                id: wriResult.insertId,
+                lot: nextLot,
+                stock_issue_id: stockIssueId
+            });
+        }
+
+        // 4. Update or create workshop entry touch record
+        await connection.execute(`
             INSERT INTO workshop_entries (
-                pmemo_id, work_order_item_id, machine_id, packing_method, status, remarks, added_by, device_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                work_order_item_id, added_by
+            ) VALUES (?, ?)
             ON DUPLICATE KEY UPDATE
-                machine_id = VALUES(machine_id),
-                packing_method = VALUES(packing_method),
-                status = VALUES(status),
-                remarks = VALUES(remarks),
-                added_by = VALUES(added_by),
-                device_id = VALUES(device_id)
-        `;
-
-        const [result] = await connection.execute(upsertQuery, [
-            pmemo_id,
-            workOrderItemId,
-            machine_id || null,
-            packing_method || null,
-            status || 'Pending',
-            remarks || null,
-            added_by,
-            device_id
-        ]);
-
-        // 3. Keep work_order_items.machine_id in sync if machine_id was specified
-        if (machine_id) {
-            await connection.execute(
-                `UPDATE work_order_items SET machine_id = ? WHERE id = ?`,
-                [machine_id, workOrderItemId]
-            );
-        }
+                updated_at = CURRENT_TIMESTAMP
+        `, [work_order_item_id, added_by || 1]);
 
         await connection.commit();
         return {
-            id: result.insertId || undefined,
-            pmemo_id,
-            work_order_item_id: workOrderItemId,
-            machine_id,
-            packing_method,
-            status,
-            remarks
+            lot: nextLot,
+            count: createdIssues.length,
+            ref_no: formattedRefNo
         };
     } catch (err) {
         await connection.rollback();
@@ -240,301 +494,450 @@ const saveWorkshopEntry = async ({
     }
 };
 
-const createWorkshopShiftsTable = async () => {
-    const query = `
-        CREATE TABLE IF NOT EXISTS workshop_shifts (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            pmemo_id INT NOT NULL,
-            shift_name VARCHAR(100) NOT NULL DEFAULT 'Shift 1 (Day)',
-            shift_date DATE NOT NULL,
-            supervisor_a_id INT DEFAULT NULL,
-            supervisor_b_id INT DEFAULT NULL,
-            running_cavity INT DEFAULT 1,
-            cycle_time DECIMAL(10,3) DEFAULT NULL,
-            hourly_target DECIMAL(15,2) DEFAULT NULL,
-            min_hourly_target DECIMAL(15,2) DEFAULT NULL,
-            status VARCHAR(50) DEFAULT 'Configured',
-            remarks TEXT DEFAULT NULL,
-            added_by INT NOT NULL,
-            device_id VARCHAR(255) DEFAULT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (pmemo_id) REFERENCES production_memos(id) ON DELETE CASCADE,
-            FOREIGN KEY (supervisor_a_id) REFERENCES operators(id) ON DELETE SET NULL,
-            FOREIGN KEY (supervisor_b_id) REFERENCES operators(id) ON DELETE SET NULL,
-            FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE CASCADE
-        )
-    `;
-    await db.execute(query);
-    console.log('Workshop Shifts table ready');
-};
-
-const createWorkshopShiftLogsTable = async () => {
-    const query = `
-        CREATE TABLE IF NOT EXISTS workshop_shift_logs (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            shift_id INT NOT NULL,
-            hour_slot VARCHAR(100) DEFAULT NULL,
-            time_from VARCHAR(20) DEFAULT NULL,
-            time_to VARCHAR(20) DEFAULT NULL,
-            operator_id INT DEFAULT NULL,
-            operator_2_id INT DEFAULT NULL,
-            product_weight DECIMAL(15,4) DEFAULT NULL,
-            target_qty DECIMAL(15,2) DEFAULT 0,
-            actual_qty DECIMAL(15,2) DEFAULT 0,
-            rejection_qty DECIMAL(15,2) DEFAULT 0,
-            downtime_minutes INT DEFAULT 0,
-            downtime_reason VARCHAR(255) DEFAULT NULL,
-            remarks TEXT DEFAULT NULL,
-            added_by INT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (shift_id) REFERENCES workshop_shifts(id) ON DELETE CASCADE,
-            FOREIGN KEY (operator_id) REFERENCES operators(id) ON DELETE SET NULL,
-            FOREIGN KEY (operator_2_id) REFERENCES operators(id) ON DELETE SET NULL,
-            FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE CASCADE
-        )
-    `;
-    await db.execute(query);
-
-    // Ensure columns exist on existing table
-    const columns = [
-        { name: 'time_from', sql: 'VARCHAR(20) DEFAULT NULL' },
-        { name: 'time_to', sql: 'VARCHAR(20) DEFAULT NULL' },
-        { name: 'operator_2_id', sql: 'INT DEFAULT NULL' },
-        { name: 'product_weight', sql: 'DECIMAL(15,4) DEFAULT NULL' }
-    ];
-    for (const col of columns) {
-        try {
-            await db.execute(`ALTER TABLE workshop_shift_logs ADD COLUMN ${col.name} ${col.sql}`);
-        } catch (e) {
-            // Column already exists or error ignored
-        }
-    }
-
-    console.log('Workshop Shift Logs table ready');
-};
-
-const getShiftsByPMemoId = async (pmemoId) => {
-    const query = `
-        SELECT 
-            ws.*,
-            opA.operator_name AS supervisor_a_name,
-            opA.operator_code AS supervisor_a_code,
-            opB.operator_name AS supervisor_b_name,
-            opB.operator_code AS supervisor_b_code
-        FROM workshop_shifts ws
-        LEFT JOIN operators opA ON ws.supervisor_a_id = opA.id
-        LEFT JOIN operators opB ON ws.supervisor_b_id = opB.id
-        WHERE ws.pmemo_id = ?
-        ORDER BY ws.shift_date ASC, ws.id ASC
-    `;
-    const [shifts] = await db.execute(query, [pmemoId]);
-
-    for (const shift of shifts) {
-        const [logs] = await db.execute(`
-            SELECT 
-                sl.*,
-                op1.operator_name AS operator_1_name,
-                op1.operator_code AS operator_1_code,
-                op2.operator_name AS operator_2_name,
-                op2.operator_code AS operator_2_code,
-                COALESCE(op1.operator_name, '') AS operator_name
-            FROM workshop_shift_logs sl
-            LEFT JOIN operators op1 ON sl.operator_id = op1.id
-            LEFT JOIN operators op2 ON sl.operator_2_id = op2.id
-            WHERE sl.shift_id = ?
-            ORDER BY sl.id ASC
-        `, [shift.id]);
-        shift.logs = logs;
-    }
-
-    return shifts;
-};
-
-const saveWorkshopShift = async ({
-    id,
-    pmemo_id,
-    shift_name = 'Shift 1 (Day)',
-    shift_date,
-    supervisor_a_id,
-    supervisor_b_id,
-    running_cavity = 1,
-    cycle_time,
-    hourly_target,
-    min_hourly_target,
-    status = 'Configured',
+const addWorkshopProductionLog = async ({
+    work_order_item_id,
+    bom_process_id,
+    quantity,
+    log_date,
     remarks,
     added_by,
     device_id
 }) => {
-    const cavityNum = Number(running_cavity) || 1;
-    const cycleSec = Number(cycle_time) || 0;
-    const calcHourlyTarget = cycleSec > 0 ? (3600 / cycleSec) * cavityNum : (Number(hourly_target) || 0);
-    const calcMinTarget = calcHourlyTarget * 0.95;
+    const moveQty = Number(quantity);
+    if (isNaN(moveQty) || moveQty <= 0) {
+        throw new Error('Quantity must be greater than 0');
+    }
 
-    if (id) {
-        const updateQuery = `
-            UPDATE workshop_shifts SET
-                shift_name = ?,
-                shift_date = ?,
-                supervisor_a_id = ?,
-                supervisor_b_id = ?,
-                running_cavity = ?,
-                cycle_time = ?,
-                hourly_target = ?,
-                min_hourly_target = ?,
-                status = ?,
-                remarks = ?
-            WHERE id = ?
-        `;
-        await db.execute(updateQuery, [
-            shift_name,
-            shift_date,
-            supervisor_a_id || null,
-            supervisor_b_id || null,
-            cavityNum,
-            cycleSec || null,
-            calcHourlyTarget.toFixed(2),
-            calcMinTarget.toFixed(2),
-            status || 'Configured',
-            remarks || null,
-            id
-        ]);
-        return { id, pmemo_id, shift_name, shift_date, hourly_target: calcHourlyTarget, min_hourly_target: calcMinTarget };
-    } else {
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        // 1. Get work order item details, material_id, batch_no & work order info
+        const [woiRows] = await connection.execute(`
+            SELECT woi.id, woi.work_order_id, woi.production_quantity, woi.quantity, woi.material_id, woi.batch_no,
+                   m.material_name, m.material_type, wo.work_order_no, c.customer_name
+            FROM work_order_items woi
+            JOIN work_orders wo ON woi.work_order_id = wo.id
+            JOIN materials m ON woi.material_id = m.id
+            LEFT JOIN customer_master c ON wo.customer_id = c.id
+            WHERE woi.id = ?
+        `, [work_order_item_id]);
+
+        if (woiRows.length === 0) {
+            throw new Error('Work Order item not found');
+        }
+
+        const targetQty = Number(woiRows[0].production_quantity || woiRows[0].quantity) || 0;
+        const materialId = woiRows[0].material_id;
+
+        // 2. Get BOM processes in order
+        const [procRows] = await connection.execute(`
+            SELECT bp.id, bp.process_id, pm.process_name
+            FROM bill_of_materials bom
+            JOIN bom_processes bp ON bom.id = bp.bom_id
+            JOIN process_masters pm ON bp.process_id = pm.id
+            WHERE bom.material_id = ?
+            ORDER BY bp.id ASC
+        `, [materialId]);
+
+        if (procRows.length === 0) {
+            throw new Error('No BOM processes configured for this product');
+        }
+
+        const stageIndex = procRows.findIndex(p => Number(p.id) === Number(bom_process_id));
+        if (stageIndex === -1) {
+            throw new Error('Specified process stage does not belong to this product BOM');
+        }
+
+        const currentStage = procRows[stageIndex];
+        const nextStage = stageIndex < procRows.length - 1 ? procRows[stageIndex + 1] : null;
+
+        // 3. Get all existing production logs for this item
+        const [existingLogs] = await connection.execute(`
+            SELECT bom_process_id, to_bom_process_id, step_order, quantity, movement_type
+            FROM workshop_production_logs
+            WHERE work_order_item_id = ?
+        `, [work_order_item_id]);
+
+        // Calculate available qty for each stage using unified balance helper
+        const stageBalances = calculateStageBalances(procRows, targetQty, existingLogs);
+        const currentStat = stageBalances[stageIndex];
+        if (moveQty > currentStat.available) {
+            throw new Error(`Cannot move ${moveQty} units. Only ${currentStat.available} units available in ${currentStage.process_name}.`);
+        }
+
+        // 4. Insert production log
         const insertQuery = `
-            INSERT INTO workshop_shifts (
-                pmemo_id, shift_name, shift_date, supervisor_a_id, supervisor_b_id,
-                running_cavity, cycle_time, hourly_target, min_hourly_target, status, remarks, added_by, device_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO workshop_production_logs (
+                work_order_item_id,
+                bom_process_id,
+                process_id,
+                step_order,
+                to_bom_process_id,
+                quantity,
+                movement_type,
+                log_date,
+                remarks,
+                added_by,
+                device_id
+            ) VALUES (?, ?, ?, ?, ?, ?, 'forward', ?, ?, ?, ?)
         `;
-        const [result] = await db.execute(insertQuery, [
-            pmemo_id,
-            shift_name,
-            shift_date,
-            supervisor_a_id || null,
-            supervisor_b_id || null,
-            cavityNum,
-            cycleSec || null,
-            calcHourlyTarget.toFixed(2),
-            calcMinTarget.toFixed(2),
-            status || 'Configured',
+
+        const [insertResult] = await connection.execute(insertQuery, [
+            work_order_item_id,
+            currentStage.id,
+            currentStage.process_id,
+            stageIndex + 1,
+            nextStage ? nextStage.id : null,
+            moveQty,
+            log_date || new Date().toISOString().split('T')[0],
             remarks || null,
             added_by,
-            device_id
+            device_id || null
         ]);
-        return { id: result.insertId, pmemo_id, shift_name, shift_date, hourly_target: calcHourlyTarget, min_hourly_target: calcMinTarget };
+
+        // 5. Update touch record in workshop_entries
+        await connection.execute(`
+            INSERT INTO workshop_entries (work_order_item_id, added_by)
+            VALUES (?, ?)
+            ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP
+        `, [work_order_item_id, added_by || 1]);
+
+        // 6. If moving to Finished Goods (final process), update stock_status
+        if (!nextStage) {
+            const batchNo = woiRows[0].batch_no || `WO-${String(woiRows[0].work_order_no).padStart(4, '0')}`;
+            await upsertStockStatusForFinishedGoods(connection, {
+                work_order_item_id,
+                material_id: materialId,
+                material_name: woiRows[0].material_name,
+                material_type: woiRows[0].material_type || 'Finished Goods',
+                batch_no: batchNo,
+                quantity: moveQty,
+                customer_name: woiRows[0].customer_name || 'In-House Production'
+            });
+        }
+
+        await connection.commit();
+
+        return {
+            id: insertResult.insertId,
+            from_process_name: currentStage.process_name,
+            to_process_name: nextStage ? nextStage.process_name : 'Finished Goods',
+            quantity: moveQty
+        };
+    } catch (err) {
+        await connection.rollback();
+        throw err;
+    } finally {
+        connection.release();
     }
 };
 
-const deleteWorkshopShift = async (id) => {
-    await db.execute(`DELETE FROM workshop_shifts WHERE id = ?`, [id]);
-    return true;
-};
-
-const saveShiftHourlyLog = async ({
-    id,
-    shift_id,
-    hour_slot,
-    time_from,
-    time_to,
-    operator_id,
-    operator_1_id,
-    operator_2_id,
-    product_weight,
-    target_qty = 0,
-    actual_qty = 0,
-    production,
-    production_qty,
-    rejection_qty = 0,
-    rejection,
-    downtime_minutes = 0,
-    downtime_reason = null,
-    remarks = null,
-    added_by
+const revertWorkshopProductionLog = async ({
+    work_order_item_id,
+    from_bom_process_id,
+    to_bom_process_id,
+    quantity,
+    log_date,
+    remarks,
+    added_by,
+    device_id
 }) => {
-    const finalOp1 = operator_1_id !== undefined ? (operator_1_id ? Number(operator_1_id) : null) : (operator_id ? Number(operator_id) : null);
-    const finalOp2 = operator_2_id ? Number(operator_2_id) : null;
-    const finalActual = Number(production !== undefined ? production : (production_qty !== undefined ? production_qty : actual_qty)) || 0;
-    const finalRejection = Number(rejection !== undefined ? rejection : rejection_qty) || 0;
-    const finalWeight = product_weight !== undefined && product_weight !== "" && product_weight !== null ? Number(product_weight) : null;
-    const formattedSlot = (time_from && time_to) ? `${time_from} - ${time_to}` : (hour_slot || time_from || time_to || '—');
+    const revertQty = Number(quantity);
+    if (isNaN(revertQty) || revertQty <= 0) {
+        throw new Error('Quantity must be greater than 0');
+    }
 
-    if (id) {
-        const updateQuery = `
-            UPDATE workshop_shift_logs SET
-                hour_slot = ?,
-                time_from = ?,
-                time_to = ?,
-                operator_id = ?,
-                operator_2_id = ?,
-                product_weight = ?,
-                target_qty = ?,
-                actual_qty = ?,
-                rejection_qty = ?,
-                downtime_minutes = ?,
-                downtime_reason = ?,
-                remarks = ?
-            WHERE id = ?
-        `;
-        await db.execute(updateQuery, [
-            formattedSlot,
-            time_from || null,
-            time_to || null,
-            finalOp1,
-            finalOp2,
-            finalWeight,
-            Number(target_qty) || 0,
-            finalActual,
-            finalRejection,
-            Number(downtime_minutes) || 0,
-            downtime_reason || null,
-            remarks || null,
-            id
-        ]);
-        return { id, shift_id, hour_slot: formattedSlot, time_from, time_to, operator_id: finalOp1, operator_2_id: finalOp2, product_weight: finalWeight, actual_qty: finalActual, rejection_qty: finalRejection, downtime_minutes };
-    } else {
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        // 1. Get work order item details & target quantity
+        const [woiRows] = await connection.execute(`
+            SELECT woi.id, woi.work_order_id, woi.production_quantity, woi.quantity, woi.material_id, woi.batch_no,
+                   m.material_name, m.material_type, wo.work_order_no, c.customer_name
+            FROM work_order_items woi
+            JOIN work_orders wo ON woi.work_order_id = wo.id
+            JOIN materials m ON woi.material_id = m.id
+            LEFT JOIN customer_master c ON wo.customer_id = c.id
+            WHERE woi.id = ?
+        `, [work_order_item_id]);
+
+        if (woiRows.length === 0) {
+            throw new Error('Work Order item not found');
+        }
+
+        const targetQty = Number(woiRows[0].production_quantity || woiRows[0].quantity) || 0;
+        const materialId = woiRows[0].material_id;
+
+        // 2. Get BOM processes in order
+        const [procRows] = await connection.execute(`
+            SELECT bp.id, bp.process_id, pm.process_name
+            FROM bill_of_materials bom
+            JOIN bom_processes bp ON bom.id = bp.bom_id
+            JOIN process_masters pm ON bp.process_id = pm.id
+            WHERE bom.material_id = ?
+            ORDER BY bp.id ASC
+        `, [materialId]);
+
+        if (procRows.length === 0) {
+            throw new Error('No BOM processes configured for this product');
+        }
+
+        const fromStageIndex = procRows.findIndex(p => Number(p.id) === Number(from_bom_process_id));
+        if (fromStageIndex === -1) {
+            throw new Error('Source process stage does not belong to this product BOM');
+        }
+
+        if (fromStageIndex === 0) {
+            throw new Error('Initial process cannot be reverted back to a previous process stage. For raw materials, please use RM Return.');
+        }
+
+        const toStageIndex = procRows.findIndex(p => Number(p.id) === Number(to_bom_process_id));
+        if (toStageIndex === -1) {
+            throw new Error('Destination process stage does not belong to this product BOM');
+        }
+
+        if (toStageIndex >= fromStageIndex) {
+            throw new Error('Destination process must be an earlier process stage than the source process');
+        }
+
+        const fromStage = procRows[fromStageIndex];
+        const toStage = procRows[toStageIndex];
+
+        // 3. Get existing production logs
+        const [existingLogs] = await connection.execute(`
+            SELECT bom_process_id, to_bom_process_id, step_order, quantity, movement_type
+            FROM workshop_production_logs
+            WHERE work_order_item_id = ?
+        `, [work_order_item_id]);
+
+        // 4. Calculate stage balances
+        const stageBalances = calculateStageBalances(procRows, targetQty, existingLogs);
+        const fromStageBalance = stageBalances[fromStageIndex].available;
+
+        if (revertQty > fromStageBalance) {
+            throw new Error(`Cannot revert ${revertQty} units. Only ${fromStageBalance} units available in ${fromStage.process_name}.`);
+        }
+
+        // 5. Insert revert log (strictly movement_type = 'revert')
         const insertQuery = `
-            INSERT INTO workshop_shift_logs (
-                shift_id, hour_slot, time_from, time_to, operator_id, operator_2_id, product_weight, target_qty, actual_qty, rejection_qty, downtime_minutes, downtime_reason, remarks, added_by
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO workshop_production_logs (
+                work_order_item_id,
+                bom_process_id,
+                process_id,
+                step_order,
+                to_bom_process_id,
+                quantity,
+                movement_type,
+                log_date,
+                remarks,
+                added_by,
+                device_id
+            ) VALUES (?, ?, ?, ?, ?, ?, 'revert', ?, ?, ?, ?)
         `;
-        const [result] = await db.execute(insertQuery, [
-            shift_id,
-            formattedSlot,
-            time_from || null,
-            time_to || null,
-            finalOp1,
-            finalOp2,
-            finalWeight,
-            Number(target_qty) || 0,
-            finalActual,
-            finalRejection,
-            Number(downtime_minutes) || 0,
-            downtime_reason || null,
+
+        const [insertResult] = await connection.execute(insertQuery, [
+            work_order_item_id,
+            fromStage.id,
+            fromStage.process_id,
+            fromStageIndex + 1,
+            toStage.id,
+            revertQty,
+            log_date || new Date().toISOString().split('T')[0],
             remarks || null,
-            added_by
+            added_by,
+            device_id || null
         ]);
-        return { id: result.insertId, shift_id, hour_slot: formattedSlot, time_from, time_to, operator_id: finalOp1, operator_2_id: finalOp2, product_weight: finalWeight, actual_qty: finalActual, rejection_qty: finalRejection, downtime_minutes };
+
+        // 6. Update touch record in workshop_entries
+        await connection.execute(`
+            INSERT INTO workshop_entries (work_order_item_id, added_by)
+            VALUES (?, ?)
+            ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP
+        `, [work_order_item_id, added_by || 1]);
+
+        await connection.commit();
+
+        return {
+            id: insertResult.insertId,
+            from_process_name: fromStage.process_name,
+            to_process_name: toStage.process_name,
+            quantity: revertQty
+        };
+    } catch (err) {
+        await connection.rollback();
+        throw err;
+    } finally {
+        connection.release();
     }
 };
 
-const deleteShiftHourlyLog = async (id) => {
-    await db.execute(`DELETE FROM workshop_shift_logs WHERE id = ?`, [id]);
-    return true;
+const calculateStageBalances = (procRows, targetQty, logs) => {
+    return procRows.map((proc, idx) => {
+        // Forward logs leaving this stage
+        const forwardOut = logs
+            .filter(l => Number(l.bom_process_id) === Number(proc.id) && l.movement_type !== 'revert')
+            .reduce((sum, l) => sum + (parseFloat(l.quantity) || 0), 0);
+
+        // Revert logs leaving this stage (moving back to an earlier stage)
+        const revertOut = logs
+            .filter(l => Number(l.bom_process_id) === Number(proc.id) && l.movement_type === 'revert')
+            .reduce((sum, l) => sum + (parseFloat(l.quantity) || 0), 0);
+
+        // Forward logs entering this stage
+        const forwardIn = idx === 0
+            ? targetQty
+            : logs
+                .filter(l => Number(l.to_bom_process_id) === Number(proc.id) && l.movement_type !== 'revert')
+                .reduce((sum, l) => sum + (parseFloat(l.quantity) || 0), 0);
+
+        // Revert logs entering this stage (reverted back from downstream)
+        const revertIn = logs
+            .filter(l => Number(l.to_bom_process_id) === Number(proc.id) && l.movement_type === 'revert')
+            .reduce((sum, l) => sum + (parseFloat(l.quantity) || 0), 0);
+
+        const totalIn = forwardIn + revertIn;
+        const totalOut = forwardOut + revertOut;
+        const available = totalIn - totalOut;
+
+        return {
+            id: proc.id,
+            process_id: proc.process_id,
+            process_name: proc.process_name,
+            forwardIn,
+            revertIn,
+            forwardOut,
+            revertOut,
+            totalIn,
+            totalOut,
+            available
+        };
+    });
+};
+
+const deleteWorkshopProductionLog = async (logId) => {
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        const [logRows] = await connection.execute(`
+            SELECT * FROM workshop_production_logs WHERE id = ?
+        `, [logId]);
+
+        if (logRows.length === 0) {
+            throw new Error('Production log not found');
+        }
+
+        const targetLog = logRows[0];
+        const workOrderItemId = targetLog.work_order_item_id;
+
+        // Get target quantity, material_id, batch_no
+        const [woiRows] = await connection.execute(`
+            SELECT woi.production_quantity, woi.quantity, woi.material_id, woi.batch_no, wo.work_order_no
+            FROM work_order_items woi
+            JOIN work_orders wo ON woi.work_order_id = wo.id
+            WHERE woi.id = ?
+        `, [workOrderItemId]);
+
+        const targetQty = Number(woiRows[0]?.production_quantity || woiRows[0]?.quantity) || 0;
+        const materialId = woiRows[0]?.material_id;
+        const batchNo = woiRows[0]?.batch_no || (woiRows[0]?.work_order_no ? `WO-${String(woiRows[0].work_order_no).padStart(4, '0')}` : null);
+
+        // Get BOM processes
+        const [procRows] = await connection.execute(`
+            SELECT bp.id, bp.process_id, pm.process_name
+            FROM bill_of_materials bom
+            JOIN bom_processes bp ON bom.id = bp.bom_id
+            JOIN process_masters pm ON bp.process_id = pm.id
+            WHERE bom.material_id = ?
+            ORDER BY bp.id ASC
+        `, [materialId]);
+
+        // Get existing logs excluding the one being deleted
+        const [remainingLogs] = await connection.execute(`
+            SELECT bom_process_id, to_bom_process_id, step_order, quantity, movement_type
+            FROM workshop_production_logs
+            WHERE work_order_item_id = ? AND id != ?
+        `, [workOrderItemId, logId]);
+
+        // Check if any stage would have negative available inventory
+        const balances = calculateStageBalances(procRows, targetQty, remainingLogs);
+        for (const stage of balances) {
+            if (stage.available < 0) {
+                throw new Error(
+                    `Cannot delete this log: it would cause stage '${stage.process_name}' available inventory to become negative (${stage.available} Nos). Please adjust subsequent movements first.`
+                );
+            }
+        }
+
+        // If this log moved forward to Finished Goods, roll back stock_status
+        if (targetLog.movement_type !== 'revert' && !targetLog.to_bom_process_id && batchNo) {
+            await rollbackStockStatusForFinishedGoods(connection, {
+                batch_no: batchNo,
+                quantity: targetLog.quantity
+            });
+        }
+
+        // Delete the log
+        await connection.execute(`DELETE FROM workshop_production_logs WHERE id = ?`, [logId]);
+
+        await connection.commit();
+        return { success: true };
+    } catch (err) {
+        await connection.rollback();
+        throw err;
+    } finally {
+        connection.release();
+    }
+};
+
+const getAllWorkshopRmIssues = async () => {
+    const query = `
+        SELECT 
+            wri.id,
+            wri.work_order_item_id,
+            wri.lot,
+            wri.date,
+            wri.remark,
+            wri.material_id,
+            m.material_name AS rm_type_name,
+            m.material_code,
+            wri.internal_batch_number,
+            wri.qty,
+            wri.total_quantity,
+            wo.work_order_no,
+            wo.work_order_date,
+            prod_m.material_name AS product_name,
+            prod_m.material_code AS product_code,
+            woi.batch_no,
+            c.customer_name
+        FROM workshop_rm_issues wri
+        JOIN work_order_items woi ON wri.work_order_item_id = woi.id
+        JOIN work_orders wo ON woi.work_order_id = wo.id
+        JOIN materials m ON wri.material_id = m.id
+        LEFT JOIN materials prod_m ON woi.material_id = prod_m.id
+        LEFT JOIN customer_master c ON wo.customer_id = c.id
+        ORDER BY wri.id DESC
+    `;
+    const [rows] = await db.execute(query);
+    return rows;
 };
 
 module.exports = {
     createWorkshopEntriesTable,
-    createWorkshopShiftsTable,
-    createWorkshopShiftLogsTable,
+    createWorkshopRmIssuesTable,
+    createWorkshopProductionLogsTable,
+    ensureWorkshopProductionLogColumns,
+    ensureWorkshopEntryColumns,
     getAllWorkshopEntries,
-    getWorkshopEntryByPMemoId,
-    saveWorkshopEntry,
-    getShiftsByPMemoId,
-    saveWorkshopShift,
-    deleteWorkshopShift,
-    saveShiftHourlyLog,
-    deleteShiftHourlyLog
+    getWorkshopEntryByWorkOrderItemId,
+    getAvailableBatches,
+    issueWorkshopRawMaterials,
+    getAllWorkshopRmIssues,
+    addWorkshopProductionLog,
+    revertWorkshopProductionLog,
+    deleteWorkshopProductionLog,
+    calculateStageBalances
 };
+

@@ -3,7 +3,6 @@ import { useNavigate, useParams } from "react-router-dom";
 import Navbar from "../../../components/Navbar";
 import { getWorkOrderById, updateWorkOrder, getMaterialStock } from "../../../api/workOrderApi";
 import { getMaterials } from "../../../api/materialApi";
-import { getAllMachines } from "../../../api/machineApi";
 import { getBOMs, getBOMByMaterialId } from "../../../api/bomApi";
 import { getJobParties } from "../../../api/jobPartyApi";
 import toast from "react-hot-toast";
@@ -27,11 +26,11 @@ export default function EditWorkOrder() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [workOrder, setWorkOrder] = useState(null);
+  const [workOrderStatus, setWorkOrderStatus] = useState("Draft");
   const [workOrderDate, setWorkOrderDate] = useState("");
   const [items, setItems] = useState([]);
 
   const [materials, setMaterials] = useState([]);
-  const [machines, setMachines] = useState([]);
   const [boms, setBoms] = useState([]);
   const [jobParties, setJobParties] = useState([]);
 
@@ -44,22 +43,22 @@ export default function EditWorkOrder() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [woRes, matRes, machineRes, bomRes, jobPartiesRes] = await Promise.all([
+        const [woRes, matRes, bomRes, jobPartiesRes] = await Promise.all([
           getWorkOrderById(id),
           getMaterials(),
-          getAllMachines(),
           getBOMs(),
           getJobParties()
         ]);
 
         const woData = woRes.data?.data;
         if (!woData) {
-          toast.error("Work Order not found");
+          toast.error("Work order not found");
           navigate("/sales/work-orders");
           return;
         }
 
         setWorkOrder(woData);
+        setWorkOrderStatus(woData.status || "Draft");
         setWorkOrderDate(woData.work_order_date ? woData.work_order_date.substring(0, 10) : "");
         
         const bomsList = bomRes.data?.data || [];
@@ -77,9 +76,6 @@ export default function EditWorkOrder() {
           return isFinishedOrSemi && activeBomMaterialIds.has(Number(m.id));
         });
         setMaterials(filteredMat);
-
-        const machinesList = Array.isArray(machineRes.data) ? machineRes.data : (machineRes.data?.data || []);
-        setMachines(machinesList);
         setJobParties(jobPartiesRes.data?.data || []);
 
         // Reconstruct Finished Goods vs Raw Materials
@@ -100,7 +96,6 @@ export default function EditWorkOrder() {
               batch_no: fgItem.batch_no || "",
               actual_delivery_date: fgItem.actual_delivery_date ? fgItem.actual_delivery_date.substring(0, 10) : "",
               remarks: fgItem.remarks || "",
-              machine_id: fgItem.machine_id || "",
               job_party_id: fgItem.job_party_id || "",
               rawMaterials: []
             };
@@ -164,7 +159,6 @@ export default function EditWorkOrder() {
         material_id: "",
         material_name: "",
         material_code: "",
-        machine_id: "",
         job_party_id: "",
         exp_delivery_date: "",
         batch_no: "",
@@ -181,7 +175,6 @@ export default function EditWorkOrder() {
       material_id: materialId,
       material_name: material ? material.material_name : "",
       material_code: material ? material.material_code : "",
-      machine_id: "",
       job_party_id: "",
       exp_delivery_date: "",
       batch_no: "",
@@ -246,6 +239,10 @@ export default function EditWorkOrder() {
   };
 
   const addItemRow = () => {
+    if (workOrderStatus === "Started") {
+      toast.error("Cannot add new material rows: Work Order is already Started.");
+      return;
+    }
     setItems([...items, {
       material_id: "",
       material_name: "",
@@ -256,12 +253,15 @@ export default function EditWorkOrder() {
       batch_no: "",
       actual_delivery_date: "",
       remarks: "",
-      machine_id: "",
       job_party_id: ""
     }]);
   };
 
   const removeItemRow = (index) => {
+    if (workOrderStatus === "Started") {
+      toast.error("Cannot delete material rows: Work Order is already Started.");
+      return;
+    }
     if (items.length > 1) {
       setItems(items.filter((_, idx) => idx !== index));
     } else {
@@ -288,7 +288,7 @@ export default function EditWorkOrder() {
               ...rm,
               productionAmount: req,
               calculatedMinSupply: calcMin,
-              minSupplyNeeded: (rm.minSupplyNeeded !== undefined && rm.minSupplyNeeded !== "" && Number(rm.minSupplyNeeded) >= calcMin)
+              minSupplyNeeded: (rm.minSupplyNeeded !== undefined && rm.minSupplyNeeded !== "" && !isNaN(Number(rm.minSupplyNeeded)))
                 ? rm.minSupplyNeeded
                 : calcMin
             };
@@ -325,17 +325,22 @@ export default function EditWorkOrder() {
       const nextRMs = [...(targetItem.rawMaterials || [])];
       const rawVal = nextRMs[rmIdx]?.minSupplyNeeded;
       const currentVal = Number(rawVal);
-      if (rawVal === "" || isNaN(currentVal) || currentVal < minVal) {
-        toast.error(`Minimum supply cannot be less than ${minVal}`);
+      if (rawVal === "" || isNaN(currentVal) || currentVal < 0) {
         nextRMs[rmIdx] = {
           ...nextRMs[rmIdx],
-          minSupplyNeeded: minVal
+          minSupplyNeeded: 0
         };
       } else {
         nextRMs[rmIdx] = {
           ...nextRMs[rmIdx],
           minSupplyNeeded: currentVal
         };
+        if (currentVal < minVal) {
+          toast(
+            `Notice: Entered supply is less than available quantity shortfall in system (${minVal}).`,
+            { icon: "⚠️" }
+          );
+        }
       }
       targetItem.rawMaterials = nextRMs;
       next[itemIdx] = targetItem;
@@ -393,7 +398,7 @@ export default function EditWorkOrder() {
             ...rm,
             productionAmount: req,
             calculatedMinSupply: calcMin,
-            minSupplyNeeded: (rm.minSupplyNeeded !== undefined && rm.minSupplyNeeded !== "" && Number(rm.minSupplyNeeded) >= calcMin)
+            minSupplyNeeded: (rm.minSupplyNeeded !== undefined && rm.minSupplyNeeded !== "" && !isNaN(Number(rm.minSupplyNeeded)))
               ? rm.minSupplyNeeded
               : calcMin
           };
@@ -406,14 +411,7 @@ export default function EditWorkOrder() {
   };
 
   const submitWorkOrder = async () => {
-    for (const rm of allRawMaterials) {
-      const minVal = Number(rm.calculatedMinSupply) || 0;
-      const val = Number(rm.minSupplyNeeded);
-      if (rm.minSupplyNeeded === "" || isNaN(val) || val < minVal) {
-        toast.error(`Minimum supply for ${rm.materialName || "material"} cannot be less than ${minVal} ${rm.unitName || ""}`);
-        return;
-      }
-    }
+    // Note: Raw materials are not issued at this stage, so stock shortfalls do not block saving work order.
     setSaving(true);
     try {
       const flattenedItems = [];
@@ -424,7 +422,6 @@ export default function EditWorkOrder() {
           material_id: Number(it.material_id),
           quantity: Number(it.quantity),
           production_quantity: Number(it.production_quantity),
-          machine_id: it.machine_id ? Number(it.machine_id) : null,
           exp_delivery_date: it.exp_delivery_date || null,
           batch_no: it.batch_no || null,
           actual_delivery_date: it.actual_delivery_date || null,
@@ -442,7 +439,6 @@ export default function EditWorkOrder() {
                 material_id: Number(rm.materialId),
                 quantity: requiredQty,
                 production_quantity: 0,
-                machine_id: it.machine_id ? Number(it.machine_id) : null,
                 exp_delivery_date: it.exp_delivery_date || null,
                 batch_no: it.batch_no || null,
                 actual_delivery_date: it.actual_delivery_date || null,
@@ -490,11 +486,19 @@ export default function EditWorkOrder() {
         {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-slate-800 tracking-tight">
-              Edit Work Order - WO-{String(workOrder?.work_order_no).padStart(4, "0")}
+            <h1 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-3">
+              <span>Edit Work Order - WO-{String(workOrder?.work_order_no).padStart(4, "0")}</span>
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
+                workOrderStatus === 'Started'
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : 'bg-amber-50 text-amber-700 border border-amber-200'
+              }`}>
+                {workOrderStatus === 'Started' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>}
+                {workOrderStatus || 'Draft'}
+              </span>
             </h1>
             <p className="text-sm text-slate-500 mt-1">
-              Modify work order date or items configuration and manage machine scheduling.
+              Modify work order date or items configuration.
             </p>
           </div>
           <button
@@ -504,6 +508,16 @@ export default function EditWorkOrder() {
             Cancel
           </button>
         </div>
+
+        {/* Started Work Order Notice */}
+        {workOrderStatus === 'Started' && (
+          <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl p-4 flex items-center gap-3 text-emerald-900 mb-6">
+            <i className="fa-solid fa-circle-info text-emerald-600 text-lg shrink-0"></i>
+            <div className="text-xs text-emerald-800">
+              <span className="font-bold">Active Started Work Order:</span> This work order has been started and is active in Workshop Entry. Adding or deleting material item rows is locked to preserve production and inventory tracking.
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Card: Header details */}
@@ -557,13 +571,19 @@ export default function EditWorkOrder() {
                 <i className="fa-solid fa-boxes-stacked text-[#369ACF]"></i>
                 Work Order Items
               </h2>
-              <button
-                type="button"
-                onClick={addItemRow}
-                className="text-sm font-semibold text-[#369ACF] hover:text-[#2583b4] flex items-center gap-1 cursor-pointer"
-              >
-                <i className="fa-solid fa-plus text-xs"></i> Add Item Row
-              </button>
+              {workOrderStatus === 'Started' ? (
+                <span className="text-xs font-semibold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200 flex items-center gap-1.5">
+                  <i className="fa-solid fa-lock text-[10px]"></i> Material rows locked (Work Order Started)
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={addItemRow}
+                  className="text-sm font-semibold text-[#369ACF] hover:text-[#2583b4] flex items-center gap-1 cursor-pointer"
+                >
+                  <i className="fa-solid fa-plus text-xs"></i> Add Item Row
+                </button>
+              )}
             </div>
 
             <div className="overflow-x-auto">
@@ -580,8 +600,6 @@ export default function EditWorkOrder() {
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                   {items.map((item, idx) => {
-                    const machineName = machines.find(m => String(m.id) === String(item.machine_id))?.name || "";
-
                     return (
                       <tr key={idx} className="hover:bg-slate-50/50">
                         <td className="px-6 py-4">
@@ -622,8 +640,9 @@ export default function EditWorkOrder() {
                             <button
                               type="button"
                               onClick={() => removeItemRow(idx)}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-250 bg-rose-50 text-rose-600 hover:bg-rose-100 cursor-pointer"
-                              title="Delete Row"
+                              disabled={workOrderStatus === 'Started'}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-250 bg-rose-50 text-rose-600 hover:bg-rose-100 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                              title={workOrderStatus === 'Started' ? "Cannot delete item from a Started Work Order" : "Delete Row"}
                             >
                               <i className="fa-solid fa-trash-can text-sm"></i>
                             </button>
@@ -798,6 +817,15 @@ export default function EditWorkOrder() {
                   </p>
                 </div>
 
+                {allRawMaterials.some(rm => (Number(rm.minSupplyNeeded) || 0) < rm.calculatedMinSupply || rm.availableStock < rm.requiredProdQty) && (
+                  <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2.5 text-amber-800 text-xs">
+                    <i className="fa-solid fa-triangle-exclamation text-amber-500 mt-0.5 text-sm shrink-0"></i>
+                    <div>
+                      <span className="font-semibold">Notice:</span> Available quantity in system is less than the required production quantity. You can proceed with saving the work order as materials are not issued at this stage.
+                    </div>
+                  </div>
+                )}
+
                 <div className="overflow-x-auto border border-slate-200 rounded-xl shadow-sm bg-white">
                   <table className="w-full text-left text-xs text-slate-600 border-collapse">
                     <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
@@ -851,8 +879,8 @@ export default function EditWorkOrder() {
                                       }}
                                       placeholder={String(rm.calculatedMinSupply)}
                                       className={`w-28 px-2.5 py-1 text-right text-xs font-mono font-semibold border rounded-lg focus:outline-none transition-colors bg-white ${
-                                        (rm.minSupplyNeeded === "" || Number(rm.minSupplyNeeded) < rm.calculatedMinSupply)
-                                          ? "border-rose-400 text-rose-600 focus:border-rose-500"
+                                        (rm.minSupplyNeeded !== "" && Number(rm.minSupplyNeeded) < rm.calculatedMinSupply)
+                                          ? "border-amber-400 text-amber-900 focus:border-amber-500"
                                           : "border-slate-200 text-slate-800 focus:border-indigo-500"
                                       }`}
                                     />
@@ -860,9 +888,9 @@ export default function EditWorkOrder() {
                                       {rm.unitName}
                                     </span>
                                   </div>
-                                  {(rm.minSupplyNeeded === "" || Number(rm.minSupplyNeeded) < rm.calculatedMinSupply) && (
-                                    <span className="text-[10px] text-rose-500 font-medium">
-                                      Min: {rm.calculatedMinSupply} {rm.unitName}
+                                  {(rm.minSupplyNeeded !== "" && Number(rm.minSupplyNeeded) < rm.calculatedMinSupply) && (
+                                    <span className="text-[10px] text-amber-600 font-medium">
+                                      Shortfall: {rm.calculatedMinSupply} {rm.unitName}
                                     </span>
                                   )}
                                 </div>

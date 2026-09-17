@@ -1,14 +1,11 @@
 import apiClient from "./authApi.js";
 
 export const getAllWorkshopEntries = () => apiClient.get("/workshop-entries");
+export const getAllWorkshopRmIssues = () => apiClient.get("/workshop-entries/all-rm-issues");
 export const getWorkshopEntryDetails = (id) => apiClient.get(`/workshop-entries/${id}`);
-export const saveWorkshopEntry = (data) => apiClient.post("/workshop-entries", data);
+export const getAvailableBatches = (materialId) => apiClient.get("/workshop-entries/stock-batches", { params: { material_id: materialId } });
+export const issueWorkshopRm = (data) => apiClient.post("/workshop-entries/rm-issue", data);
+export const addProductionLog = (data) => apiClient.post("/workshop-entries/production-log", data);
+export const revertProductionLog = (data) => apiClient.post("/workshop-entries/production-revert", data);
+export const deleteProductionLog = (id) => apiClient.delete(`/workshop-entries/production-log/${id}`);
 
-// Shifts
-export const getWorkshopShifts = (pmemoId) => apiClient.get(`/workshop-entries/${pmemoId}/shifts`);
-export const saveWorkshopShift = (pmemoId, data) => apiClient.post(`/workshop-entries/${pmemoId}/shifts`, data);
-export const deleteWorkshopShift = (shiftId) => apiClient.delete(`/workshop-entries/shifts/${shiftId}`);
-
-// Shift Hourly Logs
-export const saveShiftHourlyLog = (shiftId, data) => apiClient.post(`/workshop-entries/shifts/${shiftId}/logs`, data);
-export const deleteShiftHourlyLog = (logId) => apiClient.delete(`/workshop-entries/shift-logs/${logId}`);

@@ -25,7 +25,7 @@ const createRmReturnsTable = async () => {
     await db.execute(query);
     console.log("RM Returns table ready");
 
-    // Add pmemo_id if it doesn't exist
+    // Add pmemo_id and work_order_item_id if they don't exist
     try {
         const [rows] = await db.execute(`
             SELECT COLUMN_NAME 
@@ -38,8 +38,20 @@ const createRmReturnsTable = async () => {
             await db.execute(`ALTER TABLE rm_returns ADD COLUMN pmemo_id INT NULL`);
             console.log("Added column pmemo_id to rm_returns");
         }
+
+        const [woiRows] = await db.execute(`
+            SELECT COLUMN_NAME 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+              AND TABLE_NAME = 'rm_returns' 
+              AND COLUMN_NAME = 'work_order_item_id'
+        `);
+        if (woiRows.length === 0) {
+            await db.execute(`ALTER TABLE rm_returns ADD COLUMN work_order_item_id INT NULL`);
+            console.log("Added column work_order_item_id to rm_returns");
+        }
     } catch (err) {
-        console.error("Error adding pmemo_id column to rm_returns:", err.message);
+        console.error("Error adding columns to rm_returns:", err.message);
     }
 };
 
@@ -128,21 +140,21 @@ const createRmReturn = async (data, addedBy) => {
             INSERT INTO rm_returns (
                 return_no, return_date, material_id, material_name, 
                 grade, location_id, location_name, 
-                quantity, internal_batch_number, added_by, pmemo_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                quantity, internal_batch_number, added_by, pmemo_id, work_order_item_id
+            ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)
         `;
         const [result] = await connection.execute(insertQuery, [
             returnNo,
             data.return_date,
             data.material_id,
             materialName,
-            data.grade || null,
             data.location_id,
             locationName,
             data.quantity,
             internalBatchNumber,
             addedBy,
-            data.pmemo_id || null
+            data.pmemo_id || null,
+            data.work_order_item_id || null
         ]);
         const returnId = result.insertId;
 
@@ -152,7 +164,7 @@ const createRmReturn = async (data, addedBy) => {
             internal_batch_number: internalBatchNumber,
             material_id: data.material_id,
             material_name: materialName,
-            grade: data.grade || null,
+            grade: null,
             location_name: locationName,
             quantity: data.quantity
         });
