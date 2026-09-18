@@ -19,6 +19,7 @@
         { key: 'work_order', label: 'Work Order' },
         { key: 'workshop_entry', label: 'Workshop Entry' },
         { key: 'activity_report', label: 'User Activity Records' },
+        { key: 'dispatch', label: 'Dispatch Module' },
     ];
 
     // ─── Table creation ──────────────────────────────────────────────────────────

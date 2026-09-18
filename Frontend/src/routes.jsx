@@ -38,6 +38,8 @@ import MaterialAddMaster from "./pages/Store/MaterialAddMaster";
 import CreateMaterialAdd from "./pages/Store/CreateMaterialAdd";
 import MaterialIssueReturnMaster from "./pages/Store/MaterialIssueReturnMaster";
 import MaterialIssueReturn from "./pages/Store/MaterialIssueReturn";
+import DispatchMaster from "./pages/Dispatch/DispatchMaster";
+import CreateDispatch from "./pages/Dispatch/CreateDispatch";
 
 import WorkOrderMaster from "./pages/admin/workOrder/WorkOrderMaster";
 import CreateWorkOrder from "./pages/admin/workOrder/CreateWorkOrder";
@@ -331,6 +333,12 @@ export default function AppRoutes() {
             </Route>
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="bom" requiredAction="update" />}>
                 <Route path="/production/bom/edit" element={<CreateBOM />} />
+            </Route>
+
+            {/* Dispatch Routes */}
+            <Route element={<ProtectedRoute allowedRole="admin" />}>
+                <Route path="/dispatch" element={<DispatchMaster />} />
+                <Route path="/dispatch/create" element={<CreateDispatch />} />
             </Route>
 
         </Routes>

@@ -31,6 +31,7 @@ const materialAddRoutes = require("./routes/materialAddRoutes.js");
 const workOrderRoutes = require("./routes/workOrderRoutes.js");
 const rmReturnRoutes = require("./routes/rmReturnRoutes.js");
 const workshopEntryRoutes = require("./routes/workshopEntryRoutes.js");
+const dispatchRoutes = require("./routes/dispatchRoutes.js");
 
 
 // Model Initializations
@@ -58,8 +59,9 @@ const { createStockIssuesTable, ensureStockIssuesColumns } = require("./models/s
 const { createStockStatusTable, ensureStockStatusColumns } = require("./models/stockStatusModel.js");
 const { createMaterialAddTables, ensureMaterialAddColumns } = require("./models/materialAddModel.js");
 const { createWorkOrdersTable, ensureWorkOrderColumns, ensureSortOrderColumn, ensureIsOnHoldColumn, ensurePlannedDateColumns, ensureDelayColumns, ensurePriorityColumn, ensureWorkOrderStatusColumns } = require("./models/workOrderModel.js");
-const { createRmReturnsTable } = require("./models/rmReturnModel.js");
+const { createRmReturnsTable, ensureRmReturnColumns } = require("./models/rmReturnModel.js");
 const { createWorkshopEntriesTable, createWorkshopRmIssuesTable, createWorkshopProductionLogsTable, ensureWorkshopEntryColumns, ensureWorkshopProductionLogColumns } = require("./models/workshopEntryModel.js");
+const { createDispatchTable } = require("./models/dispatchModel.js");
 
 
 const app = express();
@@ -114,6 +116,7 @@ app.use(["/api/material-add", "/material-add"], materialAddRoutes);
 app.use(["/api/work-orders", "/work-orders"], workOrderRoutes);
 app.use(["/api/rm-returns", "/rm-returns"], rmReturnRoutes);
 app.use(["/api/workshop-entries", "/workshop-entries"], workshopEntryRoutes);
+app.use(["/api/dispatch", "/dispatch"], dispatchRoutes);
 
 
 // Global 404 handler
@@ -185,6 +188,7 @@ const startServer = async () => {
         await createMaterialAddTables();
         await ensureMaterialAddColumns();
         await createRmReturnsTable();
+        await ensureRmReturnColumns();
         await createStockIssuesTable();
         await ensureStockIssuesColumns();
         await createStockStatusTable();
@@ -202,6 +206,7 @@ const startServer = async () => {
         await createWorkshopRmIssuesTable();
         await createWorkshopProductionLogsTable();
         await ensureWorkshopProductionLogColumns();
+        await createDispatchTable();
 
 
         console.log("All database tables are initialized and ready.");

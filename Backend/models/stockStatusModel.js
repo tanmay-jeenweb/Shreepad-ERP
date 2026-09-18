@@ -393,12 +393,25 @@ const getAllStockStatus = async (typeFilter, filters = {}) => {
         LEFT JOIN material_add_items mai ON ss.internal_batch_number = mai.internal_batch_number AND ss.ma_id IS NOT NULL
         LEFT JOIN (
             SELECT 
-                COALESCE(mai_sub2.internal_batch_number, r_sub.internal_batch_number) AS internal_batch_number,
-                SUM(si.issue_quantity) AS issued_qty
-            FROM stock_issues si
-            LEFT JOIN material_add_items mai_sub2 ON si.ma_item_id = mai_sub2.id
-            LEFT JOIN rm_returns r_sub ON si.rm_return_id = r_sub.id
-            GROUP BY COALESCE(mai_sub2.internal_batch_number, r_sub.internal_batch_number)
+                internal_batch_number,
+                SUM(qty) AS issued_qty
+            FROM (
+                SELECT 
+                    COALESCE(mai_sub2.internal_batch_number, r_sub.internal_batch_number) AS internal_batch_number,
+                    si.issue_quantity AS qty
+                FROM stock_issues si
+                LEFT JOIN material_add_items mai_sub2 ON si.ma_item_id = mai_sub2.id
+                LEFT JOIN rm_returns r_sub ON si.rm_return_id = r_sub.id
+
+                UNION ALL
+
+                SELECT 
+                    d_sub.internal_batch_number,
+                    d_sub.quantity AS qty
+                FROM dispatches d_sub
+            ) all_issues
+            WHERE internal_batch_number IS NOT NULL
+            GROUP BY internal_batch_number
         ) issue_agg ON ss.internal_batch_number = issue_agg.internal_batch_number
         ${whereClause}
         ORDER BY ss.updated_at DESC

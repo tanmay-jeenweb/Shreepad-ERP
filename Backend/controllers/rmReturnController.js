@@ -10,11 +10,9 @@ const createRmReturnHandler = async (req, res) => {
             work_order_item_id,
             return_date,
             material_id,
-            job_party_id,
             location_id,
             quantity
         } = req.body;
-
 
         const addedBy = req.user.id;
         const result = await createRmReturn({
@@ -22,7 +20,6 @@ const createRmReturnHandler = async (req, res) => {
             work_order_item_id,
             return_date,
             material_id,
-            job_party_id,
             location_id,
             quantity
         }, addedBy);

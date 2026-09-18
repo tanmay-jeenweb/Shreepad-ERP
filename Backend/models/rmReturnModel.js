@@ -53,6 +53,73 @@ const createRmReturnsTable = async () => {
     } catch (err) {
         console.error("Error adding columns to rm_returns:", err.message);
     }
+
+    await ensureRmReturnColumns();
+};
+
+const ensureRmReturnColumns = async () => {
+    try {
+        // 1. Find and drop any foreign key referencing job_parties or on job_party_id
+        const [fkRows] = await db.execute(`
+            SELECT CONSTRAINT_NAME 
+            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+            WHERE TABLE_SCHEMA = DATABASE() 
+              AND TABLE_NAME = 'rm_returns' 
+              AND (COLUMN_NAME = 'job_party_id' OR REFERENCED_TABLE_NAME = 'job_parties')
+        `);
+        for (const row of fkRows) {
+            try {
+                await db.execute(`ALTER TABLE rm_returns DROP FOREIGN KEY \`${row.CONSTRAINT_NAME}\``);
+                console.log(`Dropped foreign key ${row.CONSTRAINT_NAME} from rm_returns`);
+            } catch (err) {
+                // ignore
+            }
+        }
+
+        // Specifically attempt dropping constraint rm_returns_ibfk_2 if present
+        try {
+            await db.execute(`ALTER TABLE rm_returns DROP FOREIGN KEY \`rm_returns_ibfk_2\``);
+            console.log("Dropped foreign key rm_returns_ibfk_2 from rm_returns");
+        } catch (err) {
+            // ignore if not found
+        }
+
+        // 2. Drop job_party_id column if exists
+        const [colRows] = await db.execute(`
+            SELECT COLUMN_NAME 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+              AND TABLE_NAME = 'rm_returns' 
+              AND COLUMN_NAME = 'job_party_id'
+        `);
+        if (colRows.length > 0) {
+            try {
+                await db.execute(`ALTER TABLE rm_returns DROP COLUMN job_party_id`);
+                console.log("Dropped column job_party_id from rm_returns");
+            } catch (err) {
+                console.error("Could not drop column job_party_id from rm_returns:", err.message);
+            }
+        }
+
+        // 3. Drop job_party_name column if exists
+        const [nameCols] = await db.execute(`
+            SELECT COLUMN_NAME 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+              AND TABLE_NAME = 'rm_returns' 
+              AND COLUMN_NAME = 'job_party_name'
+        `);
+        if (nameCols.length > 0) {
+            try {
+                await db.execute(`ALTER TABLE rm_returns DROP COLUMN job_party_name`);
+                console.log("Dropped column job_party_name from rm_returns");
+            } catch (err) {
+                console.error("Could not drop column job_party_name from rm_returns:", err.message);
+            }
+        }
+    } catch (err) {
+        console.error("Error ensuring rm_returns columns:", err.message);
+    }
 };
 
 const generateReturnNo = async (connection) => {
@@ -194,6 +261,7 @@ const getAllRmReturns = async () => {
 
 module.exports = {
     createRmReturnsTable,
+    ensureRmReturnColumns,
     createRmReturn,
     getAllRmReturns
 };

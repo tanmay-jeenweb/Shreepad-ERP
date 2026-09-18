@@ -15,6 +15,7 @@ export default function Navbar({ title }) {
     const [isStoreOpen, setIsStoreOpen] = useState(false);
     const [isProductionOpen, setIsProductionOpen] = useState(false);
     const [isSalesOpen, setIsSalesOpen] = useState(false);
+    const [isDispatchOpen, setIsDispatchOpen] = useState(false);
     const [isApprovalOpen, setIsApprovalOpen] = useState(false);
     const [isReportsOpen, setIsReportsOpen] = useState(false);
     const [orgLogo, setOrgLogo] = useState(localStorage.getItem("org_logo") || logoImage);
@@ -65,6 +66,9 @@ export default function Navbar({ title }) {
             if (isSalesOpen && !e.target.closest("#sales-dropdown")) {
                 setIsSalesOpen(false);
             }
+            if (isDispatchOpen && !e.target.closest("#dispatch-dropdown")) {
+                setIsDispatchOpen(false);
+            }
             if (isApprovalOpen && !e.target.closest("#approval-dropdown")) {
                 setIsApprovalOpen(false);
             }
@@ -74,7 +78,7 @@ export default function Navbar({ title }) {
         };
         document.addEventListener("click", handleOutsideClick);
         return () => document.removeEventListener("click", handleOutsideClick);
-    }, [isOpen, isProfileOpen, isPurchaseOpen, isStoreOpen, isProductionOpen, isSalesOpen, isApprovalOpen, isReportsOpen]);
+    }, [isOpen, isProfileOpen, isPurchaseOpen, isStoreOpen, isProductionOpen, isSalesOpen, isDispatchOpen, isApprovalOpen, isReportsOpen]);
 
     const closeAllDropdowns = () => {
         setIsOpen(false);
@@ -83,6 +87,7 @@ export default function Navbar({ title }) {
         setIsStoreOpen(false);
         setIsProductionOpen(false);
         setIsSalesOpen(false);
+        setIsDispatchOpen(false);
         setIsApprovalOpen(false);
         setIsReportsOpen(false);
     };
@@ -121,6 +126,12 @@ export default function Navbar({ title }) {
         const nextState = !isSalesOpen;
         closeAllDropdowns();
         setIsSalesOpen(nextState);
+    };
+
+    const toggleDispatch = () => {
+        const nextState = !isDispatchOpen;
+        closeAllDropdowns();
+        setIsDispatchOpen(nextState);
     };
 
     const toggleApproval = () => {
@@ -334,6 +345,14 @@ export default function Navbar({ title }) {
         return hasPermission(m.masterKey, "read");
     });
 
+    const availableDispatchLinks = [
+        { name: "New Dispatch", path: "/dispatch/create", icon: "fa-solid fa-truck-fast", masterKey: "dispatch" },
+        { name: "Dispatch History", path: "/dispatch", icon: "fa-solid fa-clipboard-list", masterKey: "dispatch" }
+    ].filter(m => {
+        if (isAdmin) return true;
+        return hasPermission("dispatch", "read") || hasPermission("stock_book", "read") || hasPermission("stock_status", "read");
+    });
+
     const availableSalesLinks = [
     ].filter(m => isAdmin || hasPermission(m.masterKey, "read"));
 
@@ -349,7 +368,7 @@ export default function Navbar({ title }) {
         return hasPermission(m.masterKey, "read") || (m.masterKey === "stock_status" && (hasPermission("rm_stock_status", "read") || hasPermission("batchwise_stock_status", "read"))) || (m.masterKey === "stock_book" && (hasPermission("rm_stock_book", "read") || hasPermission("general_stock_book", "read")));
     });
 
-    const hasAnyNavbarAccess = availableMasters.length > 0 || availableStoreLinks.length > 0 || availableProductionLinks.length > 0 || availableSalesLinks.length > 0 || availableApprovalLinks.length > 0 || availableReportsLinks.length > 0 || isAdmin;
+    const hasAnyNavbarAccess = availableMasters.length > 0 || availableStoreLinks.length > 0 || availableProductionLinks.length > 0 || availableDispatchLinks.length > 0 || availableSalesLinks.length > 0 || availableApprovalLinks.length > 0 || availableReportsLinks.length > 0 || isAdmin;
 
     const currentMaster = availableMasters.find(m => m.path === location.pathname) || availableMasters[0];
 
@@ -372,6 +391,7 @@ export default function Navbar({ title }) {
         availableMasters.length > 0,
         availableStoreLinks.length > 0,
         availableProductionLinks.length > 0,
+        availableDispatchLinks.length > 0,
         availableSalesLinks.length > 0,
         availableApprovalLinks.length > 0,
         availableReportsLinks.length > 0
@@ -645,6 +665,67 @@ export default function Navbar({ title }) {
                                                         onClick={() => {
                                                             navigate(m.path);
                                                             setIsProductionOpen(false);
+                                                        }}
+                                                        className={`relative group flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all cursor-pointer text-left border border-transparent ${isActive
+                                                            ? "bg-indigo-50/70 text-indigo-700 font-semibold border-indigo-100/50"
+                                                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-100"
+                                                            }`}
+                                                    >
+                                                        {/* Side Highlight Bar */}
+                                                        <span className={`absolute left-0 top-2 bottom-2 w-1 rounded-r-md transition-all duration-200 ${isActive ? "bg-indigo-600 scale-y-100" : "bg-transparent scale-y-0 group-hover:scale-y-50 group-hover:bg-slate-300"
+                                                            }`} />
+
+                                                        <div className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all shadow-sm shrink-0 ${isActive ? "bg-indigo-100/80 text-indigo-700" : "bg-slate-100/80 text-slate-500 group-hover:scale-105"
+                                                            }`}>
+                                                            <i className={`${m.icon} text-xs`}></i>
+                                                        </div>
+
+                                                        <div className="flex-1">
+                                                            <p className={`text-sm font-semibold leading-snug py-0.5 transition-colors whitespace-normal break-words ${isActive ? "text-indigo-900 font-bold" : "text-slate-800 group-hover:text-slate-950"
+                                                                }`}>
+                                                                {m.name}
+                                                            </p>
+                                                        </div>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Dispatch Dropdown */}
+                        {availableDispatchLinks.length > 0 && (
+                            <div className="relative w-full" id="dispatch-dropdown">
+                                <button
+                                    onClick={toggleDispatch}
+                                    className={`flex items-center justify-between w-full px-3.5 py-2.5 text-xs sm:text-sm border border-white/10 rounded-none hover:bg-white/5 focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer whitespace-nowrap ${location.pathname.startsWith("/dispatch") ? "bg-white/10" : "bg-[#369ACF]"}`}
+                                >
+                                    <span className="font-semibold text-white truncate">Dispatch</span>
+                                    <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        strokeWidth={2.5}
+                                        stroke="currentColor"
+                                        className={`w-3.5 h-3.5 text-slate-300 transition-transform duration-200 ${isDispatchOpen ? "rotate-180 text-white" : ""}`}
+                                    >
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                                    </svg>
+                                </button>
+
+                                {isDispatchOpen && (
+                                    <div className="absolute left-0 top-full mt-1.5 w-72 bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200">
+                                        <div className="flex flex-col gap-1.5">
+                                            {availableDispatchLinks.map((m, idx) => {
+                                                const isActive = isLinkActive(m.path, availableDispatchLinks);
+                                                return (
+                                                    <button
+                                                        key={idx}
+                                                        onClick={() => {
+                                                            navigate(m.path);
+                                                            setIsDispatchOpen(false);
                                                         }}
                                                         className={`relative group flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all cursor-pointer text-left border border-transparent ${isActive
                                                             ? "bg-indigo-50/70 text-indigo-700 font-semibold border-indigo-100/50"

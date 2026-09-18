@@ -153,7 +153,31 @@ const ensureWorkOrderColumns = async () => {
             await db.execute("ALTER TABLE work_order_items ADD COLUMN production_time_hours DECIMAL(10,3) DEFAULT NULL");
             console.log('Added column production_time_hours to work_order_items');
         }
-        // job_party_id column check removed
+        // Clean up job_party_id and its foreign key from work_order_items if lingering
+        try {
+            const [woiFk] = await db.execute(`
+                SELECT CONSTRAINT_NAME 
+                FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+                WHERE TABLE_SCHEMA = DATABASE() 
+                  AND TABLE_NAME = 'work_order_items' 
+                  AND (COLUMN_NAME = 'job_party_id' OR REFERENCED_TABLE_NAME = 'job_parties')
+            `);
+            for (const row of woiFk) {
+                await db.execute(`ALTER TABLE work_order_items DROP FOREIGN KEY \`${row.CONSTRAINT_NAME}\``).catch(() => {});
+            }
+            const [woiCols] = await db.execute(`
+                SELECT COLUMN_NAME 
+                FROM INFORMATION_SCHEMA.COLUMNS 
+                WHERE TABLE_SCHEMA = DATABASE() 
+                  AND TABLE_NAME = 'work_order_items' 
+                  AND COLUMN_NAME = 'job_party_id'
+            `);
+            if (woiCols.length > 0) {
+                await db.execute(`ALTER TABLE work_order_items DROP COLUMN job_party_id`).catch(() => {});
+            }
+        } catch (woiPartyErr) {
+            // ignore
+        }
     } catch (err) {
         console.error('Error ensuring work order columns:', err.message || err);
     }

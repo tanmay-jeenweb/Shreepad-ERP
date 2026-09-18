@@ -173,6 +173,36 @@ const getStockBookRecords = async (filters = {}) => {
             JOIN materials m ON woi.material_id = m.id
             LEFT JOIN customer_master c ON wo.customer_id = c.id
             WHERE wpl.to_bom_process_id IS NULL
+
+            UNION ALL
+
+            SELECT 
+                CONCAT('dsp_', d.id) AS id,
+                0 AS is_receipt,
+                NULL AS grn_item_id,
+                d.material_id AS material_id,
+                d.dispatch_date AS date,
+                CONCAT('Dispatched (', d.packing_method, ')') AS particular,
+                m.material_name AS product,
+                d.internal_batch_number AS internal_batch_number,
+                COALESCE(mai.supplier_batch_number, '') AS supplier_batch_number,
+                COALESCE(d.party_name, ss.party, '') AS vendor_name,
+                NULL AS job_party_name,
+                '' AS invoice_number,
+                d.dispatch_no AS grn_number,
+                COALESCE(d.dispatch_no, '') AS p_memo_number,
+                0 AS approved_quantity,
+                d.quantity AS issued_quantity,
+                ma.vendor_id AS vendor_id,
+                NULL AS job_party_id,
+                COALESCE(ma.location_id, r.location_id) AS location_id,
+                d.created_at AS created_at
+            FROM dispatches d
+            JOIN materials m ON d.material_id = m.id
+            LEFT JOIN stock_status ss ON d.internal_batch_number = ss.internal_batch_number
+            LEFT JOIN material_add_items mai ON ss.internal_batch_number = mai.internal_batch_number AND ss.ma_id IS NOT NULL
+            LEFT JOIN material_add_master ma ON mai.ma_id = ma.id
+            LEFT JOIN rm_returns r ON ss.internal_batch_number = r.internal_batch_number AND ss.rm_return_id IS NOT NULL
         ) t
         LEFT JOIN materials m ON t.material_id = m.id
         WHERE 1 = 1

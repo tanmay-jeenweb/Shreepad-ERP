@@ -48,6 +48,7 @@ const MODULE_GROUPS = [
       { key: "material_issue_return",   label: "Material Issue & Return" },
       { key: "stock_status",            label: "Stock Status", allowedPerms: ["canRead"] },
       { key: "stock_book",              label: "Stock Book", allowedPerms: ["canRead"] },
+      { key: "dispatch",                label: "Dispatch" },
     ]
   },
   {
