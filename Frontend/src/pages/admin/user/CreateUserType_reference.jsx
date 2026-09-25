@@ -11,7 +11,6 @@ const MASTERS = [
   { key: "material",              label: "Material Master" },
   { key: "worker_employee_type",  label: "Worker/Employee Type Master" },
   { key: "worker_employee",       label: "Worker/Employee Master" },
-  { key: "document",              label: "Document Master" },
   { key: "vendor",                label: "Vendor Master" },
   { key: "customer",              label: "Customer Master" },
   { key: "process_master",        label: "Process Master" },

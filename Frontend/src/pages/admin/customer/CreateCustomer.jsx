@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../../../components/Navbar";
 import { createCustomer } from "../../../api/customerApi";
-import { getAllDocuments } from "../../../api/documentApi";
 import toast from "react-hot-toast";
 
 const INDUSTRIES = [
@@ -54,7 +53,6 @@ const CURRENCIES = [
 export default function CreateCustomer() {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
-    const [documentMasters, setDocumentMasters] = useState([]);
 
     const [formData, setFormData] = useState({
         customer_code: "",
@@ -78,48 +76,15 @@ export default function CreateCustomer() {
         state_code: "",
     });
 
-    const [documents, setDocuments] = useState([]);
-    const [currentDoc, setCurrentDoc] = useState({ document_master_id: "", document_number: "" });
-
     const [contacts, setContacts] = useState([]);
     const [currentContact, setCurrentContact] = useState({ contact_name: "", contact_number: "", designation: "" });
 
     const [addresses, setAddresses] = useState([]);
     const [currentAddress, setCurrentAddress] = useState({ address: "", country: "", state: "", city: "", zip_code: "" });
 
-    useEffect(() => {
-        const fetchDocs = async () => {
-            try {
-                const res = await getAllDocuments();
-                setDocumentMasters(res.data?.data || []);
-            } catch (err) {
-                console.error("Failed to load documents", err);
-            }
-        };
-        fetchDocs();
-    }, []);
-
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
-    };
-
-    const handleAddDocument = () => {
-        if (!currentDoc.document_master_id) {
-            toast.error("Please select a document type");
-            return;
-        }
-        const docMaster = documentMasters.find(d => d.id.toString() === currentDoc.document_master_id);
-        setDocuments(prev => [...prev, {
-            document_master_id: currentDoc.document_master_id,
-            document_name: docMaster?.document_name,
-            document_number: currentDoc.document_number
-        }]);
-        setCurrentDoc({ document_master_id: "", document_number: "" });
-    };
-
-    const handleRemoveDocument = (index) => {
-        setDocuments(prev => prev.filter((_, i) => i !== index));
     };
 
     const handleAddContact = () => {
@@ -156,7 +121,7 @@ export default function CreateCustomer() {
         }
         setLoading(true);
         try {
-            await createCustomer({ ...formData, documents, contacts, addresses });
+            await createCustomer({ ...formData, contacts, addresses });
             toast.success("Customer created successfully");
             navigate("/admin/customers");
         } catch (error) {
@@ -594,76 +559,6 @@ export default function CreateCustomer() {
                                         placeholder="e.g. 22"
                                     />
                                 </div>
-                            </div>
-
-                            <hr className="border-slate-200" />
-
-                            {/* Dynamic Documents */}
-                            <div>
-                                <h3 className="text-sm font-bold text-slate-800 mb-4">Additional Documents</h3>
-                                <div className="flex flex-col md:flex-row gap-4 items-end">
-                                    <div className="flex-1 space-y-1.5">
-                                        <label className="block text-xs font-semibold text-slate-600">Document Type</label>
-                                        <select
-                                            value={currentDoc.document_master_id}
-                                            onChange={(e) => setCurrentDoc({ ...currentDoc, document_master_id: e.target.value })}
-                                            className={inputCls}
-                                        >
-                                            <option value="">Select a document type...</option>
-                                            {documentMasters.map(d => (
-                                                <option key={d.id} value={d.id}>{d.document_name}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div className="flex-1 space-y-1.5">
-                                        <label className="block text-xs font-semibold text-slate-600">License / Document Number</label>
-                                        <input
-                                            type="text"
-                                            value={currentDoc.document_number}
-                                            onChange={(e) => setCurrentDoc({ ...currentDoc, document_number: e.target.value })}
-                                            className={inputCls}
-                                            placeholder="Enter number..."
-                                        />
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={handleAddDocument}
-                                        className="h-10 px-4 bg-slate-800 hover:bg-slate-900 text-white text-sm font-medium rounded-lg transition-colors"
-                                    >
-                                        Add
-                                    </button>
-                                </div>
-
-                                {documents.length > 0 && (
-                                    <div className="mt-6 border border-slate-200 rounded-lg overflow-hidden">
-                                        <table className="min-w-full divide-y divide-slate-200">
-                                            <thead className="bg-slate-50">
-                                                <tr>
-                                                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Document Name</th>
-                                                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Document Number</th>
-                                                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase">Action</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="bg-white divide-y divide-slate-200">
-                                                {documents.map((doc, idx) => (
-                                                    <tr key={idx}>
-                                                        <td className="px-4 py-3 text-sm text-slate-800">{doc.document_name}</td>
-                                                        <td className="px-4 py-3 text-sm text-slate-600">{doc.document_number || '—'}</td>
-                                                        <td className="px-4 py-3 text-right">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleRemoveDocument(idx)}
-                                                                className="text-rose-500 hover:text-rose-700 text-sm font-medium"
-                                                            >
-                                                                Remove
-                                                            </button>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )}
                             </div>
                         </div>
                     </div>

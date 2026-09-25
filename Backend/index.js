@@ -16,14 +16,11 @@ const unitRoutes = require("./routes/unitRoutes.js");
 const materialRoutes = require("./routes/materialRoutes.js");
 const bomRoutes = require("./routes/bomRoutes.js");
 const termsAndConditionsRoutes = require("./routes/termsAndConditionsRoutes.js");
-const operatorTypeRoutes = require("./routes/operatorTypeRoutes.js");
 const operatorRoutes = require("./routes/operatorRoutes.js");
 // const itemRoutes = require("./routes/itemRoutes.js");
 const vendorRoutes = require("./routes/vendorRoutes.js");
 const customerRoutes = require("./routes/customerRoutes.js");
 const processMasterRoutes = require("./routes/processMasterRoutes.js");
-
-const documentMasterRoutes = require("./routes/documentRoutes.js");
 const organizationRoutes = require("./routes/organizationRoutes.js");
 const stockBookRoutes = require("./routes/stockBookRoutes.js");
 const stockStatusRoutes = require("./routes/stockStatusRoutes.js");
@@ -46,13 +43,11 @@ const { createUnitsTable } = require("./models/unitModel.js");
 const { createMaterialsTable, ensureMaterialColumns } = require("./models/materialModel.js");
 const { createBOMTable } = require("./models/bomModel.js");
 const { createTermsAndConditionsTable } = require("./models/termsAndConditionsModel.js");
-const { createOperatorTypesTable } = require("./models/operatorTypeModel.js");
 const { createOperatorsTable, ensureOperatorColumns } = require("./models/operatorModel.js");
 // const { createItemsTable } = require("./models/itemModel.js");
 const { createVendorTables, ensureVendorColumns } = require("./models/vendorModel.js");
 const { createCustomerTables, ensureCustomerColumns } = require("./models/customerModel.js");
 const { createProcessMastersTable } = require("./models/processMasterModel.js");
-const { createDocumentMasterTable } = require("./models/documentMaster.js");
 const { createOrganizationTable, ensureOrganizationColumns } = require("./models/organizationModel.js");
 const { createBatchSequenceTable } = require("./models/batchSequenceModel.js");
 const { createStockIssuesTable, ensureStockIssuesColumns } = require("./models/stockBookModel.js");
@@ -102,13 +97,11 @@ app.use(["/api/units", "/units"], unitRoutes);
 app.use(["/api/materials", "/materials"], materialRoutes);
 app.use(["/api/bom", "/bom"], bomRoutes);
 app.use(["/api/terms-and-conditions", "/terms-and-conditions"], termsAndConditionsRoutes);
-app.use(["/api/operator-types", "/operator-types"], operatorTypeRoutes);
 app.use(["/api/operators", "/operators"], operatorRoutes);
 // app.use(["/api/items", "/items"], itemRoutes);
 app.use(["/api/vendors", "/vendors"], vendorRoutes);
 app.use(["/api/customers", "/customers"], customerRoutes);
 app.use(["/api/process-masters", "/process-masters"], processMasterRoutes);
-app.use(["/api/document-masters", "/document-masters"], documentMasterRoutes);
 app.use(["/api/organizations", "/organizations"], organizationRoutes);
 app.use(["/api/stock-book", "/stock-book"], stockBookRoutes);
 app.use(["/api/stock-status", "/stock-status"], stockStatusRoutes);
@@ -162,11 +155,8 @@ const startServer = async () => {
 
         await createBOMTable();
         await createTermsAndConditionsTable();
-        await createOperatorTypesTable();
         await createOperatorsTable();
         await ensureOperatorColumns();
-        // await createItemsTable();
-        await createDocumentMasterTable();
         await createVendorTables();
         await ensureVendorColumns();
         await createCustomerTables();
@@ -180,6 +170,67 @@ const startServer = async () => {
             console.log("Cleaned up settings_master table and permissions");
         } catch (dropErr) {
             console.error("Error dropping settings_master table:", dropErr.message);
+        }
+
+        // Cleanup operator_types table, foreign key constraints, and permissions if exist
+        try {
+            const db = require("./config/db.js");
+            const [fkRows] = await db.execute(`
+                SELECT CONSTRAINT_NAME 
+                FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+                WHERE TABLE_SCHEMA = DATABASE() 
+                  AND TABLE_NAME = 'operators' 
+                  AND REFERENCED_TABLE_NAME = 'operator_types'
+            `);
+            for (const fk of fkRows) {
+                if (fk.CONSTRAINT_NAME) {
+                    await db.execute(`ALTER TABLE operators DROP FOREIGN KEY \`${fk.CONSTRAINT_NAME}\``);
+                    console.log(`Dropped foreign key ${fk.CONSTRAINT_NAME} from operators`);
+                }
+            }
+            await db.execute("DROP TABLE IF EXISTS operator_types");
+            await db.execute("DELETE FROM user_type_permissions WHERE master_name = 'operator_type'");
+            console.log("Cleaned up operator_types table and permissions");
+        } catch (dropErr) {
+            console.error("Error cleaning up operator_types:", dropErr.message);
+        }
+
+        // Cleanup document_master table, foreign key constraints, and permissions if exist
+        try {
+            const db = require("./config/db.js");
+            const [vendorFkRows] = await db.execute(`
+                SELECT CONSTRAINT_NAME 
+                FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+                WHERE TABLE_SCHEMA = DATABASE() 
+                  AND TABLE_NAME = 'vendor_documents' 
+                  AND REFERENCED_TABLE_NAME = 'document_master'
+            `);
+            for (const fk of vendorFkRows) {
+                if (fk.CONSTRAINT_NAME) {
+                    await db.execute(`ALTER TABLE vendor_documents DROP FOREIGN KEY \`${fk.CONSTRAINT_NAME}\``);
+                    console.log(`Dropped foreign key ${fk.CONSTRAINT_NAME} from vendor_documents`);
+                }
+            }
+            const [customerFkRows] = await db.execute(`
+                SELECT CONSTRAINT_NAME 
+                FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+                WHERE TABLE_SCHEMA = DATABASE() 
+                  AND TABLE_NAME = 'customer_documents' 
+                  AND REFERENCED_TABLE_NAME = 'document_master'
+            `);
+            for (const fk of customerFkRows) {
+                if (fk.CONSTRAINT_NAME) {
+                    await db.execute(`ALTER TABLE customer_documents DROP FOREIGN KEY \`${fk.CONSTRAINT_NAME}\``);
+                    console.log(`Dropped foreign key ${fk.CONSTRAINT_NAME} from customer_documents`);
+                }
+            }
+            await db.execute("DROP TABLE IF EXISTS vendor_documents");
+            await db.execute("DROP TABLE IF EXISTS customer_documents");
+            await db.execute("DROP TABLE IF EXISTS document_master");
+            await db.execute("DELETE FROM user_type_permissions WHERE master_name = 'document'");
+            console.log("Cleaned up document_master table and permissions");
+        } catch (dropErr) {
+            console.error("Error cleaning up document_master:", dropErr.message);
         }
 
         await createBatchSequenceTable();

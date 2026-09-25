@@ -15,7 +15,6 @@ const MODULE_GROUPS = [
     masters: [
       { key: "user_type",           label: "User Type Master" },
       { key: "location",            label: "Location Master" },
-      { key: "document",            label: "Document Master" },
       { key: "organization",        label: "Organization Master" },
       { key: "activity_report",     label: "User Activity Records", allowedPerms: ["canRead"] },
     ]
@@ -56,7 +55,6 @@ const MODULE_GROUPS = [
     icon: "fa-solid fa-users",
     description: "Operators, vendors, and customers.",
     masters: [
-      { key: "operator_type",       label: "Operator Type Master" },
       { key: "operator",            label: "Operator Master" },
       { key: "vendor",              label: "Vendor Master" },
       { key: "customer",            label: "Customer Master" },

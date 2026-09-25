@@ -40,36 +40,9 @@ const createVendorTables = async () => {
         )
     `;
 
-    const createVendorDocumentsQuery = `
-        CREATE TABLE IF NOT EXISTS vendor_documents (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            vendor_id INT NOT NULL,
-            document_master_id INT NOT NULL,
-            document_number VARCHAR(255),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (vendor_id) REFERENCES vendor_master(id) ON DELETE CASCADE,
-            FOREIGN KEY (document_master_id) REFERENCES document_master(id) ON DELETE CASCADE
-        )
-    `;
-
-    const createVendorAddressesQuery = `
-        CREATE TABLE IF NOT EXISTS vendor_addresses (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            vendor_id INT NOT NULL,
-            address TEXT,
-            country VARCHAR(100),
-            state VARCHAR(100),
-            city VARCHAR(100),
-            zip_code VARCHAR(20),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (vendor_id) REFERENCES vendor_master(id) ON DELETE CASCADE
-        )
-    `;
-
     await db.execute(createVendorMasterQuery);
     await db.execute(createVendorContactsQuery);
     await db.execute(createVendorAddressesQuery);
-    await db.execute(createVendorDocumentsQuery);
     console.log('Vendor tables ready');
 };
 
@@ -201,23 +174,6 @@ const createVendor = async (vendorData, documentsData, contactsData, addressesDa
             }
         }
 
-        // Insert documents
-        if (documentsData && documentsData.length > 0) {
-            const insertDocQuery = `
-                INSERT INTO vendor_documents (vendor_id, document_master_id, document_number)
-                VALUES (?, ?, ?)
-            `;
-            for (const doc of documentsData) {
-                if (doc.document_master_id) {
-                    await connection.execute(insertDocQuery, [
-                        vendorId,
-                        doc.document_master_id,
-                        doc.document_number || null
-                    ]);
-                }
-            }
-        }
-
         await connection.commit();
         return vendorId;
     } catch (error) {
@@ -264,24 +220,7 @@ const getAllVendors = async (includeInactive = false) => {
                     WHERE vc.vendor_id = v.id
                 ),
                 JSON_ARRAY()
-            ) as contacts,
-            COALESCE(
-                (
-                    SELECT JSON_ARRAYAGG(
-                        JSON_OBJECT(
-                            'id', vd.id,
-                            'document_master_id', vd.document_master_id,
-                            'document_name', dm.document_name,
-                            'document_type', dm.document_type,
-                            'document_number', vd.document_number
-                        )
-                    )
-                    FROM vendor_documents vd
-                    LEFT JOIN document_master dm ON vd.document_master_id = dm.id
-                    WHERE vd.vendor_id = v.id
-                ),
-                JSON_ARRAY()
-            ) as documents
+            ) as contacts
         FROM vendor_master v
         ${whereClause}
         ORDER BY v.created_at DESC
@@ -302,13 +241,6 @@ const getAllVendors = async (includeInactive = false) => {
                 row.contacts = [];
             }
         }
-        if (typeof row.documents === 'string') {
-            try {
-                row.documents = JSON.parse(row.documents);
-            } catch (e) {
-                row.documents = [];
-            }
-        }
         return row;
     });
 };
@@ -326,15 +258,6 @@ const getVendorById = async (id) => {
     const contactsQuery = `SELECT * FROM vendor_contacts WHERE vendor_id = ?`;
     const [contacts] = await db.execute(contactsQuery, [id]);
     vendor.contacts = contacts;
-
-    const docsQuery = `
-        SELECT vd.*, dm.document_name, dm.document_type 
-        FROM vendor_documents vd
-        LEFT JOIN document_master dm ON vd.document_master_id = dm.id
-        WHERE vd.vendor_id = ?
-    `;
-    const [docs] = await db.execute(docsQuery, [id]);
-    vendor.documents = docs;
 
     return vendor;
 };
@@ -420,24 +343,6 @@ const updateVendor = async (id, vendorData, documentsData, contactsData, address
                     addr.city      || null,
                     addr.zip_code  || null,
                 ]);
-            }
-        }
-
-        // Replace documents
-        await connection.execute(`DELETE FROM vendor_documents WHERE vendor_id = ?`, [id]);
-        if (documentsData && documentsData.length > 0) {
-            const insertDocQuery = `
-                INSERT INTO vendor_documents (vendor_id, document_master_id, document_number)
-                VALUES (?, ?, ?)
-            `;
-            for (const doc of documentsData) {
-                if (doc.document_master_id) {
-                    await connection.execute(insertDocQuery, [
-                        id,
-                        doc.document_master_id,
-                        doc.document_number || null
-                    ]);
-                }
             }
         }
 

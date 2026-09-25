@@ -14,8 +14,7 @@ const addOperator = async (req, res) => {
             operatorCode,
             operatorName,
             dateOfJoining,
-            information,
-            operatorTypeId
+            information
         } = req.body;
 
         const addedBy = req.user.id;
@@ -32,8 +31,7 @@ const addOperator = async (req, res) => {
             operatorCode: operatorCode.trim(),
             operatorName: operatorName.trim(),
             dateOfJoining: dateOfJoining || null,
-            information: information ? information.trim() : null,
-            operatorTypeId: operatorTypeId || null
+            information: information ? information.trim() : null
         };
 
         const operator = await createOperator(data, addedBy, deviceId);
@@ -103,8 +101,7 @@ const updateOperatorController = async (req, res) => {
             operatorCode,
             operatorName,
             dateOfJoining,
-            information,
-            operatorTypeId
+            information
         } = req.body;
 
         if (!operatorCode || !operatorCode.trim()) {
@@ -124,8 +121,7 @@ const updateOperatorController = async (req, res) => {
             operatorCode: operatorCode.trim(),
             operatorName: operatorName.trim(),
             dateOfJoining: dateOfJoining || null,
-            information: information ? information.trim() : null,
-            operatorTypeId: operatorTypeId || null
+            information: information ? information.trim() : null
         };
 
         await updateOperator(id, data);

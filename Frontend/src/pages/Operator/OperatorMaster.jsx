@@ -112,19 +112,6 @@ export default function OperatorMaster() {
         },
       },
       {
-        key: "operator_type_name",
-        label: "Type",
-        minWidth: "160px",
-        render: (row) =>
-          row.operator_type_name ? (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border bg-indigo-50 text-indigo-700 border-indigo-200">
-              {row.operator_type_name}
-            </span>
-          ) : (
-            <span className="text-slate-400 italic text-xs">—</span>
-          ),
-      },
-      {
         key: "information",
         label: "Information",
         minWidth: "200px",

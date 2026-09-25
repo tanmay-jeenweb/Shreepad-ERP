@@ -236,33 +236,15 @@ export default function Navbar({ title }) {
         },
 
         {
-            name: "Operator Type Master",
-            path: "/admin/operator-types",
-            masterKey: "operator_type",
-            icon: "fa-solid fa-user-tag",
-            color: "bg-orange-50 text-orange-600 border border-orange-100/50",
-            activeColor: "bg-orange-100 text-orange-700",
-            desc: "Manage operator type roles and classifications"
-        },
-        {
             name: "Operator Master",
             path: "/admin/operators",
             masterKey: "operator",
             icon: "fa-solid fa-user-gear",
             color: "bg-sky-50 text-sky-600 border border-sky-100/50",
             activeColor: "bg-sky-100 text-sky-700",
-            desc: "Manage operator profiles, types, and joining logs"
+            desc: "Manage operator profiles and joining logs"
         },
 
-        {
-            name: "Document Master",
-            path: "/admin/documents",
-            masterKey: "document",
-            icon: "fa-solid fa-file-contract",
-            color: "bg-teal-50 text-teal-600 border border-teal-100/50",
-            activeColor: "bg-teal-100 text-teal-700",
-            desc: "Manage organization and personal documents"
-        },
         {
             name: "Vendor Master",
             path: "/admin/vendors",
@@ -270,7 +252,7 @@ export default function Navbar({ title }) {
             icon: "fa-solid fa-building-user",
             color: "bg-blue-50 text-blue-600 border border-blue-100/50",
             activeColor: "bg-blue-100 text-blue-700",
-            desc: "Manage vendor details and related documents"
+            desc: "Manage vendor profiles and contact details"
         },
         {
             name: "Customer Master",

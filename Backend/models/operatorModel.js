@@ -8,13 +8,11 @@ const createOperatorsTable = async () => {
             operator_name VARCHAR(255) NOT NULL,
             date_of_joining DATE,
             information TEXT,
-            operator_type_id INT,
             active BOOLEAN DEFAULT TRUE,
             added_by INT NOT NULL,
             device_id VARCHAR(255),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (operator_type_id) REFERENCES operator_types(id) ON DELETE SET NULL,
             FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE CASCADE
         )
     `;
@@ -45,13 +43,12 @@ const createOperator = async (data, addedBy, deviceId) => {
         operatorCode,
         operatorName,
         dateOfJoining,
-        information,
-        operatorTypeId
+        information
     } = data;
 
     const query = `
-        INSERT INTO operators (operator_code, operator_name, date_of_joining, information, operator_type_id, added_by, device_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO operators (operator_code, operator_name, date_of_joining, information, added_by, device_id)
+        VALUES (?, ?, ?, ?, ?, ?)
     `;
 
     const [results] = await db.execute(query, [
@@ -59,7 +56,6 @@ const createOperator = async (data, addedBy, deviceId) => {
         operatorName,
         dateOfJoining || null,
         information || null,
-        operatorTypeId || null,
         addedBy,
         deviceId
     ]);
@@ -76,14 +72,11 @@ const getAllOperators = async (includeInactive = false) => {
             o.operator_name,
             o.date_of_joining,
             o.information,
-            o.operator_type_id,
             o.active,
-            ot.operator_type_name,
             COALESCE(u.name, 'Unknown') AS added_by_name,
             o.device_id,
             o.created_at
         FROM operators o
-        LEFT JOIN operator_types ot ON o.operator_type_id = ot.id
         LEFT JOIN users u ON o.added_by = u.id
         ${whereClause}
         ORDER BY o.created_at DESC
@@ -104,8 +97,7 @@ const updateOperator = async (id, data) => {
         operatorCode,
         operatorName,
         dateOfJoining,
-        information,
-        operatorTypeId
+        information
     } = data;
 
     const query = `
@@ -114,8 +106,7 @@ const updateOperator = async (id, data) => {
             operator_code = ?,
             operator_name = ?,
             date_of_joining = ?,
-            information = ?,
-            operator_type_id = ?
+            information = ?
         WHERE id = ?
     `;
 
@@ -124,7 +115,6 @@ const updateOperator = async (id, data) => {
         operatorName,
         dateOfJoining || null,
         information || null,
-        operatorTypeId || null,
         id
     ]);
 

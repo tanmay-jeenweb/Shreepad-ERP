@@ -6,7 +6,6 @@ import {
   updateOperator,
   getOperatorById,
 } from "../../api/operatorApi";
-import { getOperatorTypes } from "../../api/operatorTypeApi";
 import toast from "react-hot-toast";
 import DateInput from "../../components/DateInput";
 
@@ -14,7 +13,6 @@ const emptyForm = {
   operatorCode: "",
   operatorName: "",
   dateOfJoining: "",
-  operatorTypeId: "",
   information: "",
 };
 
@@ -24,22 +22,11 @@ export default function CreateOperator() {
   const isEditMode = Boolean(id);
 
   const [form, setForm] = useState(emptyForm);
-  const [types, setTypes] = useState([]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(isEditMode);
 
-  // ── Load dropdowns + operator details if in edit mode ─────────────
+  // ── Load operator details if in edit mode ─────────────
   useEffect(() => {
-    const fetchOperatorTypes = async () => {
-      try {
-        const res = await getOperatorTypes();
-        setTypes(res.data.data || []);
-      } catch (err) {
-        console.error("Failed to load operator types dropdown data", err);
-        toast.error("Unable to load operator types.");
-      }
-    };
-
     const fetchOperator = async () => {
       try {
         const res = await getOperatorById(id);
@@ -54,7 +41,6 @@ export default function CreateOperator() {
             operatorCode: op.operator_code || "",
             operatorName: op.operator_name || "",
             dateOfJoining: formattedDate,
-            operatorTypeId: op.operator_type_id ? String(op.operator_type_id) : "",
             information: op.information || "",
           });
         }
@@ -67,7 +53,6 @@ export default function CreateOperator() {
       }
     };
 
-    fetchOperatorTypes();
     if (isEditMode) fetchOperator();
   }, [id, isEditMode, navigate]);
 
@@ -93,7 +78,6 @@ export default function CreateOperator() {
         operatorCode: form.operatorCode.trim(),
         operatorName: form.operatorName.trim(),
         dateOfJoining: form.dateOfJoining || null,
-        operatorTypeId: form.operatorTypeId ? Number(form.operatorTypeId) : null,
         information: form.information.trim() || null,
       };
 
@@ -201,24 +185,6 @@ export default function CreateOperator() {
                         setForm((prev) => ({ ...prev, dateOfJoining: e.target.value }))
                       }
                     />
-                  </div>
-
-                  {/* Operator Type */}
-                  <div className="space-y-1">
-                    <label className={labelCls}>Operator Type</label>
-                    <select
-                      name="operatorTypeId"
-                      value={form.operatorTypeId}
-                      onChange={handleChange}
-                      className={inputCls}
-                    >
-                      <option value="">— Select Type —</option>
-                      {types.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.operator_type_name}
-                        </option>
-                      ))}
-                    </select>
                   </div>
                 </div>
 

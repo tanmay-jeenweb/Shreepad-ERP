@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Navbar from "../../../components/Navbar";
 import { getVendorById, updateVendor } from "../../../api/vendorApi";
-import { getAllDocuments } from "../../../api/documentApi";
 import toast from "react-hot-toast";
 
 const INDUSTRIES = [
@@ -39,7 +38,6 @@ export default function EditVendor() {
     const navigate = useNavigate();
     const [loading, setLoading]     = useState(false);
     const [fetching, setFetching]   = useState(true);
-    const [documentMasters, setDocumentMasters] = useState([]);
 
     const [formData, setFormData] = useState({
         vendor_code: "", vendor_name: "", contact_phone: "", contact_email: "",
@@ -49,8 +47,6 @@ export default function EditVendor() {
         cheque_printing_name: "", pan_no: "", gst_no: "", state_code: "",
     });
 
-    const [documents, setDocuments]           = useState([]);
-    const [currentDoc, setCurrentDoc]         = useState({ document_master_id: "", document_number: "" });
     const [contacts, setContacts]             = useState([]);
     const [currentContact, setCurrentContact] = useState({ contact_name: "", contact_number: "", designation: "" });
     const [addresses, setAddresses]           = useState([]);
@@ -59,12 +55,8 @@ export default function EditVendor() {
     useEffect(() => {
         const init = async () => {
             try {
-                const [vendorRes, docsRes] = await Promise.all([
-                    getVendorById(id),
-                    getAllDocuments(),
-                ]);
+                const vendorRes = await getVendorById(id);
                 const v = vendorRes.data?.data;
-                setDocumentMasters(docsRes.data?.data || []);
                 if (v) {
                     setFormData({
                         vendor_code:          v.vendor_code          || "",
@@ -86,13 +78,6 @@ export default function EditVendor() {
                     });
                     setContacts(Array.isArray(v.contacts)  ? v.contacts  : []);
                     setAddresses(Array.isArray(v.addresses) ? v.addresses : []);
-                    setDocuments(
-                        (Array.isArray(v.documents) ? v.documents : []).map(d => ({
-                            document_master_id: String(d.document_master_id),
-                            document_name:      d.document_name,
-                            document_number:    d.document_number || "",
-                        }))
-                    );
                 }
             } catch (err) {
                 toast.error("Failed to load vendor data");
@@ -107,13 +92,6 @@ export default function EditVendor() {
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
-    };
-
-    const handleAddDocument = () => {
-        if (!currentDoc.document_master_id) { toast.error("Please select a document type"); return; }
-        const dm = documentMasters.find(d => d.id.toString() === currentDoc.document_master_id);
-        setDocuments(prev => [...prev, { document_master_id: currentDoc.document_master_id, document_name: dm?.document_name, document_number: currentDoc.document_number }]);
-        setCurrentDoc({ document_master_id: "", document_number: "" });
     };
 
     const handleAddContact = () => {
@@ -133,7 +111,7 @@ export default function EditVendor() {
         if (!formData.vendor_code || !formData.vendor_name) { toast.error("Vendor Code and Vendor Name are required"); return; }
         setLoading(true);
         try {
-            await updateVendor(id, { ...formData, documents, contacts, addresses });
+            await updateVendor(id, { ...formData, contacts, addresses });
             toast.success("Vendor updated successfully");
             navigate("/admin/vendors");
         } catch (error) {
@@ -393,48 +371,6 @@ export default function EditVendor() {
                                     <label className={labelCls}>State Code</label>
                                     <input type="text" name="state_code" value={formData.state_code} onChange={handleChange} className={inputCls} placeholder="e.g. 22" />
                                 </div>
-                            </div>
-                            <hr className="border-slate-200" />
-                            <div>
-                                <h3 className="text-sm font-bold text-slate-800 mb-4">Additional Documents</h3>
-                                <div className="flex flex-col md:flex-row gap-4 items-end">
-                                    <div className="flex-1 space-y-1.5">
-                                        <label className="block text-xs font-semibold text-slate-600">Document Type</label>
-                                        <select value={currentDoc.document_master_id} onChange={(e) => setCurrentDoc({ ...currentDoc, document_master_id: e.target.value })} className={inputCls}>
-                                            <option value="">Select a document type...</option>
-                                            {documentMasters.map(d => <option key={d.id} value={d.id}>{d.document_name}</option>)}
-                                        </select>
-                                    </div>
-                                    <div className="flex-1 space-y-1.5">
-                                        <label className="block text-xs font-semibold text-slate-600">License / Document Number</label>
-                                        <input type="text" value={currentDoc.document_number} onChange={(e) => setCurrentDoc({ ...currentDoc, document_number: e.target.value })} className={inputCls} placeholder="Enter number..." />
-                                    </div>
-                                    <button type="button" onClick={handleAddDocument} className="h-10 px-4 bg-slate-800 hover:bg-slate-900 text-white text-sm font-medium rounded-lg transition-colors">Add</button>
-                                </div>
-                                {documents.length > 0 && (
-                                    <div className="mt-6 border border-slate-200 rounded-lg overflow-hidden">
-                                        <table className="min-w-full divide-y divide-slate-200">
-                                            <thead className="bg-slate-50">
-                                                <tr>
-                                                    {["Document Name","Document Number","Action"].map(h => (
-                                                        <th key={h} className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
-                                                    ))}
-                                                </tr>
-                                            </thead>
-                                            <tbody className="bg-white divide-y divide-slate-200">
-                                                {documents.map((doc, idx) => (
-                                                    <tr key={idx}>
-                                                        <td className="px-4 py-3 text-sm text-slate-800">{doc.document_name}</td>
-                                                        <td className="px-4 py-3 text-sm text-slate-600">{doc.document_number || '—'}</td>
-                                                        <td className="px-4 py-3 text-right">
-                                                            <button type="button" onClick={() => setDocuments(prev => prev.filter((_, i) => i !== idx))} className="text-rose-500 hover:text-rose-700 text-sm font-medium">Remove</button>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )}
                             </div>
                         </div>
                     </div>

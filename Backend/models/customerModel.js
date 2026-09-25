@@ -40,36 +40,9 @@ const createCustomerTables = async () => {
         )
     `;
 
-    const createCustomerDocumentsQuery = `
-        CREATE TABLE IF NOT EXISTS customer_documents (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            customer_id INT NOT NULL,
-            document_master_id INT NOT NULL,
-            document_number VARCHAR(255),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (customer_id) REFERENCES customer_master(id) ON DELETE CASCADE,
-            FOREIGN KEY (document_master_id) REFERENCES document_master(id) ON DELETE CASCADE
-        )
-    `;
-
-    const createCustomerAddressesQuery = `
-        CREATE TABLE IF NOT EXISTS customer_addresses (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            customer_id INT NOT NULL,
-            address TEXT,
-            country VARCHAR(100),
-            state VARCHAR(100),
-            city VARCHAR(100),
-            zip_code VARCHAR(20),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (customer_id) REFERENCES customer_master(id) ON DELETE CASCADE
-        )
-    `;
-
     await db.execute(createCustomerMasterQuery);
     await db.execute(createCustomerContactsQuery);
     await db.execute(createCustomerAddressesQuery);
-    await db.execute(createCustomerDocumentsQuery);
     console.log('Customer tables ready');
 };
 
@@ -201,23 +174,6 @@ const createCustomer = async (customerData, documentsData, contactsData, address
             }
         }
 
-        // Insert documents
-        if (documentsData && documentsData.length > 0) {
-            const insertDocQuery = `
-                INSERT INTO customer_documents (customer_id, document_master_id, document_number)
-                VALUES (?, ?, ?)
-            `;
-            for (const doc of documentsData) {
-                if (doc.document_master_id) {
-                    await connection.execute(insertDocQuery, [
-                        customerId,
-                        doc.document_master_id,
-                        doc.document_number || null
-                    ]);
-                }
-            }
-        }
-
         await connection.commit();
         return customerId;
     } catch (error) {
@@ -264,24 +220,7 @@ const getAllCustomers = async (includeInactive = false) => {
                     WHERE vc.customer_id = v.id
                 ),
                 JSON_ARRAY()
-            ) as contacts,
-            COALESCE(
-                (
-                    SELECT JSON_ARRAYAGG(
-                        JSON_OBJECT(
-                            'id', vd.id,
-                            'document_master_id', vd.document_master_id,
-                            'document_name', dm.document_name,
-                            'document_type', dm.document_type,
-                            'document_number', vd.document_number
-                        )
-                    )
-                    FROM customer_documents vd
-                    LEFT JOIN document_master dm ON vd.document_master_id = dm.id
-                    WHERE vd.customer_id = v.id
-                ),
-                JSON_ARRAY()
-            ) as documents
+            ) as contacts
         FROM customer_master v
         ${whereClause}
         ORDER BY v.created_at DESC
@@ -302,13 +241,6 @@ const getAllCustomers = async (includeInactive = false) => {
                 row.contacts = [];
             }
         }
-        if (typeof row.documents === 'string') {
-            try {
-                row.documents = JSON.parse(row.documents);
-            } catch (e) {
-                row.documents = [];
-            }
-        }
         return row;
     });
 };
@@ -326,15 +258,6 @@ const getCustomerById = async (id) => {
     const contactsQuery = `SELECT * FROM customer_contacts WHERE customer_id = ?`;
     const [contacts] = await db.execute(contactsQuery, [id]);
     customer.contacts = contacts;
-
-    const docsQuery = `
-        SELECT vd.*, dm.document_name, dm.document_type 
-        FROM customer_documents vd
-        LEFT JOIN document_master dm ON vd.document_master_id = dm.id
-        WHERE vd.customer_id = ?
-    `;
-    const [docs] = await db.execute(docsQuery, [id]);
-    customer.documents = docs;
 
     return customer;
 };
@@ -420,24 +343,6 @@ const updateCustomer = async (id, customerData, documentsData, contactsData, add
                     addr.city      || null,
                     addr.zip_code  || null,
                 ]);
-            }
-        }
-
-        // Replace documents
-        await connection.execute(`DELETE FROM customer_documents WHERE customer_id = ?`, [id]);
-        if (documentsData && documentsData.length > 0) {
-            const insertDocQuery = `
-                INSERT INTO customer_documents (customer_id, document_master_id, document_number)
-                VALUES (?, ?, ?)
-            `;
-            for (const doc of documentsData) {
-                if (doc.document_master_id) {
-                    await connection.execute(insertDocQuery, [
-                        id,
-                        doc.document_master_id,
-                        doc.document_number || null
-                    ]);
-                }
             }
         }
 

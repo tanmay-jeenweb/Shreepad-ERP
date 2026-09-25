@@ -12,7 +12,6 @@ import CreateLocation from "./pages/admin/location/CreateLocation";
 import CreateUser from "./pages/admin/user/CreateUser";
 import MachineMaster from "./pages/admin/machine/MachineMaster";
 import CreateMachine from "./pages/admin/machine/CreateMachine";
-import DocumentMaster from "./pages/admin/document/DocumentMaster";
 import VendorMaster from "./pages/admin/vendor/VendorMaster";
 import CreateVendor from "./pages/admin/vendor/CreateVendor";
 import EditVendor from "./pages/admin/vendor/EditVendor";
@@ -25,7 +24,6 @@ import MaterialTypeMaster from "./pages/Item/MaterialTypeMaster";
 import UnitMaster from "./pages/Item/UnitMaster";
 import MaterialMaster from "./pages/Item/MaterialMaster";
 import CreateMaterial from "./pages/Item/CreateMaterial";
-import OperatorTypeMaster from "./pages/Operator/OperatorTypeMaster";
 import OperatorMaster from "./pages/Operator/OperatorMaster";
 import CreateOperator from "./pages/Operator/CreateOperator";
 import Reports from "./pages/Reports";
@@ -218,14 +216,7 @@ export default function AppRoutes() {
             </Route>
 
 
-            {/* Raw Material and Job Party routes removed */}
-
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="operator_type" requiredAction="read" />}>
-                <Route
-                    path="/admin/operator-types"
-                    element={<OperatorTypeMaster />}
-                />
-            </Route>
+            {/* Raw Material, Job Party, and Operator Type routes removed */}
 
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="operator" requiredAction="read" />}>
                 <Route
@@ -248,14 +239,7 @@ export default function AppRoutes() {
                 />
             </Route>
 
-            {/* Reason For Delay routes removed */}
-
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="document" requiredAction="read" />}>
-                <Route
-                    path="/admin/documents"
-                    element={<DocumentMaster />}
-                />
-            </Route>
+            {/* Reason For Delay and Document routes removed */}
 
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="process_master" requiredAction="read" />}>
                 <Route
