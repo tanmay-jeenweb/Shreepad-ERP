@@ -49,7 +49,7 @@ export default function CreateBOM() {
                 setUnits(unitsRes.data?.data || []);
 
                 const allMats = materialsRes.data?.data || [];
-                const filteredMats = allMats.filter(m => ['Raw Materials', 'Semi Finished Goods'].includes(m.material_type));
+                const filteredMats = allMats.filter(m => ['Raw Materials', 'Semi Finished Goods'].includes(m.material_group || m.material_type));
                 setRawAndSemiMaterials(filteredMats);
 
                 if (materialIdParam) {

@@ -67,7 +67,7 @@ export default function BillOfMaterial() {
                 render: (row) => (
                     <div>
                         <p className="font-semibold text-slate-800">{row.material_name}</p>
-                        <p className="text-xs text-slate-500">{row.material_type}</p>
+                        <p className="text-xs text-slate-500">{row.material_group || row.material_type}</p>
                     </div>
                 )
             },

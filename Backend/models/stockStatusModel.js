@@ -83,7 +83,7 @@ const upsertStockStatusForReturn = async (connection, returnId, returnData) => {
     let materialId   = returnData.material_id || null;
     if (materialId) {
         const [matRows] = await connection.execute(
-            `SELECT material_type FROM materials WHERE id = ?`,
+            `SELECT COALESCE(material_group, material_type) AS material_type FROM materials WHERE id = ?`,
             [materialId]
         );
         if (matRows.length > 0) materialType = matRows[0].material_type;
@@ -151,7 +151,7 @@ const upsertStockStatusForMa = async (connection, maId, item, maHeader) => {
     let materialId   = item.material_id || null;
     if (materialId) {
         const [matRows] = await connection.execute(
-            `SELECT material_type FROM materials WHERE id = ?`,
+            `SELECT COALESCE(material_group, material_type) AS material_type FROM materials WHERE id = ?`,
             [materialId]
         );
         if (matRows.length > 0) materialType = matRows[0].material_type;
@@ -227,7 +227,7 @@ const upsertStockStatusForFinishedGoods = async (connection, {
     let matName = material_name || null;
     if (material_id && (!matType || !matName)) {
         const [matRows] = await connection.execute(
-            `SELECT material_name, material_type FROM materials WHERE id = ?`,
+            `SELECT material_name, COALESCE(material_group, material_type) AS material_type FROM materials WHERE id = ?`,
             [material_id]
         );
         if (matRows.length > 0) {

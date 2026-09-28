@@ -220,12 +220,12 @@ const getStockBookRecords = async (filters = {}) => {
     }
     if (filters.material_type && filters.material_type !== 'all' && filters.material_type !== '') {
         if (filters.material_type === 'rm') {
-            query += ` AND m.material_type = 'Raw Materials'`;
+            query += ` AND COALESCE(m.material_group, m.material_type) = 'Raw Materials'`;
         } else if (filters.material_type === 'general') {
-            query += ` AND (m.material_type != 'Raw Materials' OR m.material_type IS NULL)`;
+            query += ` AND (COALESCE(m.material_group, m.material_type) != 'Raw Materials' OR COALESCE(m.material_group, m.material_type) IS NULL)`;
         } else {
-            query += ` AND m.material_type = ?`;
-            queryParams.push(filters.material_type);
+            query += ` AND (m.material_group = ? OR m.material_type = ?)`;
+            queryParams.push(filters.material_type, filters.material_type);
         }
     }
 

@@ -77,8 +77,8 @@ export default function EditWorkOrder() {
         // Filter materials for Finished / Semi-Finished
         const allMaterials = matRes.data.data || [];
         const filteredMat = allMaterials.filter(m => {
-          const type = (m.material_type || "").toLowerCase();
-          const isFinishedOrSemi = type.includes("finish") || type.includes("semi");
+          const group = (m.material_group || m.material_type || "").toLowerCase();
+          const isFinishedOrSemi = group.includes("finish") || group.includes("semi");
           return isFinishedOrSemi && activeBomMaterialIds.has(Number(m.id));
         });
         setMaterials(filteredMat);
@@ -652,6 +652,9 @@ export default function EditWorkOrder() {
                             {materials.map(m => (
                               <option key={m.id} value={m.id}>{m.material_name} ({m.material_code})</option>
                             ))}
+                            {materials.length === 0 && (
+                              <option value="" disabled>No Finished/Semi-Finished materials with active BOM found</option>
+                            )}
                           </select>
                         </td>
                         <td className="px-6 py-4 text-right">

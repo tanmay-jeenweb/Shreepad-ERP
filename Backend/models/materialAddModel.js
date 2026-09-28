@@ -207,7 +207,7 @@ const previewNextBatchNumber = async (materialId) => {
 
 const getDistinctMaterialTypes = async () => {
     const [rows] = await db.execute(
-        `SELECT DISTINCT material_type FROM materials WHERE material_type IS NOT NULL AND material_type != '' ORDER BY material_type ASC`
+        `SELECT DISTINCT COALESCE(material_group, material_type) AS material_type FROM materials WHERE COALESCE(material_group, material_type) IS NOT NULL AND COALESCE(material_group, material_type) != '' ORDER BY material_type ASC`
     );
     return rows.map(r => r.material_type);
 };
@@ -217,9 +217,9 @@ const getMaterialsByType = async (materialType) => {
         `SELECT m.id, m.material_name, m.material_code, COALESCE(m.pst_code, m.hsn_code) AS pst_code, COALESCE(m.pst_code, m.hsn_code) AS hsn_code, u.unit_name, m.gst_percent
          FROM materials m
          LEFT JOIN units u ON m.unit_id = u.id
-         WHERE m.material_type = ? AND (m.active = 1 OR m.active IS NULL)
+         WHERE (m.material_group = ? OR m.material_type = ?) AND (m.active = 1 OR m.active IS NULL)
          ORDER BY m.material_name ASC`,
-        [materialType]
+        [materialType, materialType]
     );
     return rows;
 };

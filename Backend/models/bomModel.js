@@ -194,9 +194,9 @@ const ensureBOMConstraints = async () => {
 
 const getFinishedAndSemiFinishedMaterials = async () => {
     const query = `
-        SELECT id, material_code, material_name, material_type
+        SELECT id, material_code, material_name, COALESCE(material_group, material_type) AS material_group, material_type
         FROM materials
-        WHERE material_type IN ('Finished Goods', 'Semi Finished Goods')
+        WHERE (material_group IN ('Finished Goods', 'Semi Finished Goods') OR material_type IN ('Finished Goods', 'Semi Finished Goods'))
           AND active = 1
         ORDER BY material_name ASC
     `;
@@ -261,6 +261,7 @@ const getAllBOMs = async () => {
             m.id AS material_id,
             m.material_name,
             m.material_code,
+            COALESCE(m.material_group, m.material_type) AS material_group,
             m.material_type,
             bom.added_by,
             COALESCE(u.name, 'Unknown') AS added_by_name,
@@ -277,7 +278,7 @@ const getAllBOMs = async () => {
         LEFT JOIN bom_processes bp   ON bom.id              = bp.bom_id
         LEFT JOIN process_masters pm ON bp.process_id       = pm.id
         LEFT JOIN units pu           ON bp.unit_id          = pu.id
-        WHERE m.material_type IN ('Finished Goods', 'Semi Finished Goods')
+        WHERE (m.material_group IN ('Finished Goods', 'Semi Finished Goods') OR m.material_type IN ('Finished Goods', 'Semi Finished Goods'))
           AND m.active = 1
         GROUP BY m.id, bom.id, u.name
         ORDER BY m.created_at DESC
@@ -292,6 +293,7 @@ const getBOMById = async (id) => {
             bom.*,
             m.material_name,
             m.material_code,
+            COALESCE(m.material_group, m.material_type) AS material_group,
             m.material_type,
             COALESCE(u.name, 'Unknown') AS added_by_name
         FROM bill_of_materials bom
@@ -401,6 +403,7 @@ const getBOMByMaterialId = async (materialId) => {
             bom.created_at,
             m.material_name,
             m.material_code,
+            COALESCE(m.material_group, m.material_type) AS material_group,
             m.material_type,
             COALESCE(u.name, 'Unknown') AS added_by_name
         FROM bill_of_materials bom
@@ -448,6 +451,7 @@ const getBOMByMaterialId = async (materialId) => {
                 id AS material_id,
                 material_name,
                 material_code,
+                COALESCE(material_group, material_type) AS material_group,
                 material_type
             FROM materials
             WHERE id = ? AND active = 1
@@ -459,6 +463,7 @@ const getBOMByMaterialId = async (materialId) => {
                 material_id: mRows[0].material_id,
                 material_name: mRows[0].material_name,
                 material_code: mRows[0].material_code,
+                material_group: mRows[0].material_group,
                 material_type: mRows[0].material_type,
                 bomMaterials: [{ materialId: "", quantity: "", unitName: "" }],
                 bomProcesses: [{ processId: "", time: "", unitId: "" }]
