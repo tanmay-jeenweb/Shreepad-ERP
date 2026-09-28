@@ -84,9 +84,29 @@ export default function MaterialAddMaster() {
         },
         {
             key: "challan_number",
-            label: "Challan #",
-            minWidth: "120px",
-            render: (row) => <span className="text-slate-600">{row.challan_number || "—"}</span>,
+            label: "Challan Details",
+            minWidth: "150px",
+            render: (row) => (
+                <div>
+                    <span className="text-slate-700 font-medium block">{row.challan_number || "—"}</span>
+                    {row.challan_date && (
+                        <span className="text-xs text-slate-400 block">{formatDate(row.challan_date)}</span>
+                    )}
+                </div>
+            ),
+        },
+        {
+            key: "invoice_number",
+            label: "Invoice Details",
+            minWidth: "150px",
+            render: (row) => (
+                <div>
+                    <span className="text-slate-700 font-medium block">{row.invoice_number || "—"}</span>
+                    {row.invoice_date && (
+                        <span className="text-xs text-slate-400 block">{formatDate(row.invoice_date)}</span>
+                    )}
+                </div>
+            ),
         },
         {
             key: "status",

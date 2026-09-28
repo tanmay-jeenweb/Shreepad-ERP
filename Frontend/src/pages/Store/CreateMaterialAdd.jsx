@@ -33,7 +33,9 @@ const EMPTY_HEADER = {
     vendor_id: "",
     vendor_name: "",
     challan_number: "",
+    challan_date: "",
     invoice_number: "",
+    invoice_date: "",
     remark: "",
     particular: "",
     status: "received"
@@ -98,7 +100,9 @@ export default function CreateMaterialAdd() {
                     vendor_id: data.vendor_id || "",
                     vendor_name: data.vendor_name || "",
                     challan_number: data.challan_number || "",
+                    challan_date: data.challan_date ? new Date(data.challan_date).toISOString().split("T")[0] : "",
                     invoice_number: data.invoice_number || "",
+                    invoice_date: data.invoice_date ? new Date(data.invoice_date).toISOString().split("T")[0] : "",
                     remark: data.remark || "",
                     particular: data.particular || "",
                     status: data.status || "received"
@@ -349,7 +353,7 @@ export default function CreateMaterialAdd() {
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                                     <div>
                                         <label className={labelCls}>Challan Number</label>
                                         <input
@@ -362,6 +366,14 @@ export default function CreateMaterialAdd() {
                                         />
                                     </div>
                                     <div>
+                                        <label className={labelCls}>Challan Date</label>
+                                        <DateInput
+                                            name="challan_date"
+                                            value={headerData.challan_date}
+                                            onChange={handleHeaderChange}
+                                        />
+                                    </div>
+                                    <div>
                                         <label className={labelCls}>Invoice Number</label>
                                         <input
                                             type="text"
@@ -370,6 +382,14 @@ export default function CreateMaterialAdd() {
                                             onChange={handleHeaderChange}
                                             placeholder="Enter invoice number..."
                                             className={inputCls}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className={labelCls}>Invoice Date</label>
+                                        <DateInput
+                                            name="invoice_date"
+                                            value={headerData.invoice_date}
+                                            onChange={handleHeaderChange}
                                         />
                                     </div>
                                 </div>

@@ -15,7 +15,9 @@ const createMaterialAddTables = async () => {
             vendor_id           INT DEFAULT NULL,
             vendor_name         VARCHAR(255) DEFAULT NULL,
             challan_number      VARCHAR(100) DEFAULT NULL,
+            challan_date        DATE DEFAULT NULL,
             invoice_number      VARCHAR(100) DEFAULT NULL,
+            invoice_date        DATE DEFAULT NULL,
             remark              TEXT DEFAULT NULL,
             particular          TEXT DEFAULT NULL,
             status              VARCHAR(20) DEFAULT 'completed',
@@ -92,9 +94,17 @@ const ensureMaterialAddColumns = async () => {
         if (challanCols.length === 0) {
             await db.execute(`ALTER TABLE material_add_master ADD COLUMN challan_number VARCHAR(100) DEFAULT NULL`);
         }
+        const [challanDateCols] = await db.execute(`SHOW COLUMNS FROM material_add_master LIKE 'challan_date'`);
+        if (challanDateCols.length === 0) {
+            await db.execute(`ALTER TABLE material_add_master ADD COLUMN challan_date DATE DEFAULT NULL`);
+        }
         const [invoiceCols] = await db.execute(`SHOW COLUMNS FROM material_add_master LIKE 'invoice_number'`);
         if (invoiceCols.length === 0) {
             await db.execute(`ALTER TABLE material_add_master ADD COLUMN invoice_number VARCHAR(100) DEFAULT NULL`);
+        }
+        const [invoiceDateCols] = await db.execute(`SHOW COLUMNS FROM material_add_master LIKE 'invoice_date'`);
+        if (invoiceDateCols.length === 0) {
+            await db.execute(`ALTER TABLE material_add_master ADD COLUMN invoice_date DATE DEFAULT NULL`);
         }
 
         // Ensure new column in material_add_items
@@ -225,8 +235,8 @@ const createMaterialAdd = async (headerData, itemsData, addedBy) => {
 
         const insertMasterQuery = `
             INSERT INTO material_add_master
-                (ma_number, ma_date, location_id, location_name, vendor_id, vendor_name, challan_number, invoice_number, remark, particular, status, added_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (ma_number, ma_date, location_id, location_name, vendor_id, vendor_name, challan_number, challan_date, invoice_number, invoice_date, remark, particular, status, added_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
         const [maResult] = await connection.execute(insertMasterQuery, [
@@ -237,7 +247,9 @@ const createMaterialAdd = async (headerData, itemsData, addedBy) => {
             toIntOrNull(headerData.vendor_id),
             headerData.vendor_name || null,
             headerData.challan_number || null,
+            headerData.challan_date || null,
             headerData.invoice_number || null,
+            headerData.invoice_date || null,
             headerData.remark || null,
             headerData.particular || null,
             headerData.status || 'completed',
@@ -309,7 +321,9 @@ const getAllMaterialAdds = async () => {
             m.vendor_id,
             m.vendor_name,
             m.challan_number,
+            m.challan_date,
             m.invoice_number,
+            m.invoice_date,
             m.remark,
             m.particular,
             m.status,
@@ -360,7 +374,9 @@ const updateMaterialAdd = async (id, headerData, itemsData) => {
                 vendor_id           = ?,
                 vendor_name         = ?,
                 challan_number      = ?,
+                challan_date        = ?,
                 invoice_number      = ?,
+                invoice_date        = ?,
                 remark              = ?,
                 particular          = ?,
                 status              = ?
@@ -374,7 +390,9 @@ const updateMaterialAdd = async (id, headerData, itemsData) => {
             toIntOrNull(headerData.vendor_id),
             headerData.vendor_name || null,
             headerData.challan_number || null,
+            headerData.challan_date || null,
             headerData.invoice_number || null,
+            headerData.invoice_date || null,
             headerData.remark || null,
             headerData.particular || null,
             headerData.status || 'completed',
