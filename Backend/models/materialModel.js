@@ -13,6 +13,9 @@ const createMaterialsTable = async () => {
             hsn_code VARCHAR(50),
             material_group VARCHAR(100),
             material_type VARCHAR(100),
+            item VARCHAR(100) DEFAULT NULL,
+            class VARCHAR(100) DEFAULT NULL,
+            size VARCHAR(100) DEFAULT NULL,
             gst_percent VARCHAR(50),
             self_val DECIMAL(15,2),
             purchase_val DECIMAL(15,2),
@@ -40,6 +43,10 @@ const ensureMaterialColumns = async () => {
         { name: 'pts_code', query: 'ALTER TABLE materials ADD COLUMN pts_code VARCHAR(50) DEFAULT NULL' },
         { name: 'pst_code', query: 'ALTER TABLE materials ADD COLUMN pst_code VARCHAR(50) DEFAULT NULL' },
         { name: 'material_group', query: 'ALTER TABLE materials ADD COLUMN material_group VARCHAR(100) DEFAULT NULL' },
+        { name: 'material_type', query: 'ALTER TABLE materials ADD COLUMN material_type VARCHAR(100) DEFAULT NULL' },
+        { name: 'item', query: 'ALTER TABLE materials ADD COLUMN item VARCHAR(100) DEFAULT NULL' },
+        { name: 'class', query: 'ALTER TABLE materials ADD COLUMN `class` VARCHAR(100) DEFAULT NULL' },
+        { name: 'size', query: 'ALTER TABLE materials ADD COLUMN size VARCHAR(100) DEFAULT NULL' },
     ];
 
     for (const col of columnsToEnsure) {
@@ -115,6 +122,10 @@ const createMaterial = async (data, addedBy, deviceId) => {
         hsnCode,
         materialGroup,
         materialType,
+        item,
+        className,
+        class: bodyClass,
+        size,
         gstPercent,
         selfVal,
         purchaseVal,
@@ -129,6 +140,9 @@ const createMaterial = async (data, addedBy, deviceId) => {
 
     const resolvedMaterialGroup = materialGroup || null;
     const resolvedMaterialType = materialType || null;
+    const resolvedItem = item || null;
+    const resolvedClass = className || bodyClass || null;
+    const resolvedSize = size || null;
 
     const query = `
         INSERT INTO materials (
@@ -141,6 +155,9 @@ const createMaterial = async (data, addedBy, deviceId) => {
             hsn_code,
             material_group,
             material_type,
+            item,
+            \`class\`,
+            size,
             gst_percent,
             self_val,
             purchase_val,
@@ -150,7 +167,7 @@ const createMaterial = async (data, addedBy, deviceId) => {
             added_by,
             device_id
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const [results] = await db.execute(query, [
@@ -163,6 +180,9 @@ const createMaterial = async (data, addedBy, deviceId) => {
         resolvedPtsCode || null,
         resolvedMaterialGroup,
         resolvedMaterialType,
+        resolvedItem,
+        resolvedClass,
+        resolvedSize,
         gstPercent || null,
         selfVal !== undefined && selfVal !== null && selfVal !== '' ? Number(selfVal) : null,
         purchaseVal !== undefined && purchaseVal !== null && purchaseVal !== '' ? Number(purchaseVal) : null,
@@ -191,6 +211,10 @@ const getAllMaterials = async (includeInactive = false) => {
             COALESCE(m.pts_code, m.pst_code, m.hsn_code) AS hsn_code,
             m.material_group,
             m.material_type,
+            m.item,
+            m.\`class\`,
+            m.\`class\` AS class_name,
+            m.size,
             m.gst_percent,
             m.self_val,
             m.purchase_val,
@@ -219,7 +243,11 @@ const getMaterialById = async (id) => {
             COALESCE(m.pts_code, m.pst_code, m.hsn_code) AS pts_code,
             COALESCE(m.pts_code, m.pst_code, m.hsn_code) AS pst_code,
             m.material_group,
-            m.material_type
+            m.material_type,
+            m.item,
+            m.\`class\`,
+            m.\`class\` AS class_name,
+            m.size
         FROM materials m
         WHERE m.id = ?
     `;
@@ -238,6 +266,10 @@ const updateMaterial = async (id, data) => {
         hsnCode,
         materialGroup,
         materialType,
+        item,
+        className,
+        class: bodyClass,
+        size,
         gstPercent,
         selfVal,
         purchaseVal,
@@ -252,6 +284,9 @@ const updateMaterial = async (id, data) => {
 
     const resolvedMaterialGroup = materialGroup !== undefined ? (materialGroup || null) : null;
     const resolvedMaterialType = materialType !== undefined ? (materialType || null) : null;
+    const resolvedItem = item !== undefined ? (item || null) : null;
+    const resolvedClass = (className !== undefined || bodyClass !== undefined) ? (className || bodyClass || null) : null;
+    const resolvedSize = size !== undefined ? (size || null) : null;
 
     const query = `
         UPDATE materials
@@ -265,6 +300,9 @@ const updateMaterial = async (id, data) => {
             hsn_code = ?,
             material_group = ?,
             material_type = ?,
+            item = ?,
+            \`class\` = ?,
+            size = ?,
             gst_percent = ?,
             self_val = ?,
             purchase_val = ?,
@@ -284,6 +322,9 @@ const updateMaterial = async (id, data) => {
         resolvedPtsCode || null,
         resolvedMaterialGroup,
         resolvedMaterialType,
+        resolvedItem,
+        resolvedClass,
+        resolvedSize,
         gstPercent || null,
         selfVal !== undefined && selfVal !== null && selfVal !== '' ? Number(selfVal) : null,
         purchaseVal !== undefined && purchaseVal !== null && purchaseVal !== '' ? Number(purchaseVal) : null,

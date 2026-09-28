@@ -226,6 +226,33 @@ export default function Navbar({ title }) {
             desc: "Manage material types"
         },
         {
+            name: "Item Master",
+            path: "/admin/items",
+            masterKey: "item",
+            icon: "fa-solid fa-shapes",
+            color: "bg-teal-50 text-teal-600 border border-teal-100/50",
+            activeColor: "bg-teal-100 text-teal-700",
+            desc: "Manage items and item names"
+        },
+        {
+            name: "Class Master",
+            path: "/admin/classes",
+            masterKey: "class",
+            icon: "fa-solid fa-layer-group",
+            color: "bg-purple-50 text-purple-600 border border-purple-100/50",
+            activeColor: "bg-purple-100 text-purple-700",
+            desc: "Manage item classes and grades"
+        },
+        {
+            name: "Size Master",
+            path: "/admin/sizes",
+            masterKey: "size",
+            icon: "fa-solid fa-up-right-and-down-left-from-center",
+            color: "bg-amber-50 text-amber-600 border border-amber-100/50",
+            activeColor: "bg-amber-100 text-amber-700",
+            desc: "Manage material sizes and dimensions"
+        },
+        {
             name: "Unit Master",
             path: "/admin/units",
             masterKey: "unit",

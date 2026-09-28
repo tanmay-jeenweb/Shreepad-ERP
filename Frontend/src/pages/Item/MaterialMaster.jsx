@@ -170,6 +170,45 @@ export default function MaterialMaster() {
           ),
       },
       {
+        key: "item",
+        label: "Item",
+        minWidth: "130px",
+        render: (row) =>
+          row.item ? (
+            <span className="font-medium text-slate-800">{row.item}</span>
+          ) : (
+            <span className="text-slate-400 italic text-xs">—</span>
+          ),
+      },
+      {
+        key: "class",
+        label: "Class",
+        minWidth: "120px",
+        render: (row) => {
+          const val = row.class || row.class_name;
+          return val ? (
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
+              {val}
+            </span>
+          ) : (
+            <span className="text-slate-400 italic text-xs">—</span>
+          );
+        },
+      },
+      {
+        key: "size",
+        label: "Size",
+        minWidth: "110px",
+        render: (row) =>
+          row.size ? (
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+              {row.size}
+            </span>
+          ) : (
+            <span className="text-slate-400 italic text-xs">—</span>
+          ),
+      },
+      {
         key: "details",
         label: "Details",
         minWidth: "160px",

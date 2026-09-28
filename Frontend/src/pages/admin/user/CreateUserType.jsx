@@ -31,6 +31,9 @@ const MODULE_GROUPS = [
     masters: [
       { key: "material_group",        label: "Material Group Master" },
       { key: "material_type",         label: "Material Type Master" },
+      { key: "item",                  label: "Item Master" },
+      { key: "class",                 label: "Class Master" },
+      { key: "size",                  label: "Size Master" },
       { key: "unit",                label: "Unit Master" },
       { key: "material",            label: "Material Master" },
     ]

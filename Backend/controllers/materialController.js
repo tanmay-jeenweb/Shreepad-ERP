@@ -20,6 +20,10 @@ const addMaterial = async (req, res) => {
             hsnCode,
             materialGroup,
             materialType,
+            item,
+            className,
+            class: bodyClass,
+            size,
             gstPercent,
             selfVal,
             purchaseVal,
@@ -42,6 +46,9 @@ const addMaterial = async (req, res) => {
         const rawPts = (ptsCode !== undefined && ptsCode !== null) ? ptsCode : ((pstCode !== undefined && pstCode !== null) ? pstCode : hsnCode);
         const rawGroup = (materialGroup !== undefined && materialGroup !== null) ? materialGroup : null;
         const rawType = (materialType !== undefined && materialType !== null) ? materialType : null;
+        const rawItem = (item !== undefined && item !== null) ? item : null;
+        const rawClass = (className !== undefined && className !== null) ? className : ((bodyClass !== undefined && bodyClass !== null) ? bodyClass : null);
+        const rawSize = (size !== undefined && size !== null) ? size : null;
 
         const data = {
             materialCode: materialCode.trim(),
@@ -53,6 +60,10 @@ const addMaterial = async (req, res) => {
             hsnCode: rawPts ? rawPts.trim() : null,
             materialGroup: rawGroup ? (typeof rawGroup === 'string' ? rawGroup.trim() : rawGroup) : null,
             materialType: rawType ? (typeof rawType === 'string' ? rawType.trim() : rawType) : null,
+            item: rawItem ? (typeof rawItem === 'string' ? rawItem.trim() : rawItem) : null,
+            class: rawClass ? (typeof rawClass === 'string' ? rawClass.trim() : rawClass) : null,
+            className: rawClass ? (typeof rawClass === 'string' ? rawClass.trim() : rawClass) : null,
+            size: rawSize ? (typeof rawSize === 'string' ? rawSize.trim() : rawSize) : null,
             gstPercent: gstPercent ? gstPercent.trim() : null,
             selfVal: selfVal !== undefined && selfVal !== null && selfVal !== '' ? Number(selfVal) : null,
             purchaseVal: purchaseVal !== undefined && purchaseVal !== null && purchaseVal !== '' ? Number(purchaseVal) : null,
@@ -134,6 +145,10 @@ const updateMaterialController = async (req, res) => {
             hsnCode,
             materialGroup,
             materialType,
+            item,
+            className,
+            class: bodyClass,
+            size,
             gstPercent,
             selfVal,
             purchaseVal,
@@ -164,6 +179,10 @@ const updateMaterialController = async (req, res) => {
 
         const rawGroup = materialGroup !== undefined ? materialGroup : (beforeData ? beforeData.material_group : null);
         const rawType = materialType !== undefined ? materialType : (beforeData ? beforeData.material_type : null);
+        const rawItem = item !== undefined ? item : (beforeData ? beforeData.item : null);
+        const inputClass = (className !== undefined && className !== null) ? className : bodyClass;
+        const rawClass = inputClass !== undefined ? inputClass : (beforeData ? (beforeData.class || beforeData.class_name) : null);
+        const rawSize = size !== undefined ? size : (beforeData ? beforeData.size : null);
 
         const data = {
             materialCode: materialCode.trim(),
@@ -175,6 +194,10 @@ const updateMaterialController = async (req, res) => {
             hsnCode: rawPts ? rawPts.trim() : null,
             materialGroup: rawGroup ? (typeof rawGroup === 'string' ? rawGroup.trim() : rawGroup) : null,
             materialType: rawType ? (typeof rawType === 'string' ? rawType.trim() : rawType) : null,
+            item: rawItem ? (typeof rawItem === 'string' ? rawItem.trim() : rawItem) : null,
+            class: rawClass ? (typeof rawClass === 'string' ? rawClass.trim() : rawClass) : null,
+            className: rawClass ? (typeof rawClass === 'string' ? rawClass.trim() : rawClass) : null,
+            size: rawSize ? (typeof rawSize === 'string' ? rawSize.trim() : rawSize) : null,
             gstPercent: gstPercent ? gstPercent.trim() : null,
             selfVal: selfVal !== undefined && selfVal !== null && selfVal !== '' ? Number(selfVal) : null,
             purchaseVal: purchaseVal !== undefined && purchaseVal !== null && purchaseVal !== '' ? Number(purchaseVal) : null,

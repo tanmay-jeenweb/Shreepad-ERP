@@ -4,6 +4,9 @@ import Navbar from "../../components/Navbar";
 import { createMaterial, updateMaterial, getMaterialById } from "../../api/materialApi";
 import { getMaterialGroups } from "../../api/materialGroupApi";
 import { getMaterialTypes } from "../../api/materialTypeApi";
+import { getItems } from "../../api/itemApi";
+import { getClasses } from "../../api/classApi";
+import { getSizes } from "../../api/sizeApi";
 import { getUnits } from "../../api/unitApi";
 import toast from "react-hot-toast";
 
@@ -29,6 +32,9 @@ const emptyForm = {
   ptsCode: "",
   materialGroup: "",
   materialType: "",
+  item: "",
+  className: "",
+  size: "",
   prefix: "",
   details: "",
   remarks: "",
@@ -43,6 +49,9 @@ export default function CreateMaterial() {
   const [form, setForm] = useState(emptyForm);
   const [materialGroups, setMaterialGroups] = useState([]);
   const [materialTypes, setMaterialTypes] = useState([]);
+  const [items, setItems] = useState([]);
+  const [classes, setClasses] = useState([]);
+  const [sizes, setSizes] = useState([]);
   const [units, setUnits] = useState([]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -52,15 +61,21 @@ export default function CreateMaterial() {
     const initData = async () => {
       setLoading(true);
       try {
-        // Fetch dropdowns
-        const [unitRes, groupRes, typeRes] = await Promise.all([
+        // Fetch all dropdowns
+        const [unitRes, groupRes, typeRes, itemRes, classRes, sizeRes] = await Promise.all([
           getUnits(),
           getMaterialGroups(),
           getMaterialTypes(),
+          getItems(),
+          getClasses(),
+          getSizes(),
         ]);
         setUnits(unitRes.data?.data || []);
         setMaterialGroups(groupRes.data?.data || []);
         setMaterialTypes(typeRes.data?.data || []);
+        setItems(itemRes.data?.data || []);
+        setClasses(classRes.data?.data || []);
+        setSizes(sizeRes.data?.data || []);
 
         // Fetch material details if in edit mode
         if (isEditMode) {
@@ -69,6 +84,9 @@ export default function CreateMaterial() {
           if (mat) {
             const currentGroup = mat.material_group || "";
             const currentType = mat.material_type || "";
+            const currentItem = mat.item || "";
+            const currentClass = mat.class || mat.class_name || "";
+            const currentSize = mat.size || "";
             setForm({
               materialCode: mat.material_code || "",
               materialName: mat.material_name || "",
@@ -76,6 +94,9 @@ export default function CreateMaterial() {
               ptsCode: mat.pts_code || mat.pst_code || mat.hsn_code || "",
               materialGroup: currentGroup,
               materialType: currentType,
+              item: currentItem,
+              className: currentClass,
+              size: currentSize,
               prefix: mat.prefix || (currentGroup ? DEFAULT_PREFIXES[currentGroup] || "" : ""),
               details: mat.details || "",
               remarks: mat.remarks || "",
@@ -147,6 +168,10 @@ export default function CreateMaterial() {
         hsnCode: form.ptsCode.trim() || null,
         materialGroup: form.materialGroup || null,
         materialType: form.materialType || null,
+        item: form.item || null,
+        className: form.className || null,
+        class: form.className || null,
+        size: form.size || null,
         details: form.details.trim() || null,
         remarks: form.remarks.trim() || null,
       };
@@ -307,6 +332,60 @@ export default function CreateMaterial() {
                   {materialTypes.map((t) => (
                     <option key={t.id} value={t.material_type_name}>
                       {t.material_type_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Item */}
+              <div>
+                <label className={labelCls}>Item</label>
+                <select
+                  name="item"
+                  value={form.item}
+                  onChange={handleChange}
+                  className={inputCls}
+                >
+                  <option value="">— Select Item —</option>
+                  {items.map((i) => (
+                    <option key={i.id} value={i.item_name}>
+                      {i.item_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Class */}
+              <div>
+                <label className={labelCls}>Class</label>
+                <select
+                  name="className"
+                  value={form.className}
+                  onChange={handleChange}
+                  className={inputCls}
+                >
+                  <option value="">— Select Class —</option>
+                  {classes.map((c) => (
+                    <option key={c.id} value={c.class_name}>
+                      {c.class_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Size */}
+              <div>
+                <label className={labelCls}>Size</label>
+                <select
+                  name="size"
+                  value={form.size}
+                  onChange={handleChange}
+                  className={inputCls}
+                >
+                  <option value="">— Select Size —</option>
+                  {sizes.map((s) => (
+                    <option key={s.id} value={s.size_name}>
+                      {s.size_name}
                     </option>
                   ))}
                 </select>

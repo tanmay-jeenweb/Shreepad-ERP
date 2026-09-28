@@ -22,6 +22,9 @@ import CreateUserType from "./pages/admin/user/CreateUserType";
 import Profile from "./pages/Profile";
 import MaterialGroupMaster from "./pages/Item/MaterialGroupMaster";
 import MaterialTypeMaster from "./pages/Item/MaterialTypeMaster";
+import ItemMaster from "./pages/Item/ItemMaster";
+import ClassMaster from "./pages/Item/ClassMaster";
+import SizeMaster from "./pages/Item/SizeMaster";
 import UnitMaster from "./pages/Item/UnitMaster";
 import MaterialMaster from "./pages/Item/MaterialMaster";
 import CreateMaterial from "./pages/Item/CreateMaterial";
@@ -199,6 +202,30 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/material-types"
                     element={<MaterialTypeMaster />}
+                />
+            </Route>
+
+            {/* Item Master */}
+            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="item" requiredAction="read" />}>
+                <Route
+                    path="/admin/items"
+                    element={<ItemMaster />}
+                />
+            </Route>
+
+            {/* Class Master */}
+            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="class" requiredAction="read" />}>
+                <Route
+                    path="/admin/classes"
+                    element={<ClassMaster />}
+                />
+            </Route>
+
+            {/* Size Master */}
+            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="size" requiredAction="read" />}>
+                <Route
+                    path="/admin/sizes"
+                    element={<SizeMaster />}
                 />
             </Route>
 
