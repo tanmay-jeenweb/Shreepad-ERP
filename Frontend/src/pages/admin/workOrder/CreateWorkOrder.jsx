@@ -8,6 +8,7 @@ import { getBOMs, getBOMByMaterialId } from "../../../api/bomApi";
 import { getJobParties } from "../../../api/jobPartyApi";
 import toast from "react-hot-toast";
 import DateInput from "../../../components/DateInput";
+import ItemConfigModal from "./ItemConfigModal";
 
 export default function CreateWorkOrder() {
   const navigate = useNavigate();
@@ -23,9 +24,14 @@ export default function CreateWorkOrder() {
   const [workOrderDate, setWorkOrderDate] = useState(new Date().toISOString().substring(0, 10));
   const [items, setItems] = useState([]);
 
-  // Modal states for work order configuration
+  // Modal states for work order configuration (common modal on save)
   const [showModal, setShowModal] = useState(false);
   const [modalItems, setModalItems] = useState([]);
+  const [activeModalTab, setActiveModalTab] = useState("all");
+
+  // Modal states for single item configuration (gear symbol)
+  const [showSingleModal, setShowSingleModal] = useState(false);
+  const [singleItemIdx, setSingleItemIdx] = useState(null);
 
 
   const formatDate = (d) => {
@@ -142,14 +148,21 @@ export default function CreateWorkOrder() {
             } catch (err) {
               console.error(`Failed to fetch stock for material ${rm.materialId}`, err);
             }
+            const bomQty = Number(rm.quantity);
+            const prodQty = Number(updated[index].production_quantity || 1);
+            const req = Number((bomQty * prodQty).toFixed(3));
+            const avail = Number(stock) || 0;
+            const calcMin = Math.max(0, Number((req - avail).toFixed(3)));
             return {
               materialId: rm.materialId,
               materialName: rm.materialName,
               materialCode: rm.materialCode,
               unitName: rm.unitName,
-              bomQty: Number(rm.quantity),
-              availableStock: Number(stock),
-              productionAmount: Number(rm.quantity) * Number(updated[index].production_quantity || 1)
+              bomQty,
+              availableStock: avail,
+              productionAmount: req,
+              calculatedMinSupply: calcMin,
+              minSupplyNeeded: calcMin
             };
           })
         );
@@ -171,13 +184,22 @@ export default function CreateWorkOrder() {
     const updated = [...items];
     const qtyVal = Number(qty);
     updated[index].quantity = qtyVal;
-    updated[index].production_quantity = qtyVal; // default prod qty to total qty
+    updated[index].production_quantity = qtyVal;
 
     if (updated[index].rawMaterials) {
-      updated[index].rawMaterials = updated[index].rawMaterials.map(rm => ({
-        ...rm,
-        productionAmount: Number((rm.bomQty * qtyVal).toFixed(3))
-      }));
+      updated[index].rawMaterials = updated[index].rawMaterials.map(rm => {
+        const req = Number((Number(rm.bomQty) * qtyVal).toFixed(3));
+        const avail = Number(rm.availableStock) || 0;
+        const calcMin = Math.max(0, Number((req - avail).toFixed(3)));
+        return {
+          ...rm,
+          productionAmount: req,
+          calculatedMinSupply: calcMin,
+          minSupplyNeeded: (rm.minSupplyNeeded !== undefined && rm.minSupplyNeeded !== "" && !isNaN(Number(rm.minSupplyNeeded)))
+            ? rm.minSupplyNeeded
+            : calcMin
+        };
+      });
     }
     setItems(updated);
   };
@@ -203,6 +225,41 @@ export default function CreateWorkOrder() {
     } else {
       toast.error("Work order must have at least one item");
     }
+  };
+
+  const isItemConfigured = (item) => {
+    if (!item) return false;
+    return Boolean(
+      item.batch_no ||
+      item.exp_delivery_date ||
+      item.actual_delivery_date ||
+      item.remarks ||
+      (item.production_quantity !== undefined && Number(item.production_quantity) !== Number(item.quantity)) ||
+      (item.rawMaterials && item.rawMaterials.some(rm => rm.minSupplyNeeded !== undefined && rm.minSupplyNeeded !== "" && Number(rm.minSupplyNeeded) > 0))
+    );
+  };
+
+  const handleOpenItemConfig = (idx) => {
+    const target = items[idx];
+    if (!target?.material_id) {
+      toast.error("Please select a material first");
+      return;
+    }
+    if (!target.quantity || Number(target.quantity) <= 0) {
+      toast.error("Please enter a valid quantity first");
+      return;
+    }
+    setSingleItemIdx(idx);
+    setShowSingleModal(true);
+  };
+
+  const handleSaveSingleItemConfig = (updatedItem) => {
+    if (singleItemIdx === null) return;
+    const updated = [...items];
+    updated[singleItemIdx] = updatedItem;
+    setItems(updated);
+    setShowSingleModal(false);
+    toast.success(`Configuration saved for ${updatedItem.material_name || `Item #${singleItemIdx + 1}`}`);
   };
 
   const handleModalItemChange = (idx, field, value) => {
@@ -284,37 +341,10 @@ export default function CreateWorkOrder() {
     });
   };
 
-  const allRawMaterials = useMemo(() => {
-    const list = [];
-    (modalItems || []).forEach((it, itemIdx) => {
-      if (it.rawMaterials && it.rawMaterials.length > 0) {
-        it.rawMaterials.forEach((rm, rmIdx) => {
-          const prodQty = Number(it.production_quantity) || 0;
-          const bomQty = Number(rm.bomQty) || 0;
-          const requiredProdQty = Number((bomQty * prodQty).toFixed(3));
-          const availableStock = Number(rm.availableStock) || 0;
-          const calculatedMinSupply = Math.max(0, Number((requiredProdQty - availableStock).toFixed(3)));
-          const minSupplyNeeded = rm.minSupplyNeeded !== undefined && rm.minSupplyNeeded !== null && rm.minSupplyNeeded !== ""
-            ? rm.minSupplyNeeded
-            : calculatedMinSupply;
-
-          list.push({
-            ...rm,
-            itemIdx,
-            rmIdx,
-            finishedGoodName: it.material_name,
-            bomQty,
-            availableStock,
-            requiredProdQty,
-            calculatedMinSupply,
-            minSupplyNeeded,
-            unitName: rm.unitName || "kg"
-          });
-        });
-      }
-    });
-    return list;
-  }, [modalItems]);
+  const handleCloseCommonModal = () => {
+    setItems(modalItems);
+    setShowModal(false);
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -328,7 +358,8 @@ export default function CreateWorkOrder() {
       return;
     }
     const cloned = JSON.parse(JSON.stringify(items)).map(it => {
-      const prodQty = Number(it.production_quantity) || 0;
+      const prodQty = Number(it.production_quantity) || Number(it.quantity) || 0;
+      it.production_quantity = prodQty;
       if (it.rawMaterials) {
         it.rawMaterials = it.rawMaterials.map(rm => {
           const req = Number((Number(rm.bomQty) * prodQty).toFixed(3));
@@ -347,6 +378,7 @@ export default function CreateWorkOrder() {
       return it;
     });
     setModalItems(cloned);
+    setActiveModalTab("all");
     setShowModal(true);
   };
 
@@ -551,6 +583,18 @@ export default function CreateWorkOrder() {
                           <div className="flex items-center justify-center gap-2">
                             <button
                               type="button"
+                              onClick={() => handleOpenItemConfig(idx)}
+                              className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-all cursor-pointer ${
+                                isItemConfigured(item)
+                                  ? "border-[#369ACF] bg-sky-50 text-[#369ACF] hover:bg-sky-100 shadow-xs"
+                                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                              }`}
+                              title={isItemConfigured(item) ? "Configured (Click to edit configuration)" : "Configure Item"}
+                            >
+                              <i className="fa-solid fa-gear text-sm"></i>
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => removeItemRow(idx)}
                               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-250 bg-rose-50 text-rose-600 hover:bg-rose-100 cursor-pointer"
                               title="Delete Row"
@@ -579,10 +623,19 @@ export default function CreateWorkOrder() {
         </form>
       </main>
 
-      {/* Work Order Configuration & Allocation Modal */}
+      {/* Single Item Configuration Modal (triggered by gear icon on each row) */}
+      <ItemConfigModal
+        isOpen={showSingleModal}
+        onClose={() => setShowSingleModal(false)}
+        itemIndex={singleItemIdx}
+        item={singleItemIdx !== null ? items[singleItemIdx] : null}
+        onSave={handleSaveSingleItemConfig}
+      />
+
+      {/* Common Work Order Configuration Modal (triggered on Save Work Order - Separated Item-Wise) */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70 shrink-0">
               <div>
@@ -591,13 +644,13 @@ export default function CreateWorkOrder() {
                   Work Order Configuration
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Configure production details and review raw materials allocation before saving.
+                  Configure production details and review raw materials allocation separated item-wise before saving.
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setShowModal(false)}
-                className="text-slate-400 hover:text-slate-600 text-2xl font-bold cursor-pointer"
+                onClick={handleCloseCommonModal}
+                className="text-slate-400 hover:text-slate-600 text-2xl font-bold cursor-pointer p-1"
               >
                 &times;
               </button>
@@ -605,213 +658,267 @@ export default function CreateWorkOrder() {
 
             {/* Modal Body */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {/* Item Production Details Sections */}
-              <div className="space-y-4">
-                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                  <i className="fa-solid fa-boxes-stacked text-[#369ACF]"></i>
-                  Production Details ({modalItems.length} {modalItems.length === 1 ? "Item" : "Items"})
-                </h4>
+              {/* Item Navigation Tabs */}
+              {modalItems.length > 1 && (
+                <div className="flex items-center gap-2 border-b border-slate-200 pb-3 overflow-x-auto">
+                  <button
+                    type="button"
+                    onClick={() => setActiveModalTab("all")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer shrink-0 ${
+                      activeModalTab === "all"
+                        ? "bg-indigo-600 text-white shadow-xs"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    All Items ({modalItems.length})
+                  </button>
+                  {modalItems.map((it, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setActiveModalTab(i)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer shrink-0 flex items-center gap-1.5 ${
+                        activeModalTab === i
+                          ? "bg-[#369ACF] text-white shadow-xs"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      }`}
+                    >
+                      <i className="fa-solid fa-gear text-[10px]"></i>
+                      Item #{i + 1}: {it.material_name || "Material"}
+                    </button>
+                  ))}
+                </div>
+              )}
 
-                {modalItems.map((item, idx) => (
-                  <div key={idx} className="border border-slate-200 rounded-xl p-4 bg-white shadow-sm space-y-4">
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 text-xs font-bold bg-indigo-50 text-indigo-700 rounded-md border border-indigo-100">
-                          Item #{idx + 1}
-                        </span>
-                        <span className="text-sm font-bold text-slate-800">
-                          {item.material_name || "Unselected"}
-                        </span>
-                        {item.material_code && (
-                          <span className="text-xs font-mono text-slate-400">
-                            ({item.material_code})
+              {/* Items Separated Item-Wise */}
+              <div className="space-y-6">
+                {modalItems.map((item, idx) => {
+                  if (activeModalTab !== "all" && activeModalTab !== idx) return null;
+
+                  const itemHasShortfall = item.rawMaterials?.some(
+                    rm => (Number(rm.minSupplyNeeded) || 0) < rm.calculatedMinSupply || rm.availableStock < rm.productionAmount
+                  );
+
+                  return (
+                    <div key={idx} className="border border-slate-200 rounded-xl p-5 bg-white shadow-xs space-y-5">
+                      {/* Item Header */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className="h-8 w-8 rounded-lg bg-sky-50 border border-sky-200 text-[#369ACF] flex items-center justify-center text-sm shadow-xs">
+                            <i className="fa-solid fa-gear"></i>
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-0.5 text-xs font-bold bg-indigo-50 text-indigo-700 rounded-md border border-indigo-100">
+                                Item #{idx + 1}
+                              </span>
+                              <h4 className="text-sm font-bold text-slate-800">
+                                {item.material_name || "Unselected Material"}
+                              </h4>
+                            </div>
+                            {item.material_code && (
+                              <span className="text-xs font-mono text-slate-400">
+                                Code: {item.material_code}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2.5 text-xs">
+                          <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg font-medium">
+                            Order Qty: <strong className="text-slate-800">{item.quantity}</strong>
                           </span>
+                          <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-lg font-medium border border-indigo-100">
+                            Prod Qty: <strong className="text-indigo-900">{item.production_quantity}</strong>
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Production Details Form */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                            Order Quantity <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="number"
+                            step="0.001"
+                            value={item.quantity}
+                            onChange={(e) => handleModalItemChange(idx, "quantity", e.target.value)}
+                            required
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                            Production Quantity <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="number"
+                            step="0.001"
+                            value={item.production_quantity}
+                            onChange={(e) => handleModalItemChange(idx, "production_quantity", e.target.value)}
+                            required
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm font-semibold text-indigo-600 focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                            Exp. Delivery Date
+                          </label>
+                          <DateInput
+                            value={item.exp_delivery_date}
+                            onChange={(e) => handleModalItemChange(idx, "exp_delivery_date", e.target.value)}
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                            Batch Number
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Enter batch number"
+                            value={item.batch_no || ""}
+                            onChange={(e) => handleModalItemChange(idx, "batch_no", e.target.value)}
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                            Actual Delivery Date
+                          </label>
+                          <DateInput
+                            value={item.actual_delivery_date}
+                            onChange={(e) => handleModalItemChange(idx, "actual_delivery_date", e.target.value)}
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                            Remarks
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Enter remarks"
+                            value={item.remarks || ""}
+                            onChange={(e) => handleModalItemChange(idx, "remarks", e.target.value)}
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Raw Materials Allocation for this item */}
+                      <div className="pt-2 border-t border-slate-100 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h5 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                            <i className="fa-solid fa-layer-group text-[#369ACF]"></i>
+                            Raw Materials Allocation for {item.material_name}
+                          </h5>
+                          <span className="text-[11px] text-slate-400">
+                            {item.rawMaterials?.length || 0} raw {item.rawMaterials?.length === 1 ? "material" : "materials"} in BOM
+                          </span>
+                        </div>
+
+                        {itemHasShortfall && (
+                          <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2 text-amber-800 text-xs">
+                            <i className="fa-solid fa-triangle-exclamation text-amber-500 mt-0.5 text-xs shrink-0"></i>
+                            <div>
+                              <span className="font-semibold">Notice:</span> Available quantity in system is less than required for this item's production quantity. You can set the minimum supply needed.
+                            </div>
+                          </div>
                         )}
+
+                        <div className="overflow-x-auto border border-slate-200 rounded-xl shadow-xs bg-white">
+                          <table className="w-full text-left text-xs text-slate-600 border-collapse">
+                            <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                              <tr>
+                                <th className="px-4 py-2.5">Raw Material</th>
+                                <th className="px-4 py-2.5 text-right">Available Stock</th>
+                                <th className="px-4 py-2.5 text-right">RM req. for 1 Unit</th>
+                                <th className="px-4 py-2.5 text-right">RM req. for Prod Qty</th>
+                                <th className="px-4 py-2.5 text-right">Min Supply Needed</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                              {item.rawMaterials && item.rawMaterials.length > 0 ? (
+                                item.rawMaterials.map((rm, rmIdx) => {
+                                  const prodQty = Number(item.production_quantity) || 0;
+                                  const bomQty = Number(rm.bomQty) || 0;
+                                  const requiredProdQty = Number((bomQty * prodQty).toFixed(3));
+                                  const availableStock = Number(rm.availableStock) || 0;
+                                  const calculatedMinSupply = Math.max(0, Number((requiredProdQty - availableStock).toFixed(3)));
+                                  const isShortfall = (Number(rm.minSupplyNeeded) || 0) < calculatedMinSupply;
+
+                                  return (
+                                    <tr key={rmIdx} className="hover:bg-slate-50/60 transition-colors">
+                                      <td className="px-4 py-2.5">
+                                        <div className="font-semibold text-slate-800">{rm.materialName}</div>
+                                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                                          {rm.materialCode || "—"}
+                                        </div>
+                                      </td>
+                                      <td className="px-4 py-2.5 text-right font-mono text-slate-600 text-xs">
+                                        {availableStock.toFixed(3)} {rm.unitName || "kg"}
+                                      </td>
+                                      <td className="px-4 py-2.5 text-right font-mono text-slate-600 text-xs">
+                                        {bomQty.toFixed(4)} {rm.unitName || "kg"}
+                                      </td>
+                                      <td className="px-4 py-2.5 text-right font-mono font-semibold text-indigo-700 text-xs">
+                                        {requiredProdQty.toFixed(3)} {rm.unitName || "kg"}
+                                      </td>
+                                      <td className="px-4 py-2.5 text-right">
+                                        <div className="flex flex-col items-end gap-1">
+                                          <div className="flex items-center justify-end gap-1.5">
+                                            <input
+                                              type="text"
+                                              value={rm.minSupplyNeeded !== undefined ? rm.minSupplyNeeded : calculatedMinSupply}
+                                              onChange={(e) => handleRMMinSupplyChange(idx, rmIdx, e.target.value)}
+                                              onBlur={() => handleRMMinSupplyBlur(idx, rmIdx, calculatedMinSupply)}
+                                              onKeyDown={(e) => {
+                                                if (e.key === "Enter") {
+                                                  e.preventDefault();
+                                                  handleRMMinSupplyBlur(idx, rmIdx, calculatedMinSupply);
+                                                }
+                                              }}
+                                              placeholder={String(calculatedMinSupply)}
+                                              className={`w-24 px-2 py-1 text-right text-xs font-mono font-semibold border rounded-lg focus:outline-none transition-colors bg-white ${
+                                                isShortfall
+                                                  ? "border-amber-400 text-amber-900 focus:border-amber-500"
+                                                  : "border-slate-200 text-slate-800 focus:border-indigo-500"
+                                              }`}
+                                            />
+                                            <span className="text-[11px] text-slate-400 font-mono w-6 text-left shrink-0">
+                                              {rm.unitName || "kg"}
+                                            </span>
+                                          </div>
+                                          {isShortfall && (
+                                            <span className="text-[10px] text-amber-600 font-medium">
+                                              Shortfall: {calculatedMinSupply} {rm.unitName || "kg"}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })
+                              ) : (
+                                <tr>
+                                  <td colSpan={5} className="px-4 py-5 text-center text-xs text-slate-400 italic">
+                                    No raw materials configured in BOM for this item.
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                          Quantity <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="number"
-                          step="0.001"
-                          value={item.quantity}
-                          onChange={(e) => handleModalItemChange(idx, "quantity", e.target.value)}
-                          required
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                          Production Quantity <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="number"
-                          step="0.001"
-                          value={item.production_quantity}
-                          onChange={(e) => handleModalItemChange(idx, "production_quantity", e.target.value)}
-                          required
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm font-semibold text-indigo-600 focus:outline-none focus:border-indigo-500"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                          Exp. Delivery Date
-                        </label>
-                        <DateInput
-                          value={item.exp_delivery_date}
-                          onChange={(e) => handleModalItemChange(idx, "exp_delivery_date", e.target.value)}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                          Batch Number
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Enter batch number"
-                          value={item.batch_no}
-                          onChange={(e) => handleModalItemChange(idx, "batch_no", e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                          Actual Delivery Date
-                        </label>
-                        <DateInput
-                          value={item.actual_delivery_date}
-                          onChange={(e) => handleModalItemChange(idx, "actual_delivery_date", e.target.value)}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                          Remarks
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Enter remarks"
-                          value={item.remarks}
-                          onChange={(e) => handleModalItemChange(idx, "remarks", e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Raw Materials Allocation Check Section */}
-              <div className="border-t border-slate-200 pt-5">
-                <div className="mb-3">
-                  <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
-                    <i className="fa-solid fa-layer-group text-[#369ACF]"></i>
-                    Raw Materials Allocation Check
-                  </h4>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Live check of stock availability and minimum supply needed based on required production quantities.
-                  </p>
-                </div>
-
-                {allRawMaterials.some(rm => (Number(rm.minSupplyNeeded) || 0) < rm.calculatedMinSupply || rm.availableStock < rm.requiredProdQty) && (
-                  <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2.5 text-amber-800 text-xs">
-                    <i className="fa-solid fa-triangle-exclamation text-amber-500 mt-0.5 text-sm shrink-0"></i>
-                    <div>
-                      <span className="font-semibold">Notice:</span> Available quantity in system is less than the required production quantity. You can proceed with saving the work order as materials are not issued at this stage.
-                    </div>
-                  </div>
-                )}
-
-                <div className="overflow-x-auto border border-slate-200 rounded-xl shadow-sm bg-white">
-                  <table className="w-full text-left text-xs text-slate-600 border-collapse">
-                    <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
-                      <tr>
-                        <th className="px-4 py-3">Raw Material Name</th>
-                        <th className="px-4 py-3 text-right">Available Stock</th>
-                        <th className="px-4 py-3 text-right">Raw material required for 1 Unit</th>
-                        <th className="px-4 py-3 text-right">Raw material required accoring to production quantity</th>
-                        <th className="px-4 py-3 text-right">Minimum Supply needed to be made</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                      {allRawMaterials.length > 0 ? (
-                        allRawMaterials.map((rm, rmIdx) => {
-                          const isShortfall = rm.minSupplyNeeded > 0;
-                          return (
-                            <tr key={rmIdx} className="hover:bg-slate-50/60 transition-colors">
-                              <td className="px-4 py-3">
-                                <div className="font-semibold text-slate-800">{rm.materialName}</div>
-                                <div className="text-[11px] text-slate-400 font-mono flex items-center gap-1.5 mt-0.5">
-                                  <span>{rm.materialCode || "—"}</span>
-                                  {modalItems.length > 1 && (
-                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-sans font-medium bg-slate-100 text-slate-600 border border-slate-200">
-                                      For: {rm.finishedGoodName}
-                                    </span>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 text-right font-mono text-slate-600 text-xs">
-                                {rm.availableStock.toFixed(3)} {rm.unitName}
-                              </td>
-                              <td className="px-4 py-3 text-right font-mono text-slate-600 text-xs">
-                                {rm.bomQty.toFixed(4)} {rm.unitName}
-                              </td>
-                              <td className="px-4 py-3 text-right font-mono font-semibold text-indigo-700 text-xs">
-                                {rm.requiredProdQty.toFixed(3)} {rm.unitName}
-                              </td>
-                              <td className="px-4 py-3 text-right">
-                                <div className="flex flex-col items-end gap-1">
-                                  <div className="flex items-center justify-end gap-1.5">
-                                    <input
-                                      type="text"
-                                      value={rm.minSupplyNeeded}
-                                      onChange={(e) => handleRMMinSupplyChange(rm.itemIdx, rm.rmIdx, e.target.value)}
-                                      onBlur={() => handleRMMinSupplyBlur(rm.itemIdx, rm.rmIdx, rm.calculatedMinSupply)}
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Enter") {
-                                          e.preventDefault();
-                                          handleRMMinSupplyBlur(rm.itemIdx, rm.rmIdx, rm.calculatedMinSupply);
-                                        }
-                                      }}
-                                      placeholder={String(rm.calculatedMinSupply)}
-                                      className={`w-28 px-2.5 py-1 text-right text-xs font-mono font-semibold border rounded-lg focus:outline-none transition-colors bg-white ${
-                                        (rm.minSupplyNeeded !== "" && Number(rm.minSupplyNeeded) < rm.calculatedMinSupply)
-                                          ? "border-amber-400 text-amber-900 focus:border-amber-500"
-                                          : "border-slate-200 text-slate-800 focus:border-indigo-500"
-                                      }`}
-                                    />
-                                    <span className="text-[11px] text-slate-400 font-mono w-6 text-left shrink-0">
-                                      {rm.unitName}
-                                    </span>
-                                  </div>
-                                  {(rm.minSupplyNeeded !== "" && Number(rm.minSupplyNeeded) < rm.calculatedMinSupply) && (
-                                    <span className="text-[10px] text-amber-600 font-medium">
-                                      Shortfall: {rm.calculatedMinSupply} {rm.unitName}
-                                    </span>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })
-                      ) : (
-                        <tr>
-                          <td colSpan={5} className="px-4 py-8 text-center text-xs text-slate-400 italic">
-                            No raw materials configured for the selected finished goods BOMs.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -819,7 +926,7 @@ export default function CreateWorkOrder() {
             <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-3 shrink-0">
               <button
                 type="button"
-                onClick={() => setShowModal(false)}
+                onClick={handleCloseCommonModal}
                 className="px-4 py-2 text-sm font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg shadow-sm hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 Back to Form
