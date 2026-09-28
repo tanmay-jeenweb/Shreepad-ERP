@@ -10,7 +10,6 @@ const createDispatchTable = async () => {
             material_id            INT NOT NULL,
             internal_batch_number  VARCHAR(100) NOT NULL,
             quantity               DECIMAL(15,4) NOT NULL,
-            packing_method         VARCHAR(100) NOT NULL,
             party_name             VARCHAR(255) DEFAULT NULL,
             vehicle_no             VARCHAR(100) DEFAULT NULL,
             remarks                TEXT DEFAULT NULL,
@@ -23,6 +22,25 @@ const createDispatchTable = async () => {
     `;
     await db.execute(query);
     console.log('Dispatches table ready');
+    await ensureDispatchColumns();
+};
+
+const ensureDispatchColumns = async () => {
+    try {
+        const [cols] = await db.execute(`
+            SELECT COLUMN_NAME 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+              AND TABLE_NAME = 'dispatches' 
+              AND COLUMN_NAME = 'packing_method'
+        `);
+        if (cols.length > 0) {
+            console.log("Dropping unused packing_method column from dispatches...");
+            await db.execute(`ALTER TABLE dispatches DROP COLUMN packing_method`);
+        }
+    } catch (err) {
+        console.error("Error dropping packing_method from dispatches:", err);
+    }
 };
 
 const generateDispatchNo = async (connection) => {
@@ -109,10 +127,6 @@ const createDispatch = async (data, addedBy) => {
             throw new Error('Internal batch number is required');
         }
 
-        if (!data.packing_method || !data.packing_method.trim()) {
-            throw new Error('Packing method is required');
-        }
-
         // 1. Lock and fetch current stock_status item
         const [statusRows] = await connection.execute(
             `SELECT 
@@ -185,12 +199,11 @@ const createDispatch = async (data, addedBy) => {
                 material_id,
                 internal_batch_number,
                 quantity,
-                packing_method,
                 party_name,
                 vehicle_no,
                 remarks,
                 added_by
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
         const [insertRes] = await connection.execute(insertQuery, [
@@ -200,7 +213,6 @@ const createDispatch = async (data, addedBy) => {
             materialId,
             data.internal_batch_number,
             qty,
-            data.packing_method.trim(),
             partyName,
             data.vehicle_no || null,
             data.remarks || null,
@@ -222,7 +234,6 @@ const createDispatch = async (data, addedBy) => {
             dispatch_date: dispatchDate,
             internal_batch_number: data.internal_batch_number,
             quantity: qty,
-            packing_method: data.packing_method.trim(),
             party_name: partyName,
             available_after_dispatch: availableQty - qty
         };
@@ -247,7 +258,6 @@ const getAllDispatches = async (filters = {}) => {
             COALESCE(u.unit_name, 'Nos') AS unit,
             d.internal_batch_number,
             d.quantity,
-            d.packing_method,
             d.party_name,
             d.vehicle_no,
             d.remarks,
@@ -280,8 +290,8 @@ const getAllDispatches = async (filters = {}) => {
 
     if (filters.search && filters.search.trim() !== '') {
         const searchTerm = `%${filters.search.trim()}%`;
-        query += ` AND (d.dispatch_no LIKE ? OR d.internal_batch_number LIKE ? OR m.material_name LIKE ? OR d.party_name LIKE ? OR d.packing_method LIKE ?)`;
-        params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
+        query += ` AND (d.dispatch_no LIKE ? OR d.internal_batch_number LIKE ? OR m.material_name LIKE ? OR d.party_name LIKE ?)`;
+        params.push(searchTerm, searchTerm, searchTerm, searchTerm);
     }
 
     query += ` ORDER BY d.dispatch_date DESC, d.id DESC`;

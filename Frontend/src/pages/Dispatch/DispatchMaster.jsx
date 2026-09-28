@@ -98,17 +98,6 @@ export default function DispatchMaster() {
             },
         },
         {
-            key: "packing_method",
-            label: "Packing Method",
-            minWidth: "160px",
-            render: (row) => (
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                    <i className="fa-solid fa-box text-slate-400 text-[10px]"></i>
-                    {row.packing_method}
-                </span>
-            ),
-        },
-        {
             key: "party_name",
             label: "Customer / Party",
             minWidth: "170px",
@@ -208,15 +197,9 @@ export default function DispatchMaster() {
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <span className="text-xs text-slate-400 block uppercase tracking-wider font-semibold">Packing Method</span>
-                                    <span className="font-semibold text-slate-800">{viewItem.packing_method}</span>
-                                </div>
-                                <div>
-                                    <span className="text-xs text-slate-400 block uppercase tracking-wider font-semibold">Vehicle / Transporter</span>
-                                    <span className="font-semibold text-slate-800">{viewItem.vehicle_no || "—"}</span>
-                                </div>
+                            <div>
+                                <span className="text-xs text-slate-400 block uppercase tracking-wider font-semibold">Vehicle / Transporter</span>
+                                <span className="font-semibold text-slate-800">{viewItem.vehicle_no || "—"}</span>
                             </div>
 
                             <div>

@@ -7,7 +7,6 @@ const createDispatch = async (req, res) => {
             material_id,
             internal_batch_number,
             quantity,
-            packing_method,
             dispatch_date,
             party_name,
             vehicle_no,
@@ -32,19 +31,11 @@ const createDispatch = async (req, res) => {
             });
         }
 
-        if (!packing_method || !packing_method.trim()) {
-            return res.status(400).json({
-                success: false,
-                message: 'Packing method is required'
-            });
-        }
-
         const result = await dispatchModel.createDispatch({
             stock_status_id,
             material_id,
             internal_batch_number,
             quantity: qty,
-            packing_method,
             dispatch_date,
             party_name,
             vehicle_no,

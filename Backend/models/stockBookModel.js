@@ -182,7 +182,7 @@ const getStockBookRecords = async (filters = {}) => {
                 NULL AS grn_item_id,
                 d.material_id AS material_id,
                 d.dispatch_date AS date,
-                CONCAT('Dispatched (', d.packing_method, ')') AS particular,
+                'Dispatched' AS particular,
                 m.material_name AS product,
                 d.internal_batch_number AS internal_batch_number,
                 COALESCE(mai.supplier_batch_number, '') AS supplier_batch_number,

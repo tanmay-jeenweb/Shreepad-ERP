@@ -18,7 +18,6 @@ export default function CreateDispatch() {
     const [selectedBatch, setSelectedBatch] = useState(null);
     const [dispatchDate, setDispatchDate] = useState(new Date().toISOString().split("T")[0]);
     const [quantity, setQuantity] = useState("");
-    const [packingMethod, setPackingMethod] = useState("");
     const [partyName, setPartyName] = useState("");
     const [vehicleNo, setVehicleNo] = useState("");
     const [remarks, setRemarks] = useState("");
@@ -115,11 +114,6 @@ export default function CreateDispatch() {
             return;
         }
 
-        if (!packingMethod.trim()) {
-            toast.error("Please enter a packing method.");
-            return;
-        }
-
         setSubmitting(true);
         try {
             const payload = {
@@ -127,7 +121,6 @@ export default function CreateDispatch() {
                 material_id: selectedBatch.material_id,
                 internal_batch_number: selectedBatch.internal_batch_number,
                 quantity: enteredQty,
-                packing_method: packingMethod.trim(),
                 dispatch_date: dispatchDate,
                 party_name: partyName.trim() || null,
                 vehicle_no: vehicleNo.trim() || null,
@@ -412,21 +405,6 @@ export default function CreateDispatch() {
                                     required
                                 />
                             </div>
-                        </div>
-
-                        {/* Packing Method Section */}
-                        <div className="space-y-1">
-                            <label className={labelCls}>
-                                Packing Method <span className="text-rose-500">*</span>
-                            </label>
-                            <input
-                                type="text"
-                                value={packingMethod}
-                                onChange={(e) => setPackingMethod(e.target.value)}
-                                placeholder="Enter packing method (e.g. Boxes, PP Bags, Wooden Crates, Pallets, Loose)..."
-                                className={inputCls}
-                                required
-                            />
                         </div>
 
                         {/* Additional Logistics Details */}
