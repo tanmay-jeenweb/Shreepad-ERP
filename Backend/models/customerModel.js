@@ -40,6 +40,20 @@ const createCustomerTables = async () => {
         )
     `;
 
+    const createCustomerAddressesQuery = `
+        CREATE TABLE IF NOT EXISTS customer_addresses (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            customer_id INT NOT NULL,
+            address TEXT,
+            country VARCHAR(100),
+            state VARCHAR(100),
+            city VARCHAR(100),
+            zip_code VARCHAR(20),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (customer_id) REFERENCES customer_master(id) ON DELETE CASCADE
+        )
+    `;
+
     await db.execute(createCustomerMasterQuery);
     await db.execute(createCustomerContactsQuery);
     await db.execute(createCustomerAddressesQuery);

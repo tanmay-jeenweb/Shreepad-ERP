@@ -40,6 +40,20 @@ const createVendorTables = async () => {
         )
     `;
 
+    const createVendorAddressesQuery = `
+        CREATE TABLE IF NOT EXISTS vendor_addresses (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            vendor_id INT NOT NULL,
+            address TEXT,
+            country VARCHAR(100),
+            state VARCHAR(100),
+            city VARCHAR(100),
+            zip_code VARCHAR(20),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (vendor_id) REFERENCES vendor_master(id) ON DELETE CASCADE
+        )
+    `;
+
     await db.execute(createVendorMasterQuery);
     await db.execute(createVendorContactsQuery);
     await db.execute(createVendorAddressesQuery);
