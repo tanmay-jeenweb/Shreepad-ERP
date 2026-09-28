@@ -225,24 +225,6 @@ export default function BillOfMaterial() {
                                 </div>
                             </div>
 
-                            <div>
-                                <h3 className="text-sm font-bold text-amber-600 mb-4 border-b border-amber-100 pb-2 uppercase tracking-wider">Measurements & Valuation</h3>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                                    <div className="space-y-1">
-                                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Product Weight</p>
-                                        <p className="text-sm font-medium text-slate-800">{viewData.product_weight || "-"}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Unit Wt. Tolerance [+/-]</p>
-                                        <p className="text-sm font-medium text-slate-800">{viewData.unit_weight_tolerance || "-"}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Product Wt. For Sale</p>
-                                        <p className="text-sm font-medium text-slate-800">{viewData.product_weight_for_sale || "-"}</p>
-                                    </div>
-                                </div>
-                            </div>
-
                             <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
                                 <span>Configured By: <span className="font-medium text-slate-600">{viewData.added_by_name || "-"}</span></span>
                                 <span>Configured On: <span className="font-medium text-slate-600">{viewData.created_at ? formatDateTime(viewData.created_at) : "-"}</span></span>

@@ -388,7 +388,7 @@ const getAllWorkOrders = async (includeHeld = false) => {
             mac.name AS machine_name,
             mac.machine_number,
             COALESCE(u.name, 'Unknown') AS added_by_name,
-            bom.product_weight,
+            m.unit_weight AS product_weight,
             sched.running_start_date,
             sched.running_end_date,
             we.id AS workshop_entry_id,
@@ -400,11 +400,6 @@ const getAllWorkOrders = async (includeHeld = false) => {
         LEFT JOIN machines mac ON woi.machine_id = mac.id
         LEFT JOIN users u ON wo.added_by = u.id
         LEFT JOIN users starter ON wo.started_by = starter.id
-        LEFT JOIN (
-            SELECT material_id, MAX(product_weight) AS product_weight
-            FROM bill_of_materials
-            GROUP BY material_id
-        ) bom ON m.id = bom.material_id
         LEFT JOIN (
             SELECT 
                 work_order_item_id,

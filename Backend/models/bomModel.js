@@ -5,9 +5,6 @@ const createBOMTable = async () => {
         CREATE TABLE IF NOT EXISTS bill_of_materials (
             id                      INT AUTO_INCREMENT PRIMARY KEY,
             material_id             INT NOT NULL,
-            unit_weight_tolerance   DECIMAL(10,4),
-            product_weight          DECIMAL(15,4),
-            product_weight_for_sale DECIMAL(15,4),
             added_by                INT NOT NULL,
             device_id               VARCHAR(255),
             created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -63,7 +60,10 @@ const dropUnusedBOMColumns = async () => {
             'rm_formulation',
             'price',
             'packing_method',
-            'difference'
+            'difference',
+            'unit_weight_tolerance',
+            'product_weight',
+            'product_weight_for_sale'
         ];
 
         for (const col of columnsToDrop) {
@@ -211,15 +211,11 @@ const createBOM = async (data, addedBy, deviceId) => {
 
         const query = `
             INSERT INTO bill_of_materials
-                (material_id, unit_weight_tolerance, product_weight,
-                 product_weight_for_sale, added_by, device_id)
-            VALUES (?, ?, ?, ?, ?, ?)
+                (material_id, added_by, device_id)
+            VALUES (?, ?, ?)
         `;
         const [results] = await connection.execute(query, [
             data.materialId,
-            data.unitWeightTolerance    !== '' && data.unitWeightTolerance !== undefined ? Number(data.unitWeightTolerance)    : null,
-            data.productWeight          !== '' && data.productWeight !== undefined          ? Number(data.productWeight)          : null,
-            data.productWeightForSale   !== '' && data.productWeightForSale !== undefined   ? Number(data.productWeightForSale)   : null,
             addedBy,
             deviceId,
         ]);
@@ -266,9 +262,6 @@ const getAllBOMs = async () => {
             m.material_name,
             m.material_code,
             m.material_type,
-            bom.unit_weight_tolerance,
-            bom.product_weight,
-            bom.product_weight_for_sale,
             bom.added_by,
             COALESCE(u.name, 'Unknown') AS added_by_name,
             bom.device_id,
@@ -349,17 +342,11 @@ const updateBOM = async (id, data) => {
 
         const query = `
             UPDATE bill_of_materials SET
-                material_id             = ?,
-                unit_weight_tolerance   = ?,
-                product_weight          = ?,
-                product_weight_for_sale = ?
+                material_id             = ?
             WHERE id = ?
         `;
         const [results] = await connection.execute(query, [
             data.materialId,
-            data.unitWeightTolerance    !== '' && data.unitWeightTolerance !== undefined ? Number(data.unitWeightTolerance)    : null,
-            data.productWeight          !== '' && data.productWeight !== undefined          ? Number(data.productWeight)          : null,
-            data.productWeightForSale   !== '' && data.productWeightForSale !== undefined   ? Number(data.productWeightForSale)   : null,
             id,
         ]);
 
@@ -409,9 +396,6 @@ const getBOMByMaterialId = async (materialId) => {
         SELECT
             bom.id AS id,
             bom.material_id,
-            bom.unit_weight_tolerance,
-            bom.product_weight,
-            bom.product_weight_for_sale,
             bom.added_by,
             bom.device_id,
             bom.created_at,

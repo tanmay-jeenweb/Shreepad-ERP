@@ -11,9 +11,6 @@ import toast from "react-hot-toast";
 const emptyForm = {
     materialId: "",
     rawMaterialId: "",
-    unitWeightTolerance: "",
-    productWeight: "",
-    productWeightForSale: "",
     bomMaterials: [{ materialId: "", quantity: "", unitName: "" }],
     bomProcesses: [{ processId: "", time: "", unitId: "" }]
 };
@@ -85,9 +82,6 @@ export default function CreateBOM() {
                             setForm({
                                 materialId: bomToEdit.material_id || "",
                                 rawMaterialId: bomToEdit.raw_material_id || "",
-                                unitWeightTolerance: bomToEdit.unit_weight_tolerance || "",
-                                productWeight: bomToEdit.product_weight || "",
-                                productWeightForSale: bomToEdit.product_weight_for_sale || "",
                                 bomMaterials: parsedMaterials,
                                 bomProcesses: parsedProcesses
                             });
@@ -429,51 +423,6 @@ export default function CreateBOM() {
                                             )}
                                         </div>
                                     ))}
-                                </div>
-                            </div>
-
-                            <div className="md:col-span-2 pt-4 pb-4 border-b border-slate-100 mt-2">
-                                <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                                    <i className="fa-solid fa-scale-balanced text-amber-500"></i>
-                                    Measurements & Valuation
-                                </h2>
-                            </div>
-
-                            <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div>
-                                    <label className={labelCls}>Product Weight</label>
-                                    <input
-                                        type="number"
-                                        step="0.0001"
-                                        name="productWeight"
-                                        value={form.productWeight}
-                                        onChange={handleChange}
-                                        className={inputCls}
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className={labelCls}>Unit Weight Tolerance [+/-]</label>
-                                    <input
-                                        type="number"
-                                        step="0.0001"
-                                        name="unitWeightTolerance"
-                                        value={form.unitWeightTolerance}
-                                        onChange={handleChange}
-                                        className={inputCls}
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className={labelCls}>Product Weight For Sale</label>
-                                    <input
-                                        type="number"
-                                        step="0.0001"
-                                        name="productWeightForSale"
-                                        value={form.productWeightForSale}
-                                        onChange={handleChange}
-                                        className={inputCls}
-                                    />
                                 </div>
                             </div>
 

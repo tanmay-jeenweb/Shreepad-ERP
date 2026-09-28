@@ -184,7 +184,7 @@ const getAllWorkshopEntries = async () => {
             m.id AS material_id,
             m.material_name,
             m.material_code,
-            bom.product_weight AS unit_weight,
+            m.unit_weight AS unit_weight,
             c.customer_name,
             COALESCE(issue_summary.issued_rm_count, 0) AS issued_rm_count
         FROM work_order_items woi
@@ -222,8 +222,7 @@ const getWorkshopEntryByWorkOrderItemId = async (workOrderItemId) => {
             m.material_name,
             m.material_code,
             bom.id AS bom_id,
-            bom.product_weight AS unit_weight,
-            bom.unit_weight_tolerance,
+            m.unit_weight AS unit_weight,
             c.customer_name
         FROM work_order_items woi
         JOIN work_orders wo ON woi.work_order_id = wo.id
