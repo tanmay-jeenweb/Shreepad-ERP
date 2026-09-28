@@ -262,6 +262,15 @@ export default function Navbar({ title }) {
             desc: "Manage measurement units and specifications"
         },
         {
+            name: "Inspection Master",
+            path: "/admin/inspections",
+            masterKey: "inspection",
+            icon: "fa-solid fa-clipboard-check",
+            color: "bg-teal-50 text-teal-600 border border-teal-100/50",
+            activeColor: "bg-teal-100 text-teal-700",
+            desc: "Manage inspection types for work orders"
+        },
+        {
             name: "Material Master",
             path: "/admin/materials",
             masterKey: "material",

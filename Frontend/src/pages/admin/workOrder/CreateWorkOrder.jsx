@@ -6,9 +6,11 @@ import { getAllCustomers } from "../../../api/customerApi";
 import { getMaterials } from "../../../api/materialApi";
 import { getBOMs, getBOMByMaterialId } from "../../../api/bomApi";
 import { getJobParties } from "../../../api/jobPartyApi";
+import { getInspections } from "../../../api/inspectionApi";
 import toast from "react-hot-toast";
 import DateInput from "../../../components/DateInput";
 import ItemConfigModal from "./ItemConfigModal";
+import MaterialFilterDropdown from "../../../components/MaterialFilterDropdown";
 
 export default function CreateWorkOrder() {
   const navigate = useNavigate();
@@ -18,10 +20,16 @@ export default function CreateWorkOrder() {
   const [materials, setMaterials] = useState([]);
   const [boms, setBoms] = useState([]);
   const [jobParties, setJobParties] = useState([]);
+  const [inspections, setInspections] = useState([]);
 
   // Form states
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [workOrderDate, setWorkOrderDate] = useState(new Date().toISOString().substring(0, 10));
+  const [purchaseOrderNumber, setPurchaseOrderNumber] = useState("");
+  const [purchaseOrderDate, setPurchaseOrderDate] = useState("");
+  const [projectName, setProjectName] = useState("");
+  const [inspectionId, setInspectionId] = useState("");
+  const [remark, setRemark] = useState("");
   const [items, setItems] = useState([]);
 
   // Modal states for work order configuration (common modal on save)
@@ -52,14 +60,16 @@ export default function CreateWorkOrder() {
         const noRes = await getNextWorkOrderNo();
         setNextWONo(`WO-${String(noRes.data.nextNo).padStart(4, "0")}`);
 
-        const [custRes, matRes, bomRes, jobPartiesRes] = await Promise.all([
+        const [custRes, matRes, bomRes, jobPartiesRes, inspRes] = await Promise.all([
           getAllCustomers(),
           getMaterials(),
           getBOMs(),
-          getJobParties()
+          getJobParties(),
+          getInspections()
         ]);
 
         setCustomers(custRes.data.data || []);
+        setInspections(inspRes.data?.data || []);
         
         const bomsList = bomRes.data?.data || [];
         setBoms(bomsList);
@@ -88,7 +98,6 @@ export default function CreateWorkOrder() {
           production_quantity: 1,
           exp_delivery_date: "",
           batch_no: "",
-          actual_delivery_date: "",
           remarks: "",
           job_party_id: ""
         }]);
@@ -113,7 +122,6 @@ export default function CreateWorkOrder() {
         job_party_id: "",
         exp_delivery_date: "",
         batch_no: "",
-        actual_delivery_date: "",
         remarks: "",
         rawMaterials: []
       };
@@ -129,7 +137,6 @@ export default function CreateWorkOrder() {
       job_party_id: "",
       exp_delivery_date: "",
       batch_no: "",
-      actual_delivery_date: "",
       remarks: "",
       rawMaterials: []
     };
@@ -213,7 +220,6 @@ export default function CreateWorkOrder() {
       production_quantity: 1,
       exp_delivery_date: "",
       batch_no: "",
-      actual_delivery_date: "",
       remarks: "",
       job_party_id: ""
     }]);
@@ -232,7 +238,6 @@ export default function CreateWorkOrder() {
     return Boolean(
       item.batch_no ||
       item.exp_delivery_date ||
-      item.actual_delivery_date ||
       item.remarks ||
       (item.production_quantity !== undefined && Number(item.production_quantity) !== Number(item.quantity)) ||
       (item.rawMaterials && item.rawMaterials.some(rm => rm.minSupplyNeeded !== undefined && rm.minSupplyNeeded !== "" && Number(rm.minSupplyNeeded) > 0))
@@ -395,7 +400,6 @@ export default function CreateWorkOrder() {
           production_quantity: Number(it.production_quantity),
           exp_delivery_date: it.exp_delivery_date || null,
           batch_no: it.batch_no || null,
-          actual_delivery_date: it.actual_delivery_date || null,
           remarks: it.remarks || null,
           job_party_id: it.job_party_id ? Number(it.job_party_id) : null
         });
@@ -411,7 +415,6 @@ export default function CreateWorkOrder() {
                 production_quantity: 0,
                 exp_delivery_date: it.exp_delivery_date || null,
                 batch_no: it.batch_no || null,
-                actual_delivery_date: it.actual_delivery_date || null,
                 remarks: `Allocated raw material for ${it.material_name} (${it.material_code})`,
                 job_party_id: it.job_party_id ? Number(it.job_party_id) : null
               });
@@ -423,6 +426,11 @@ export default function CreateWorkOrder() {
       const payload = {
         customer_id: Number(selectedCustomerId),
         work_order_date: workOrderDate,
+        purchase_order_number: purchaseOrderNumber.trim() || null,
+        purchase_order_date: purchaseOrderDate || null,
+        project_name: projectName.trim() || null,
+        inspection_id: inspectionId ? Number(inspectionId) : null,
+        remark: remark.trim() || null,
         items: flattenedItems
       };
 
@@ -511,6 +519,73 @@ export default function CreateWorkOrder() {
                   ))}
                 </select>
               </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                  Purchase Order Number
+                </label>
+                <input
+                  type="text"
+                  placeholder="Enter purchase order number"
+                  value={purchaseOrderNumber}
+                  onChange={(e) => setPurchaseOrderNumber(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                  Purchase Order Date
+                </label>
+                <DateInput
+                  value={purchaseOrderDate}
+                  onChange={(e) => setPurchaseOrderDate(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                  Project Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="Enter project name"
+                  value={projectName}
+                  onChange={(e) => setProjectName(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                  Inspection
+                </label>
+                <select
+                  value={inspectionId}
+                  onChange={(e) => setInspectionId(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="">-- Select Inspection --</option>
+                  {inspections.map((insp) => (
+                    <option key={insp.id} value={insp.id}>
+                      {insp.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                  Remark
+                </label>
+                <input
+                  type="text"
+                  placeholder="Enter work order remarks"
+                  value={remark}
+                  onChange={(e) => setRemark(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500"
+                />
+              </div>
             </div>
           </div>
 
@@ -534,7 +609,7 @@ export default function CreateWorkOrder() {
               <table className="w-full border-collapse text-left text-sm text-slate-600">
                 <thead className="bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider">
                   <tr>
-                    <th className="px-6 py-3.5 min-w-[250px]">Material Details *</th>
+                    <th className="px-6 py-3.5 min-w-[320px]">Material Details *</th>
                     <th className="px-6 py-3.5 w-32 text-right">Quantity *</th>
                     <th className="px-6 py-3.5 w-32 text-right">Prod Qty</th>
                     <th className="px-6 py-3.5">Exp Deliv.</th>
@@ -547,20 +622,11 @@ export default function CreateWorkOrder() {
                     return (
                       <tr key={idx} className="hover:bg-slate-50/50">
                         <td className="px-6 py-4">
-                          <select
-                            value={item.material_id}
-                            onChange={(e) => handleMaterialChange(idx, e.target.value)}
-                            required
-                            className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none"
-                          >
-                            <option value="">Select Material</option>
-                            {materials.map(m => (
-                              <option key={m.id} value={m.id}>{m.material_name} ({m.material_code})</option>
-                            ))}
-                            {materials.length === 0 && (
-                              <option value="" disabled>No Finished/Semi-Finished materials with active BOM found</option>
-                            )}
-                          </select>
+                          <MaterialFilterDropdown
+                            materials={materials}
+                            selectedMaterialId={item.material_id}
+                            onSelect={(selectedId) => handleMaterialChange(idx, selectedId)}
+                          />
                         </td>
                         <td className="px-6 py-4 text-right">
                           <input
@@ -787,16 +853,6 @@ export default function CreateWorkOrder() {
                             value={item.batch_no || ""}
                             onChange={(e) => handleModalItemChange(idx, "batch_no", e.target.value)}
                             className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                            Actual Delivery Date
-                          </label>
-                          <DateInput
-                            value={item.actual_delivery_date}
-                            onChange={(e) => handleModalItemChange(idx, "actual_delivery_date", e.target.value)}
                           />
                         </div>
 

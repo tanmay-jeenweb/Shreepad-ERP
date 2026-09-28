@@ -119,10 +119,6 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                         </p>
                                     </div>
                                     <div>
-                                        <p className="text-xs text-slate-400 font-medium mb-1">Added By</p>
-                                        <p className="text-sm text-slate-800 font-medium">{workOrder.added_by_name || "N/A"}</p>
-                                    </div>
-                                    <div>
                                         <p className="text-xs text-slate-400 font-medium mb-1">Status</p>
                                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
                                             workOrder.status === 'Started'
@@ -135,16 +131,46 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                             {workOrder.status || 'Draft'}
                                         </span>
                                     </div>
+
+                                    <div>
+                                        <p className="text-xs text-slate-400 font-medium mb-1">PO Number</p>
+                                        <p className="text-sm font-semibold text-slate-800">
+                                            {workOrder.purchase_order_number || "—"}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-slate-400 font-medium mb-1">PO Date</p>
+                                        <p className="text-sm font-semibold text-slate-800 font-mono">
+                                            {formatDate(workOrder.purchase_order_date)}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-slate-400 font-medium mb-1">Project Name</p>
+                                        <p className="text-sm font-semibold text-slate-800">
+                                            {workOrder.project_name || "—"}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-slate-400 font-medium mb-1">Inspection</p>
+                                        <p className="text-sm font-semibold text-slate-800">
+                                            {workOrder.inspection_name || "—"}
+                                        </p>
+                                    </div>
+
+                                    <div className="sm:col-span-2">
+                                        <p className="text-xs text-slate-400 font-medium mb-1">Remark</p>
+                                        <p className="text-sm text-slate-700">
+                                            {workOrder.remark || "—"}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-slate-400 font-medium mb-1">Added By</p>
+                                        <p className="text-sm text-slate-800 font-medium">{workOrder.added_by_name || "N/A"}</p>
+                                    </div>
                                     <div>
                                         <p className="text-xs text-slate-400 font-medium mb-1">Created On</p>
                                         <p className="text-sm text-slate-700 font-mono text-xs">
                                             {formatDateTime(workOrder.created_at)}
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <p className="text-xs text-slate-400 font-medium mb-1">Last Updated</p>
-                                        <p className="text-sm text-slate-700 font-mono text-xs">
-                                            {formatDateTime(workOrder.updated_at)}
                                         </p>
                                     </div>
                                 </div>
@@ -170,7 +196,6 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                                 <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Order Qty</th>
                                                 <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Prod Qty</th>
                                                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Exp. Delivery</th>
-                                                <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Actual Delivery</th>
                                                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Batch No.</th>
                                                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Remarks</th>
                                                 <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Actions</th>
@@ -190,9 +215,6 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                                     <td className="px-3 py-2 text-sm font-bold text-[#369ACF] text-right">{item.production_quantity}</td>
                                                     <td className="px-3 py-2 text-sm text-slate-700 whitespace-nowrap font-mono text-xs">
                                                         {formatDate(item.exp_delivery_date)}
-                                                    </td>
-                                                    <td className="px-3 py-2 text-sm text-slate-700 whitespace-nowrap font-mono text-xs">
-                                                        {formatDate(item.actual_delivery_date)}
                                                     </td>
                                                     <td className="px-3 py-2 text-sm text-slate-800 font-mono text-xs">{item.batch_no || "—"}</td>
                                                     <td className="px-3 py-2 text-sm text-slate-500 max-w-[150px] truncate" title={item.remarks}>

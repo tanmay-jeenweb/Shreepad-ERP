@@ -31,6 +31,12 @@ const createWorkOrdersTable = async () => {
             work_order_date     DATE NOT NULL,
             added_by            INT NOT NULL,
             device_id           VARCHAR(255) DEFAULT NULL,
+            status              VARCHAR(50) NOT NULL DEFAULT 'Draft',
+            purchase_order_number VARCHAR(100) DEFAULT NULL,
+            purchase_order_date DATE DEFAULT NULL,
+            project_name        VARCHAR(255) DEFAULT NULL,
+            inspection_id       INT DEFAULT NULL,
+            remark              TEXT DEFAULT NULL,
             created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (customer_id) REFERENCES customer_master(id) ON DELETE CASCADE,
@@ -279,6 +285,58 @@ const ensureWorkOrderStatusColumns = async () => {
     }
 };
 
+const ensureWorkOrderHeaderColumns = async () => {
+    try {
+        const columnsToCheck = [
+            { name: 'purchase_order_number', type: 'VARCHAR(100) DEFAULT NULL' },
+            { name: 'purchase_order_date', type: 'DATE DEFAULT NULL' },
+            { name: 'project_name', type: 'VARCHAR(255) DEFAULT NULL' },
+            { name: 'inspection_id', type: 'INT DEFAULT NULL' },
+            { name: 'remark', type: 'TEXT DEFAULT NULL' }
+        ];
+
+        for (const col of columnsToCheck) {
+            const [rows] = await db.execute(
+                "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'work_orders' AND COLUMN_NAME = ?",
+                [col.name]
+            );
+            if (rows.length === 0) {
+                await db.execute(`ALTER TABLE work_orders ADD COLUMN ${col.name} ${col.type}`);
+                console.log(`Added column ${col.name} to work_orders`);
+            }
+        }
+
+        try {
+            const [fkRows] = await db.execute(`
+                SELECT CONSTRAINT_NAME 
+                FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+                WHERE TABLE_SCHEMA = DATABASE() 
+                  AND TABLE_NAME = 'work_orders' 
+                  AND COLUMN_NAME = 'inspection_id'
+                  AND REFERENCED_TABLE_NAME = 'inspection_masters'
+            `);
+            if (fkRows.length === 0) {
+                const [tableRows] = await db.execute(
+                    "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'inspection_masters'"
+                );
+                if (tableRows.length > 0) {
+                    await db.execute(`
+                        ALTER TABLE work_orders 
+                        ADD CONSTRAINT fk_work_orders_inspection 
+                        FOREIGN KEY (inspection_id) REFERENCES inspection_masters(id) 
+                        ON DELETE SET NULL
+                    `);
+                    console.log('Added foreign key fk_work_orders_inspection to work_orders');
+                }
+            }
+        } catch (fkErr) {
+            console.warn('Notice adding fk_work_orders_inspection:', fkErr.message);
+        }
+    } catch (err) {
+        console.error('Error ensuring work order header columns:', err.message || err);
+    }
+};
+
 const getNextWorkOrderNo = async () => {
     const [rows] = await db.execute(
         `SELECT MAX(work_order_no) AS maxNo FROM work_orders`
@@ -287,23 +345,39 @@ const getNextWorkOrderNo = async () => {
     return maxNo ? maxNo + 1 : 1;
 };
 
-const createWorkOrder = async (customerId, workOrderDate, addedBy, deviceId, itemsArray) => {
+const createWorkOrder = async (customerId, workOrderDate, addedBy, deviceId, itemsArray, headerData = {}) => {
     const connection = await db.getConnection();
     try {
         await connection.beginTransaction();
 
         const workOrderNo = await getNextWorkOrderNo();
 
+        const {
+            purchase_order_number = null,
+            purchase_order_date = null,
+            project_name = null,
+            inspection_id = null,
+            remark = null
+        } = headerData;
+
         const insertQuery = `
-            INSERT INTO work_orders (work_order_no, customer_id, work_order_date, added_by, device_id, status)
-            VALUES (?, ?, ?, ?, ?, 'Draft')
+            INSERT INTO work_orders (
+                work_order_no, customer_id, work_order_date, added_by, device_id, status,
+                purchase_order_number, purchase_order_date, project_name, inspection_id, remark
+            )
+            VALUES (?, ?, ?, ?, ?, 'Draft', ?, ?, ?, ?, ?)
         `;
         const [results] = await connection.execute(insertQuery, [
             workOrderNo,
             customerId,
             workOrderDate,
             addedBy,
-            deviceId || null
+            deviceId || null,
+            purchase_order_number || null,
+            purchase_order_date || null,
+            project_name || null,
+            inspection_id ? Number(inspection_id) : null,
+            remark || null
         ]);
 
         const workOrderId = results.insertId;
@@ -381,6 +455,12 @@ const getAllWorkOrders = async (includeHeld = false) => {
             wo.id AS work_order_id,
             wo.work_order_no,
             wo.work_order_date,
+            wo.purchase_order_number,
+            wo.purchase_order_date,
+            wo.project_name,
+            wo.inspection_id,
+            wo.remark,
+            insp.name AS inspection_name,
             COALESCE(wo.status, 'Draft') AS work_order_status,
             wo.started_at,
             wo.started_by,
@@ -400,6 +480,7 @@ const getAllWorkOrders = async (includeHeld = false) => {
         LEFT JOIN machines mac ON woi.machine_id = mac.id
         LEFT JOIN users u ON wo.added_by = u.id
         LEFT JOIN users starter ON wo.started_by = starter.id
+        LEFT JOIN inspection_masters insp ON wo.inspection_id = insp.id
         LEFT JOIN (
             SELECT 
                 work_order_item_id,
@@ -431,11 +512,13 @@ const getWorkOrderById = async (id) => {
             c.customer_name,
             c.customer_code,
             COALESCE(u.name, 'Unknown') AS added_by_name,
-            starter.name AS started_by_name
+            starter.name AS started_by_name,
+            insp.name AS inspection_name
         FROM work_orders wo
         LEFT JOIN customer_master c ON wo.customer_id = c.id
         LEFT JOIN users u ON wo.added_by = u.id
         LEFT JOIN users starter ON wo.started_by = starter.id
+        LEFT JOIN inspection_masters insp ON wo.inspection_id = insp.id
         WHERE wo.id = ?
     `;
     const [rows] = await db.execute(query, [id]);
@@ -548,18 +631,29 @@ const ensurePriorityColumn = async () => {
     }
 };
 
-const updateWorkOrder = async (workOrderId, workOrderDate, itemsArray) => {
+const updateWorkOrder = async (workOrderId, workOrderDate, itemsArray, headerData = {}) => {
     const connection = await db.getConnection();
     try {
         await connection.beginTransaction();
 
-        // 1. Update the work order date
-        const updateHeaderQuery = `
-            UPDATE work_orders
-            SET work_order_date = ?
-            WHERE id = ?
-        `;
-        await connection.execute(updateHeaderQuery, [workOrderDate, workOrderId]);
+        // 1. Update the work order date and header fields
+        let updateHeaderQuery = `UPDATE work_orders SET work_order_date = ?`;
+        const headerParams = [workOrderDate];
+
+        if (headerData && Object.keys(headerData).length > 0) {
+            updateHeaderQuery += `, purchase_order_number = ?, purchase_order_date = ?, project_name = ?, inspection_id = ?, remark = ?`;
+            headerParams.push(
+                headerData.purchase_order_number || null,
+                headerData.purchase_order_date || null,
+                headerData.project_name || null,
+                headerData.inspection_id ? Number(headerData.inspection_id) : null,
+                headerData.remark || null
+            );
+        }
+        updateHeaderQuery += ` WHERE id = ?`;
+        headerParams.push(workOrderId);
+
+        await connection.execute(updateHeaderQuery, headerParams);
 
         // 2. Process Deleted Items
         const incomingIds = itemsArray.filter(it => it.id).map(it => Number(it.id));
@@ -720,5 +814,6 @@ module.exports = {
     updateWorkOrderItemPriority,
     updateWorkOrderItemRemarks,
     updateWorkOrder,
-    ensureWorkOrderStatusColumns
+    ensureWorkOrderStatusColumns,
+    ensureWorkOrderHeaderColumns
 };

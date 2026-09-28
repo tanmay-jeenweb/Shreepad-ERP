@@ -2,7 +2,17 @@ const workOrderModel = require('../models/workOrderModel.js');
 
 const addWorkOrder = async (req, res) => {
     try {
-        const { customer_id, work_order_date, item, items } = req.body;
+        const {
+            customer_id,
+            work_order_date,
+            item,
+            items,
+            purchase_order_number,
+            purchase_order_date,
+            project_name,
+            inspection_id,
+            remark
+        } = req.body;
         const addedBy = req.user.id;
         const deviceId = req.headers['device-id'] || null;
 
@@ -20,7 +30,14 @@ const addWorkOrder = async (req, res) => {
             work_order_date,
             addedBy,
             deviceId,
-            workOrderItems
+            workOrderItems,
+            {
+                purchase_order_number,
+                purchase_order_date,
+                project_name,
+                inspection_id,
+                remark
+            }
         );
 
         return res.status(201).json({
@@ -200,7 +217,15 @@ const updateWorkOrderItemRemarksController = async (req, res) => {
 const updateWorkOrderController = async (req, res) => {
     try {
         const { id } = req.params;
-        const { work_order_date, items } = req.body;
+        const {
+            work_order_date,
+            items,
+            purchase_order_number,
+            purchase_order_date,
+            project_name,
+            inspection_id,
+            remark
+        } = req.body;
 
         if (!work_order_date || !items || !Array.isArray(items) || items.length === 0) {
             return res.status(400).json({
@@ -209,7 +234,13 @@ const updateWorkOrderController = async (req, res) => {
             });
         }
 
-        await workOrderModel.updateWorkOrder(id, work_order_date, items);
+        await workOrderModel.updateWorkOrder(id, work_order_date, items, {
+            purchase_order_number,
+            purchase_order_date,
+            project_name,
+            inspection_id,
+            remark
+        });
 
         return res.status(200).json({
             success: true,

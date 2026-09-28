@@ -24,6 +24,7 @@ const MASTERS = [
     { key: 'workshop_entry', label: 'Workshop Entry' },
     { key: 'activity_report', label: 'User Activity Records' },
     { key: 'dispatch', label: 'Dispatch Module' },
+    { key: 'inspection', label: 'Inspection Master' },
 ];
 
 // ─── Table creation ──────────────────────────────────────────────────────────
@@ -67,13 +68,13 @@ const createUserTypePermissionsTable = async () => {
             await db.execute("ALTER TABLE user_type_permissions ADD COLUMN can_approve TINYINT(1) DEFAULT 0");
             console.log("Added column can_approve to user_type_permissions");
         }
-        // Ensure material_type, item, class, size have permissions copied from material_group if missing
-        for (const m of ['material_type', 'item', 'class', 'size']) {
+        // Ensure material_type, item, class, size, inspection have permissions copied from material_group/unit if missing
+        for (const m of ['material_type', 'item', 'class', 'size', 'inspection']) {
             await db.execute(`
                 INSERT IGNORE INTO user_type_permissions (user_type_id, master_name, can_read, can_write, can_update, can_delete, can_approve)
                 SELECT user_type_id, ?, can_read, can_write, can_update, can_delete, can_approve
                 FROM user_type_permissions
-                WHERE master_name = 'material_group'
+                WHERE master_name = 'unit'
             `, [m]);
         }
     } catch (err) {

@@ -32,6 +32,7 @@ const workOrderRoutes = require("./routes/workOrderRoutes.js");
 const rmReturnRoutes = require("./routes/rmReturnRoutes.js");
 const workshopEntryRoutes = require("./routes/workshopEntryRoutes.js");
 const dispatchRoutes = require("./routes/dispatchRoutes.js");
+const inspectionRoutes = require("./routes/inspectionRoutes.js");
 
 
 // Model Initializations
@@ -59,10 +60,11 @@ const { createBatchSequenceTable } = require("./models/batchSequenceModel.js");
 const { createStockIssuesTable, ensureStockIssuesColumns } = require("./models/stockBookModel.js");
 const { createStockStatusTable, ensureStockStatusColumns } = require("./models/stockStatusModel.js");
 const { createMaterialAddTables, ensureMaterialAddColumns } = require("./models/materialAddModel.js");
-const { createWorkOrdersTable, ensureWorkOrderColumns, ensureSortOrderColumn, ensureIsOnHoldColumn, ensurePlannedDateColumns, ensureDelayColumns, ensurePriorityColumn, ensureWorkOrderStatusColumns } = require("./models/workOrderModel.js");
+const { createWorkOrdersTable, ensureWorkOrderColumns, ensureSortOrderColumn, ensureIsOnHoldColumn, ensurePlannedDateColumns, ensureDelayColumns, ensurePriorityColumn, ensureWorkOrderStatusColumns, ensureWorkOrderHeaderColumns } = require("./models/workOrderModel.js");
 const { createRmReturnsTable, ensureRmReturnColumns } = require("./models/rmReturnModel.js");
 const { createWorkshopEntriesTable, createWorkshopRmIssuesTable, createWorkshopProductionLogsTable, createWorkshopProductionLogItemsTable, ensureWorkshopEntryColumns, ensureWorkshopProductionLogColumns } = require("./models/workshopEntryModel.js");
 const { createDispatchTable } = require("./models/dispatchModel.js");
+const { createInspectionTable } = require("./models/inspectionModel.js");
 
 
 const app = express();
@@ -119,6 +121,7 @@ app.use(["/api/work-orders", "/work-orders"], workOrderRoutes);
 app.use(["/api/rm-returns", "/rm-returns"], rmReturnRoutes);
 app.use(["/api/workshop-entries", "/workshop-entries"], workshopEntryRoutes);
 app.use(["/api/dispatch", "/dispatch"], dispatchRoutes);
+app.use(["/api/inspections", "/inspections"], inspectionRoutes);
 
 
 // Global 404 handler
@@ -248,6 +251,7 @@ const startServer = async () => {
         await ensureStockIssuesColumns();
         await createStockStatusTable();
         await ensureStockStatusColumns();
+        await createInspectionTable();
         await createWorkOrdersTable();
         await ensureWorkOrderColumns();
         await ensureSortOrderColumn();
@@ -256,6 +260,7 @@ const startServer = async () => {
         await ensureDelayColumns();
         await ensurePriorityColumn();
         await ensureWorkOrderStatusColumns();
+        await ensureWorkOrderHeaderColumns();
         await createWorkshopEntriesTable();
         await ensureWorkshopEntryColumns();
         await createWorkshopRmIssuesTable();
@@ -268,13 +273,33 @@ const startServer = async () => {
         console.log("All database tables are initialized and ready.");
 
         const PORT = process.env.PORT || 5000;
-        app.listen(PORT, () => {
+        const server = app.listen(PORT, () => {
             console.log(`Server Running on Port ${PORT}`);
+        });
+
+        server.on("error", (err) => {
+            if (err.code === "EADDRINUSE") {
+                console.error(`Port ${PORT} is busy. Retrying in 1 second...`);
+                setTimeout(() => {
+                    server.close();
+                    server.listen(PORT);
+                }, 1000);
+            } else {
+                console.error("Server error:", err);
+            }
         });
     } catch (error) {
         console.error("Failed to start application server:", error);
         process.exit(1);
     }
 };
+
+process.on("uncaughtException", (err) => {
+    console.error("Uncaught Exception:", err);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+    console.error("Unhandled Rejection at:", promise, "reason:", reason);
+});
 
 startServer();

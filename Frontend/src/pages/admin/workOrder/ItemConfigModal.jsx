@@ -225,17 +225,6 @@ export default function ItemConfigModal({
 
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                  Actual Delivery Date
-                </label>
-                <DateInput
-                  value={formData.actual_delivery_date}
-                  onChange={(e) => handleFieldChange("actual_delivery_date", e.target.value)}
-                  disabled={disabled}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
                   Remarks
                 </label>
                 <input

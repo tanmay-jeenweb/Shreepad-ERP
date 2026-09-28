@@ -26,6 +26,7 @@ import ItemMaster from "./pages/Item/ItemMaster";
 import ClassMaster from "./pages/Item/ClassMaster";
 import SizeMaster from "./pages/Item/SizeMaster";
 import UnitMaster from "./pages/Item/UnitMaster";
+import InspectionMaster from "./pages/admin/InspectionMaster";
 import MaterialMaster from "./pages/Item/MaterialMaster";
 import CreateMaterial from "./pages/Item/CreateMaterial";
 import OperatorMaster from "./pages/Operator/OperatorMaster";
@@ -233,6 +234,13 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/units"
                     element={<UnitMaster />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="inspection" requiredAction="read" />}>
+                <Route
+                    path="/admin/inspections"
+                    element={<InspectionMaster />}
                 />
             </Route>
 
