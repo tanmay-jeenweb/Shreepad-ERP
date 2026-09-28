@@ -144,21 +144,23 @@ const addWorkshopProductionLogController = async (req, res) => {
             work_order_item_id,
             bom_process_id,
             quantity,
+            items,
             log_date,
             remarks
         } = req.body;
 
-        if (!work_order_item_id || !bom_process_id || !quantity) {
+        if (!work_order_item_id || !bom_process_id || (!quantity && (!items || items.length === 0))) {
             return res.status(400).json({
                 success: false,
-                message: 'Work order item ID, process stage ID, and quantity are required'
+                message: 'Work order item ID, process stage ID, and quantity or operator allocations are required'
             });
         }
 
         const result = await addWorkshopProductionLog({
             work_order_item_id: Number(work_order_item_id),
             bom_process_id: Number(bom_process_id),
-            quantity: Number(quantity),
+            quantity: quantity ? Number(quantity) : undefined,
+            items: Array.isArray(items) ? items : undefined,
             log_date,
             remarks,
             added_by: addedBy,
@@ -175,7 +177,9 @@ const addWorkshopProductionLogController = async (req, res) => {
             {
                 work_order_item_id,
                 bom_process_id,
-                quantity,
+                quantity: result.quantity,
+                items_count: result.items_count || 0,
+                items: items || [],
                 from_process: result.from_process_name,
                 to_process: result.to_process_name,
                 added_by: addedBy
@@ -184,7 +188,7 @@ const addWorkshopProductionLogController = async (req, res) => {
 
         res.status(201).json({
             success: true,
-            message: `Successfully moved ${quantity} units from ${result.from_process_name} to ${result.to_process_name}`,
+            message: `Successfully moved ${result.quantity} units from ${result.from_process_name} to ${result.to_process_name}`,
             data: result
         });
     } catch (error) {

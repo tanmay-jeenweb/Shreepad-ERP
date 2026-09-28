@@ -102,6 +102,29 @@ const ensureWorkshopProductionLogColumns = async () => {
     }
 };
 
+const createWorkshopProductionLogItemsTable = async () => {
+    const query = `
+        CREATE TABLE IF NOT EXISTS workshop_production_log_items (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            production_log_id INT NOT NULL,
+            operator_id INT NOT NULL,
+            machine_id INT DEFAULT NULL,
+            quantity DECIMAL(15,4) NOT NULL,
+            remarks VARCHAR(255) DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (production_log_id) REFERENCES workshop_production_logs(id) ON DELETE CASCADE,
+            FOREIGN KEY (operator_id) REFERENCES operators(id) ON DELETE RESTRICT,
+            FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE SET NULL,
+            INDEX idx_wpli_log_id (production_log_id),
+            INDEX idx_wpli_op_id (operator_id),
+            INDEX idx_wpli_mc_id (machine_id)
+        )
+    `;
+    await db.execute(query);
+    console.log('Workshop Production Log Items table ready');
+};
+
+
 const ensureWorkshopEntryColumns = async () => {
     try {
         // Ensure work_order_item_id column exists
@@ -348,10 +371,81 @@ const getWorkshopEntryByWorkOrderItemId = async (workOrderItemId) => {
             ORDER BY wpl.id DESC
         `, [workOrderItemId]);
         productionLogs = prodRows;
+
+        if (productionLogs.length > 0) {
+            try {
+                const logIds = productionLogs.map(l => l.id);
+                const placeholders = logIds.map(() => '?').join(',');
+                const [itemRows] = await db.execute(`
+                    SELECT 
+                        wpli.id,
+                        wpli.production_log_id,
+                        wpli.operator_id,
+                        op.operator_name,
+                        op.operator_code,
+                        wpli.machine_id,
+                        m.machine_number,
+                        m.name AS machine_name,
+                        wpli.quantity,
+                        wpli.remarks
+                    FROM workshop_production_log_items wpli
+                    JOIN operators op ON wpli.operator_id = op.id
+                    LEFT JOIN machines m ON wpli.machine_id = m.id
+                    WHERE wpli.production_log_id IN (${placeholders})
+                    ORDER BY wpli.id ASC
+                `, logIds);
+
+                const itemsMap = {};
+                for (const item of itemRows) {
+                    if (!itemsMap[item.production_log_id]) {
+                        itemsMap[item.production_log_id] = [];
+                    }
+                    itemsMap[item.production_log_id].push(item);
+                }
+
+                for (const log of productionLogs) {
+                    log.items = itemsMap[log.id] || [];
+                }
+            } catch (itemErr) {
+                console.error("Error fetching production log items:", itemErr.message);
+                for (const log of productionLogs) {
+                    log.items = [];
+                }
+            }
+        }
     } catch (prodErr) {
         console.error("Error fetching production logs:", prodErr.message);
     }
     entry.productionLogs = productionLogs;
+
+    // 5. Fetch active operators and machines for workshop movements
+    let operators = [];
+    try {
+        const [opRows] = await db.execute(`
+            SELECT id, operator_code, operator_name 
+            FROM operators 
+            WHERE active = TRUE 
+            ORDER BY operator_name ASC
+        `);
+        operators = opRows;
+    } catch (opErr) {
+        console.error("Error fetching operators for workshop entry:", opErr.message);
+    }
+    entry.operators = operators;
+
+    let machines = [];
+    try {
+        const [mcRows] = await db.execute(`
+            SELECT id, machine_number, name 
+            FROM machines 
+            WHERE active = TRUE 
+            ORDER BY name ASC, machine_number ASC
+        `);
+        machines = mcRows;
+    } catch (mcErr) {
+        console.error("Error fetching machines for workshop entry:", mcErr.message);
+    }
+    entry.machines = machines;
 
     return entry;
 };
@@ -498,12 +592,30 @@ const addWorkshopProductionLog = async ({
     work_order_item_id,
     bom_process_id,
     quantity,
+    items,
     log_date,
     remarks,
     added_by,
     device_id
 }) => {
-    const moveQty = Number(quantity);
+    let moveQty = Number(quantity);
+
+    if (Array.isArray(items) && items.length > 0) {
+        let sum = 0;
+        for (let i = 0; i < items.length; i++) {
+            const it = items[i];
+            if (!it.operator_id) {
+                throw new Error(`Row #${i + 1}: Please select an operator.`);
+            }
+            const q = Number(it.quantity);
+            if (isNaN(q) || q <= 0) {
+                throw new Error(`Row #${i + 1}: Quantity must be greater than 0.`);
+            }
+            sum += q;
+        }
+        moveQty = sum;
+    }
+
     if (isNaN(moveQty) || moveQty <= 0) {
         throw new Error('Quantity must be greater than 0');
     }
@@ -596,14 +708,35 @@ const addWorkshopProductionLog = async ({
             device_id || null
         ]);
 
-        // 5. Update touch record in workshop_entries
+        const productionLogId = insertResult.insertId;
+
+        // 5. Insert breakdown items if provided
+        if (Array.isArray(items) && items.length > 0) {
+            for (const item of items) {
+                const itemQty = Number(item.quantity) || 0;
+                if (itemQty <= 0) continue;
+                await connection.execute(`
+                    INSERT INTO workshop_production_log_items (
+                        production_log_id, operator_id, machine_id, quantity, remarks
+                    ) VALUES (?, ?, ?, ?, ?)
+                `, [
+                    productionLogId,
+                    Number(item.operator_id),
+                    item.machine_id ? Number(item.machine_id) : null,
+                    itemQty,
+                    item.remarks || null
+                ]);
+            }
+        }
+
+        // 6. Update touch record in workshop_entries
         await connection.execute(`
             INSERT INTO workshop_entries (work_order_item_id, added_by)
             VALUES (?, ?)
             ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP
         `, [work_order_item_id, added_by || 1]);
 
-        // 6. If moving to Finished Goods (final process), update stock_status
+        // 7. If moving to Finished Goods (final process), update stock_status
         if (!nextStage) {
             const batchNo = woiRows[0].batch_no || `WO-${String(woiRows[0].work_order_no).padStart(4, '0')}`;
             await upsertStockStatusForFinishedGoods(connection, {
@@ -620,10 +753,11 @@ const addWorkshopProductionLog = async ({
         await connection.commit();
 
         return {
-            id: insertResult.insertId,
+            id: productionLogId,
             from_process_name: currentStage.process_name,
             to_process_name: nextStage ? nextStage.process_name : 'Finished Goods',
-            quantity: moveQty
+            quantity: moveQty,
+            items_count: Array.isArray(items) ? items.length : 0
         };
     } catch (err) {
         await connection.rollback();
@@ -928,6 +1062,7 @@ module.exports = {
     createWorkshopEntriesTable,
     createWorkshopRmIssuesTable,
     createWorkshopProductionLogsTable,
+    createWorkshopProductionLogItemsTable,
     ensureWorkshopProductionLogColumns,
     ensureWorkshopEntryColumns,
     getAllWorkshopEntries,

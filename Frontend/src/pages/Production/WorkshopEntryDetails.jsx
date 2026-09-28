@@ -12,6 +12,8 @@ import {
 import { getRawMaterials } from "../../api/rawMaterialApi";
 import { getLocations } from "../../api/locationApi";
 import { createRmReturn } from "../../api/rmReturnApi";
+import { getOperators } from "../../api/operatorApi";
+import { getAllMachines } from "../../api/machineApi";
 import toast from "react-hot-toast";
 import DateInput from "../../components/DateInput";
 import WorkshopRmIssueChit from "../../components/WorkshopRmIssueChit";
@@ -27,6 +29,8 @@ export default function WorkshopEntryDetails() {
   const [entryData, setEntryData] = useState(null);
   const [rawMaterialsList, setRawMaterialsList] = useState([]);
   const [locations, setLocations] = useState([]);
+  const [operatorsList, setOperatorsList] = useState([]);
+  const [machinesList, setMachinesList] = useState([]);
 
   // RM Issue Form State
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split("T")[0]);
@@ -43,11 +47,21 @@ export default function WorkshopEntryDetails() {
   // Production Movement Form & Modal State
   const [moveModalOpen, setMoveModalOpen] = useState(false);
   const [selectedStage, setSelectedStage] = useState(null);
-  const [moveQuantity, setMoveQuantity] = useState("");
+  const [moveItems, setMoveItems] = useState([
+    { operator_id: "", machine_id: "", quantity: "", remarks: "" }
+  ]);
   const [moveDate, setMoveDate] = useState(new Date().toISOString().split("T")[0]);
   const [moveRemarks, setMoveRemarks] = useState("");
   const [movingProduction, setMovingProduction] = useState(false);
   const [deletingLogId, setDeletingLogId] = useState(null);
+  const [expandedLogIds, setExpandedLogIds] = useState({});
+
+  const toggleLogExpand = (logId) => {
+    setExpandedLogIds((prev) => ({
+      ...prev,
+      [logId]: !prev[logId],
+    }));
+  };
 
   // Revert Production Movement Form & Modal State
   const [revertModalOpen, setRevertModalOpen] = useState(false);
@@ -91,20 +105,39 @@ export default function WorkshopEntryDetails() {
   const loadAllData = async () => {
     try {
       setLoading(true);
-      const [entryRes, rmRes, locRes] = await Promise.all([
+      const [entryRes, rmRes, locRes, opRes, mcRes] = await Promise.allSettled([
         getWorkshopEntryDetails(workOrderItemId),
         getRawMaterials(),
         getLocations(false),
+        getOperators(false),
+        getAllMachines(false),
       ]);
 
-      if (entryRes.data?.success && entryRes.data.data) {
-        setEntryData(entryRes.data.data);
+      if (entryRes.status === "fulfilled" && entryRes.value.data?.success && entryRes.value.data.data) {
+        const data = entryRes.value.data.data;
+        setEntryData(data);
+        if (data.operators && data.operators.length > 0) {
+          setOperatorsList(data.operators);
+        }
+        if (data.machines && data.machines.length > 0) {
+          setMachinesList(data.machines);
+        }
       } else {
         toast.error("Workshop entry not found");
       }
 
-      setRawMaterialsList(rmRes.data?.data || []);
-      setLocations(locRes.data?.data || []);
+      if (rmRes.status === "fulfilled") {
+        setRawMaterialsList(rmRes.value.data?.data || []);
+      }
+      if (locRes.status === "fulfilled") {
+        setLocations(locRes.value.data?.data || []);
+      }
+      if (opRes.status === "fulfilled" && opRes.value.data?.data) {
+        setOperatorsList(opRes.value.data.data);
+      }
+      if (mcRes.status === "fulfilled" && mcRes.value.data?.data) {
+        setMachinesList(mcRes.value.data.data);
+      }
     } catch (err) {
       console.error("Failed to load workshop details:", err);
       toast.error(err.response?.data?.message || "Failed to load workshop details");
@@ -420,9 +453,54 @@ export default function WorkshopEntryDetails() {
     return stageStats.filter((s) => s.stageNumber < revertFromStage.stageNumber);
   }, [revertFromStage, stageStats]);
 
+  const allLogsExpanded = useMemo(() => {
+    const logsWithItems = productionLogs.filter((l) => l.items && l.items.length > 0);
+    if (logsWithItems.length === 0) return false;
+    return logsWithItems.every((l) => expandedLogIds[l.id]);
+  }, [productionLogs, expandedLogIds]);
+
+  const handleToggleAllExpand = () => {
+    const logsWithItems = productionLogs.filter((l) => l.items && l.items.length > 0);
+    if (allLogsExpanded) {
+      setExpandedLogIds({});
+    } else {
+      const next = {};
+      logsWithItems.forEach((l) => {
+        next[l.id] = true;
+      });
+      setExpandedLogIds(next);
+    }
+  };
+
+  const handleAddMoveItem = () => {
+    setMoveItems((prev) => [
+      ...prev,
+      { operator_id: "", machine_id: "", quantity: "", remarks: "" },
+    ]);
+  };
+
+  const handleRemoveMoveItem = (index) => {
+    if (moveItems.length <= 1) return;
+    setMoveItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleMoveItemChange = (index, field, value) => {
+    setMoveItems((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  };
+
+  const totalMoveQuantity = useMemo(() => {
+    return moveItems.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
+  }, [moveItems]);
+
   const handleOpenMoveModal = (stage) => {
     setSelectedStage(stage);
-    setMoveQuantity("");
+    setMoveItems([
+      { operator_id: "", machine_id: "", quantity: "", remarks: "" },
+    ]);
     setMoveDate(new Date().toISOString().split("T")[0]);
     setMoveRemarks("");
     setMoveModalOpen(true);
@@ -438,13 +516,28 @@ export default function WorkshopEntryDetails() {
     e.preventDefault();
     if (!selectedStage) return;
 
-    const qtyNum = parseFloat(moveQuantity);
-    if (isNaN(qtyNum) || qtyNum <= 0) {
-      return toast.error("Please enter a valid quantity greater than 0.");
+    if (!moveItems || moveItems.length === 0) {
+      return toast.error("Please add at least one operator allocation row.");
     }
-    if (qtyNum > selectedStage.availableQty) {
+
+    for (let i = 0; i < moveItems.length; i++) {
+      const row = moveItems[i];
+      if (!row.operator_id) {
+        return toast.error(`Row #${i + 1}: Please select an operator.`);
+      }
+      const q = parseFloat(row.quantity);
+      if (isNaN(q) || q <= 0) {
+        return toast.error(`Row #${i + 1}: Quantity must be greater than 0.`);
+      }
+    }
+
+    if (totalMoveQuantity <= 0) {
+      return toast.error("Total quantity to move must be greater than 0.");
+    }
+
+    if (totalMoveQuantity > selectedStage.availableQty) {
       return toast.error(
-        `Quantity cannot exceed available stock (${selectedStage.availableQty} Nos) in ${selectedStage.process_name}.`
+        `Total allocated quantity (${totalMoveQuantity} Nos) exceeds available stock (${selectedStage.availableQty} Nos) in ${selectedStage.process_name}.`
       );
     }
 
@@ -453,7 +546,13 @@ export default function WorkshopEntryDetails() {
       const res = await addProductionLog({
         work_order_item_id: Number(workOrderItemId),
         bom_process_id: selectedStage.id,
-        quantity: qtyNum,
+        quantity: totalMoveQuantity,
+        items: moveItems.map((item) => ({
+          operator_id: Number(item.operator_id),
+          machine_id: item.machine_id ? Number(item.machine_id) : null,
+          quantity: parseFloat(item.quantity),
+          remarks: item.remarks ? item.remarks.trim() : null,
+        })),
         log_date: moveDate,
         remarks: moveRemarks.trim(),
       });
@@ -464,7 +563,10 @@ export default function WorkshopEntryDetails() {
       // Reload workshop data
       const updated = await getWorkshopEntryDetails(workOrderItemId);
       if (updated.data?.success) {
-        setEntryData(updated.data.data);
+        const data = updated.data.data;
+        setEntryData(data);
+        if (data.operators) setOperatorsList(data.operators);
+        if (data.machines) setMachinesList(data.machines);
       }
     } catch (err) {
       console.error("Failed to record production movement:", err);
@@ -1386,9 +1488,21 @@ export default function WorkshopEntryDetails() {
                     Production Movement History
                   </h2>
                 </div>
-                <span className="text-xs font-bold text-slate-600 bg-slate-100 border border-slate-200 px-3 py-1 rounded-full self-start sm:self-auto">
-                  {productionLogs.length} {productionLogs.length === 1 ? "Record" : "Records"}
-                </span>
+                <div className="flex items-center gap-2">
+                  {productionLogs.some((l) => l.items && l.items.length > 0) && (
+                    <button
+                      type="button"
+                      onClick={handleToggleAllExpand}
+                      className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <i className={`fa-solid ${allLogsExpanded ? "fa-compress" : "fa-expand"} text-[10px]`}></i>
+                      <span>{allLogsExpanded ? "Collapse All Details" : "Expand All Details"}</span>
+                    </button>
+                  )}
+                  <span className="text-xs font-bold text-slate-600 bg-slate-100 border border-slate-200 px-3 py-1 rounded-full self-start sm:self-auto">
+                    {productionLogs.length} {productionLogs.length === 1 ? "Record" : "Records"}
+                  </span>
+                </div>
               </div>
 
               {productionLogs.length === 0 ? (
@@ -1407,7 +1521,8 @@ export default function WorkshopEntryDetails() {
                         <th className="py-2.5 px-3 text-center"></th>
                         <th className="py-2.5 px-3">To Stage</th>
                         <th className="py-2.5 px-3 text-right">Quantity (Nos)</th>
-                        <th className="py-2.5 px-3">Remarks</th>
+                        <th className="py-2.5 px-3 min-w-[290px]">Operator & Machine Breakdown</th>
+                        <th className="py-2.5 px-3 min-w-[130px]">Movement Remarks</th>
                         <th className="py-2.5 px-3">Logged By</th>
                         <th className="py-2.5 px-3 text-center w-20">Action</th>
                       </tr>
@@ -1460,8 +1575,153 @@ export default function WorkshopEntryDetails() {
                             >
                               {Number(log.quantity).toLocaleString()}
                             </td>
-                            <td className="py-2.5 px-3 text-slate-600 max-w-[200px] truncate" title={log.remarks || ""}>
-                              {log.remarks || "—"}
+                            <td className="py-2.5 px-3">
+                              {log.items && log.items.length > 0 ? (
+                                <div className="min-w-[270px] max-w-[420px]">
+                                  {!expandedLogIds[log.id] ? (
+                                    /* Collapsed compact view */
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleLogExpand(log.id)}
+                                      className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-slate-50 hover:bg-indigo-50/60 border border-slate-200 hover:border-indigo-300 text-left transition cursor-pointer group shadow-2xs"
+                                      title="Click to view operator & machine breakdown"
+                                    >
+                                      <div className="flex items-center gap-1.5 min-w-0">
+                                        <span className="w-5 h-5 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0 text-[10px]">
+                                          <i className="fa-solid fa-users-gear"></i>
+                                        </span>
+                                        <span className="font-bold text-slate-800 text-xs truncate">
+                                          {log.items.length === 1
+                                            ? log.items[0].operator_name
+                                            : `${log.items.length} Allocations`}
+                                        </span>
+                                        <span className="text-[11px] text-slate-400 truncate max-w-[130px]">
+                                          {log.items.length === 1
+                                            ? log.items[0].machine_name
+                                              ? `• ${log.items[0].machine_name}`
+                                              : "• Manual"
+                                            : `(${log.items.map((it) => it.operator_name).filter(Boolean).join(", ")})`}
+                                        </span>
+                                      </div>
+
+                                      <div className="flex items-center gap-1.5 shrink-0">
+                                        {log.items.some((it) => it.remarks) && (
+                                          <span title="Contains operator remark" className="text-amber-500 text-[10px]">
+                                            <i className="fa-regular fa-comment-dots"></i>
+                                          </span>
+                                        )}
+                                        <span className="inline-flex items-center gap-1 text-[10.5px] font-bold text-indigo-600 group-hover:text-indigo-800 bg-white border border-indigo-200/70 px-1.5 py-0.5 rounded shadow-2xs">
+                                          <span>View</span>
+                                          <i className="fa-solid fa-chevron-down text-[9px] transition-transform group-hover:translate-y-0.5"></i>
+                                        </span>
+                                      </div>
+                                    </button>
+                                  ) : (
+                                    /* Expanded accordion view */
+                                    <div className="flex flex-col gap-2 py-0.5 animate-in fade-in duration-150">
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleLogExpand(log.id)}
+                                        className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-indigo-50 text-indigo-900 border border-indigo-200/80 hover:bg-indigo-100 text-left transition cursor-pointer"
+                                        title="Click to collapse breakdown"
+                                      >
+                                        <span className="font-bold text-xs flex items-center gap-1.5">
+                                          <i className="fa-solid fa-users-gear text-indigo-600 text-[10px]"></i>
+                                          <span>{log.items.length} {log.items.length === 1 ? "Allocation" : "Allocations"}</span>
+                                        </span>
+                                        <span className="inline-flex items-center gap-1 text-[10.5px] font-bold text-indigo-700 bg-white border border-indigo-200 px-1.5 py-0.5 rounded shadow-2xs">
+                                          <span>Hide</span>
+                                          <i className="fa-solid fa-chevron-up text-[9px]"></i>
+                                        </span>
+                                      </button>
+
+                                      {/* Cards for each item */}
+                                      <div className="space-y-1.5">
+                                        {log.items.map((item, itmIdx) => (
+                                          <div
+                                            key={item.id || itmIdx}
+                                            className="p-2.5 rounded-xl bg-slate-50/90 hover:bg-white border border-slate-200 shadow-2xs transition-all space-y-1.5"
+                                          >
+                                            {/* Top Row: Operator & Quantity */}
+                                            <div className="flex items-center justify-between gap-2">
+                                              <div className="flex items-center gap-2 min-w-0">
+                                                <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0 text-[10px]">
+                                                  <i className="fa-solid fa-user"></i>
+                                                </span>
+                                                <span className="font-bold text-slate-800 text-xs truncate" title={item.operator_name}>
+                                                  {item.operator_name}
+                                                  {item.operator_code && (
+                                                    <span className="ml-1 text-[10px] font-normal text-slate-400">
+                                                      ({item.operator_code})
+                                                    </span>
+                                                  )}
+                                                </span>
+                                              </div>
+
+                                              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200/70 shrink-0">
+                                                {Number(item.quantity).toLocaleString()}{" "}
+                                                <span className="text-[9px] font-bold ml-1 text-indigo-500">Nos</span>
+                                              </span>
+                                            </div>
+
+                                            {/* Middle Row: Machine */}
+                                            <div className="flex items-center gap-1.5 text-[11px] text-slate-600 pl-7">
+                                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0">
+                                                Machine:
+                                              </span>
+                                              {item.machine_name || item.machine_number ? (
+                                                <span
+                                                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-700 text-[10.5px] font-semibold shadow-2xs"
+                                                  title={`${item.machine_number || ""} ${item.machine_name || ""}`}
+                                                >
+                                                  <i className="fa-solid fa-gears text-indigo-500 text-[9px] shrink-0"></i>
+                                                  <span>
+                                                    {item.machine_number ? (
+                                                      <strong className="text-slate-900 font-bold mr-1">[{item.machine_number}]</strong>
+                                                    ) : null}
+                                                    {item.machine_name || ""}
+                                                  </span>
+                                                </span>
+                                              ) : (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100/90 border border-slate-200 text-slate-400 text-[10px] italic">
+                                                  <i className="fa-solid fa-hand text-slate-400 text-[9px]"></i>
+                                                  Manual (No Machine)
+                                                </span>
+                                              )}
+                                            </div>
+
+                                            {/* Bottom Row: Operator Remark */}
+                                            {item.remarks && item.remarks.trim() ? (
+                                              <div className="flex items-start gap-1.5 text-[11px] pl-7 pt-1 border-t border-slate-100">
+                                                <i className="fa-regular fa-comment-dots text-amber-500 text-[10px] mt-0.5 shrink-0"></i>
+                                                <div className="flex-1 min-w-0">
+                                                  <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider mr-1">
+                                                    Remark:
+                                                  </span>
+                                                  <span className="italic text-slate-700 text-[11px] font-medium break-words">
+                                                    {item.remarks}
+                                                  </span>
+                                                </div>
+                                              </div>
+                                            ) : null}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-slate-400 text-xs italic">—</span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-600 max-w-[200px]" title={log.remarks || ""}>
+                              {log.remarks ? (
+                                <span className="text-slate-700 font-medium text-xs break-words">
+                                  {log.remarks}
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 text-xs italic">—</span>
+                              )}
                             </td>
                             <td className="py-2.5 px-3 text-slate-500 font-medium">
                               {log.added_by_name || "Unknown"}
@@ -1501,7 +1761,7 @@ export default function WorkshopEntryDetails() {
             {/* Move Products Modal */}
             {moveModalOpen && selectedStage && (
               <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-                <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[92vh] flex flex-col border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-auto">
+                <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[92vh] flex flex-col border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-auto">
                   {/* Modal Header */}
                   <div className="px-5 sm:px-6 py-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70 flex-shrink-0">
                     <div>
@@ -1524,100 +1784,228 @@ export default function WorkshopEntryDetails() {
                   </div>
 
                   {/* Modal Body Form */}
-                  <form onSubmit={handleMoveSubmit} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-3.5 text-xs flex flex-col justify-between">
-                    <div className="space-y-3.5">
-                      {/* Destination Banner */}
-                      <div className="p-3 rounded-xl bg-indigo-50/60 border border-indigo-100 flex items-center justify-between">
+                  <form onSubmit={handleMoveSubmit} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4 text-xs flex flex-col justify-between">
+                    <div className="space-y-4">
+                      {/* Destination & Queue Banner */}
+                      <div className="p-3.5 rounded-xl bg-gradient-to-r from-indigo-50/80 via-slate-50 to-indigo-50/50 border border-indigo-100 flex flex-wrap items-center justify-between gap-3">
                         <div>
                           <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block">
                             Moving To:
                           </span>
-                          <span className="text-xs sm:text-sm font-black text-indigo-950">
+                          <span className="text-xs sm:text-sm font-black text-indigo-950 flex items-center gap-1.5 mt-0.5">
+                            <i className="fa-solid fa-arrow-right text-[11px] text-indigo-500"></i>
                             {selectedStage.nextStageName}
                           </span>
                         </div>
-                        <div className="text-right">
-                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                            Available in Queue
-                          </span>
-                          <span className="text-xs sm:text-sm font-black text-slate-900">
-                            {selectedStage.availableQty.toLocaleString()} Nos
-                          </span>
+                        <div className="flex items-center gap-4 text-right">
+                          <div>
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                              Available in Queue
+                            </span>
+                            <span className="text-xs sm:text-sm font-black text-slate-900">
+                              {selectedStage.availableQty.toLocaleString()} Nos
+                            </span>
+                          </div>
+                          <div className="border-l border-indigo-200/80 pl-4">
+                            <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block">
+                              Total Allocated
+                            </span>
+                            <span className={`text-xs sm:text-sm font-black ${
+                              totalMoveQuantity > selectedStage.availableQty
+                                ? "text-rose-600"
+                                : "text-indigo-700"
+                            }`}>
+                              {totalMoveQuantity.toLocaleString()} Nos
+                            </span>
+                          </div>
                         </div>
                       </div>
 
-                      {/* Quantity Input with Quick Presets */}
-                      <div className="space-y-1">
-                        <label className="block font-bold text-slate-700 text-[11px]">
-                          Quantity to Move (Nos) <span className="text-rose-500">*</span>
-                        </label>
-                        <input
-                          type="number"
-                          step="any"
-                          min="1"
-                          max={selectedStage.availableQty}
-                          value={moveQuantity}
-                          onChange={(e) => setMoveQuantity(e.target.value)}
-                          placeholder={`Enter quantity (max ${selectedStage.availableQty})`}
-                          required
-                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition"
-                        />
-
-                        {/* Quick preset buttons */}
-                        <div className="flex items-center gap-1.5 pt-0.5">
-                          <span className="text-[10px] text-slate-400">Presets:</span>
+                      {/* Operator & Machine Breakdown Table */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <label className="block font-bold text-slate-800 text-[12px] flex items-center gap-1.5">
+                              <i className="fa-solid fa-users-gear text-indigo-600 text-xs"></i>
+                              <span>Operator & Machine Allocation</span>
+                              <span className="text-rose-500">*</span>
+                            </label>
+                            <span className="text-[11px] text-slate-500">
+                              Specify quantities completed by each operator and machine
+                            </span>
+                          </div>
                           <button
                             type="button"
-                            onClick={() => setMoveQuantity(String(Math.floor(selectedStage.availableQty * 0.25) || 1))}
-                            className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 transition cursor-pointer"
+                            onClick={handleAddMoveItem}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition cursor-pointer"
                           >
-                            25%
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setMoveQuantity(String(Math.floor(selectedStage.availableQty * 0.5) || 1))}
-                            className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 transition cursor-pointer"
-                          >
-                            50%
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setMoveQuantity(String(selectedStage.availableQty))}
-                            className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition cursor-pointer"
-                          >
-                            All ({selectedStage.availableQty})
+                            <i className="fa-solid fa-plus text-[10px]"></i>
+                            <span>Add Row</span>
                           </button>
                         </div>
+
+                        {/* Allocations Table */}
+                        <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+                          <table className="w-full text-left border-collapse text-xs">
+                            <thead>
+                              <tr className="bg-slate-50 border-b border-slate-200 font-bold text-slate-600 uppercase tracking-wider text-[10px]">
+                                <th className="py-2 px-2.5 w-8 text-center">#</th>
+                                <th className="py-2 px-2.5 min-w-[170px]">Operator <span className="text-rose-500">*</span></th>
+                                <th className="py-2 px-2.5 min-w-[170px]">Machine (Optional)</th>
+                                <th className="py-2 px-2.5 w-32 text-right">Quantity (Nos) <span className="text-rose-500">*</span></th>
+                                <th className="py-2 px-2.5 min-w-[150px]">Operator Remark</th>
+                                <th className="py-2 px-2.5 w-10 text-center"></th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 bg-white">
+                              {moveItems.map((item, idx) => (
+                                <tr key={idx} className="hover:bg-slate-50/50 transition">
+                                  <td className="py-2 px-2.5 text-center font-bold text-slate-400 text-[11px]">
+                                    {idx + 1}
+                                  </td>
+                                  <td className="py-2 px-2.5">
+                                    <select
+                                      value={item.operator_id}
+                                      onChange={(e) => handleMoveItemChange(idx, "operator_id", e.target.value)}
+                                      required
+                                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 bg-white"
+                                    >
+                                      <option value="">-- Select Operator * --</option>
+                                      {operatorsList.map((op) => (
+                                        <option key={op.id} value={op.id}>
+                                          {op.operator_code ? `[${op.operator_code}] ` : ""}{op.operator_name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </td>
+                                  <td className="py-2 px-2.5">
+                                    <select
+                                      value={item.machine_id}
+                                      onChange={(e) => handleMoveItemChange(idx, "machine_id", e.target.value)}
+                                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 bg-white"
+                                    >
+                                      <option value="">-- Manual / No Machine --</option>
+                                      {machinesList.map((mc) => (
+                                        <option key={mc.id} value={mc.id}>
+                                          {mc.machine_number ? `[${mc.machine_number}] ` : ""}{mc.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </td>
+                                  <td className="py-2 px-2.5">
+                                    <input
+                                      type="number"
+                                      step="any"
+                                      min="0.0001"
+                                      value={item.quantity}
+                                      onChange={(e) => handleMoveItemChange(idx, "quantity", e.target.value)}
+                                      placeholder="0"
+                                      required
+                                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 text-right bg-white"
+                                    />
+                                  </td>
+                                  <td className="py-2 px-2.5">
+                                    <input
+                                      type="text"
+                                      value={item.remarks}
+                                      onChange={(e) => handleMoveItemChange(idx, "remarks", e.target.value)}
+                                      placeholder="e.g. Shift 1, notes..."
+                                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 bg-white"
+                                    />
+                                  </td>
+                                  <td className="py-2 px-2.5 text-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveMoveItem(idx)}
+                                      disabled={moveItems.length <= 1}
+                                      title={moveItems.length <= 1 ? "At least one row required" : "Remove row"}
+                                      className="w-7 h-7 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 flex items-center justify-center transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed mx-auto"
+                                    >
+                                      <i className="fa-regular fa-trash-can text-xs"></i>
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot className="bg-slate-50 border-t border-slate-200">
+                              <tr>
+                                <td colSpan="3" className="py-2 px-3 text-right font-bold text-slate-600 text-[11px]">
+                                  Total Allocated:
+                                </td>
+                                <td className={`py-2 px-3 text-right font-black text-xs ${
+                                  totalMoveQuantity > selectedStage.availableQty ? "text-rose-600" : "text-indigo-700"
+                                }`}>
+                                  {totalMoveQuantity.toLocaleString()} Nos
+                                </td>
+                                <td colSpan="2" className="py-2 px-3 text-[11px]">
+                                  {totalMoveQuantity > selectedStage.availableQty ? (
+                                    <span className="text-rose-600 font-bold">
+                                      Exceeds available queue by {(totalMoveQuantity - selectedStage.availableQty).toLocaleString()} Nos
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-500">
+                                      Remaining in queue: {(selectedStage.availableQty - totalMoveQuantity).toLocaleString()} Nos
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+
+                        {/* Quick Preset: Fill All */}
+                        {moveItems.length === 1 && (
+                          <div className="flex items-center gap-2 pt-0.5">
+                            <span className="text-[10px] text-slate-400">Quick fill:</span>
+                            <button
+                              type="button"
+                              onClick={() => handleMoveItemChange(0, "quantity", String(selectedStage.availableQty))}
+                              className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition cursor-pointer"
+                            >
+                              Fill All Available ({selectedStage.availableQty.toLocaleString()} Nos)
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Over-allocation warning banner */}
+                        {totalMoveQuantity > selectedStage.availableQty && (
+                          <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
+                            <i className="fa-solid fa-triangle-exclamation text-rose-500"></i>
+                            <span>
+                              Total allocated quantity ({totalMoveQuantity} Nos) exceeds the available {selectedStage.availableQty} Nos in this stage.
+                            </span>
+                          </div>
+                        )}
                       </div>
 
-                      {/* Movement Date Input */}
-                      <div className="space-y-1">
-                        <label className="block font-bold text-slate-700 text-[11px]">
-                          Movement Date <span className="text-rose-500">*</span>
-                        </label>
-                        <DateInput
-                          value={moveDate}
-                          onChange={(e) => setMoveDate(e.target.value)}
-                          required
-                        />
-                      </div>
-
-                      {/* Remarks Input */}
-                      <div className="space-y-1">
-                        <label className="block font-bold text-slate-700 text-[11px]">
-                          Remarks / Notes <span className="text-slate-400 font-normal">(Optional)</span>
-                        </label>
-                        <textarea
-                          rows="2"
-                          value={moveRemarks}
-                          onChange={(e) => setMoveRemarks(e.target.value)}
-                          placeholder="Enter any notes or remarks..."
-                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition resize-none"
-                        ></textarea>
+                      {/* Date & Overall Remarks */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                        <div className="space-y-1">
+                          <label className="block font-bold text-slate-700 text-[11px]">
+                            Movement Date <span className="text-rose-500">*</span>
+                          </label>
+                          <DateInput
+                            value={moveDate}
+                            onChange={(e) => setMoveDate(e.target.value)}
+                            required
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="block font-bold text-slate-700 text-[11px]">
+                            Overall Remarks / Notes <span className="text-slate-400 font-normal">(Optional)</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={moveRemarks}
+                            onChange={(e) => setMoveRemarks(e.target.value)}
+                            placeholder="Enter any notes or remarks..."
+                            className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition"
+                          />
+                        </div>
                       </div>
                     </div>
 
-                    {/* Modal Actions (Sticky bottom footer) */}
+                    {/* Modal Actions */}
                     <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 flex-shrink-0 mt-2">
                       <button
                         type="button"
@@ -1629,7 +2017,12 @@ export default function WorkshopEntryDetails() {
                       </button>
                       <button
                         type="submit"
-                        disabled={movingProduction || !moveQuantity}
+                        disabled={
+                          movingProduction ||
+                          totalMoveQuantity <= 0 ||
+                          totalMoveQuantity > selectedStage.availableQty ||
+                          moveItems.some(it => !it.operator_id || !it.quantity || parseFloat(it.quantity) <= 0)
+                        }
                         className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-xs transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
                       >
                         {movingProduction ? (
@@ -1640,7 +2033,7 @@ export default function WorkshopEntryDetails() {
                         ) : (
                           <>
                             <i className="fa-solid fa-check"></i>
-                            <span>Confirm & Move</span>
+                            <span>Confirm & Move ({totalMoveQuantity.toLocaleString()} Nos)</span>
                           </>
                         )}
                       </button>
