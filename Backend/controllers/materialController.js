@@ -15,7 +15,10 @@ const addMaterial = async (req, res) => {
             prefix,
             materialName,
             unitId,
+            ptsCode,
+            pstCode,
             hsnCode,
+            materialGroup,
             materialType,
             gstPercent,
             selfVal,
@@ -36,13 +39,20 @@ const addMaterial = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Material name is required' });
         }
 
+        const rawPts = (ptsCode !== undefined && ptsCode !== null) ? ptsCode : ((pstCode !== undefined && pstCode !== null) ? pstCode : hsnCode);
+        const rawGroup = (materialGroup !== undefined && materialGroup !== null) ? materialGroup : null;
+        const rawType = (materialType !== undefined && materialType !== null) ? materialType : null;
+
         const data = {
             materialCode: materialCode.trim(),
             prefix: prefix ? prefix.trim().toUpperCase().slice(0, 10) : null,
             materialName: materialName.trim(),
             unitId: unitId || null,
-            hsnCode: hsnCode ? hsnCode.trim() : null,
-            materialType: materialType || null,
+            ptsCode: rawPts ? rawPts.trim() : null,
+            pstCode: rawPts ? rawPts.trim() : null,
+            hsnCode: rawPts ? rawPts.trim() : null,
+            materialGroup: rawGroup ? (typeof rawGroup === 'string' ? rawGroup.trim() : rawGroup) : null,
+            materialType: rawType ? (typeof rawType === 'string' ? rawType.trim() : rawType) : null,
             gstPercent: gstPercent ? gstPercent.trim() : null,
             selfVal: selfVal !== undefined && selfVal !== null && selfVal !== '' ? Number(selfVal) : null,
             purchaseVal: purchaseVal !== undefined && purchaseVal !== null && purchaseVal !== '' ? Number(purchaseVal) : null,
@@ -119,7 +129,10 @@ const updateMaterialController = async (req, res) => {
             prefix,
             materialName,
             unitId,
+            ptsCode,
+            pstCode,
             hsnCode,
+            materialGroup,
             materialType,
             gstPercent,
             selfVal,
@@ -143,13 +156,25 @@ const updateMaterialController = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Material not found' });
         }
 
+        const rawPts = (ptsCode !== undefined && ptsCode !== null)
+            ? ptsCode
+            : ((pstCode !== undefined && pstCode !== null)
+                ? pstCode
+                : (hsnCode !== undefined ? hsnCode : (beforeData ? (beforeData.pts_code || beforeData.pst_code) : null)));
+
+        const rawGroup = materialGroup !== undefined ? materialGroup : (beforeData ? beforeData.material_group : null);
+        const rawType = materialType !== undefined ? materialType : (beforeData ? beforeData.material_type : null);
+
         const data = {
             materialCode: materialCode.trim(),
             prefix: prefix !== undefined ? (prefix ? prefix.trim().toUpperCase().slice(0, 10) : null) : (beforeData ? beforeData.prefix : null),
             materialName: materialName.trim(),
             unitId: unitId || null,
-            hsnCode: hsnCode ? hsnCode.trim() : null,
-            materialType: materialType || null,
+            ptsCode: rawPts ? rawPts.trim() : null,
+            pstCode: rawPts ? rawPts.trim() : null,
+            hsnCode: rawPts ? rawPts.trim() : null,
+            materialGroup: rawGroup ? (typeof rawGroup === 'string' ? rawGroup.trim() : rawGroup) : null,
+            materialType: rawType ? (typeof rawType === 'string' ? rawType.trim() : rawType) : null,
             gstPercent: gstPercent ? gstPercent.trim() : null,
             selfVal: selfVal !== undefined && selfVal !== null && selfVal !== '' ? Number(selfVal) : null,
             purchaseVal: purchaseVal !== undefined && purchaseVal !== null && purchaseVal !== '' ? Number(purchaseVal) : null,

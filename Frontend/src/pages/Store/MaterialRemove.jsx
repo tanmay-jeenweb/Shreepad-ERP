@@ -188,7 +188,7 @@ export default function MaterialRemove() {
                                     {/* Type */}
                                     <div className="space-y-1">
                                         <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                                            Material Type
+                                            Material Group
                                         </label>
                                         <input
                                             type="text"

@@ -7,6 +7,7 @@
         { key: 'machine', label: 'Machine Master' },
         { key: 'mould', label: 'Mould Master' },
 
+        { key: 'material_group', label: 'Material Group Master' },
         { key: 'material_type', label: 'Material Type Master' },
         { key: 'unit', label: 'Unit Master' },
         { key: 'customer', label: 'Customer Master' },
@@ -64,6 +65,13 @@
                 await db.execute("ALTER TABLE user_type_permissions ADD COLUMN can_approve TINYINT(1) DEFAULT 0");
                 console.log("Added column can_approve to user_type_permissions");
             }
+            // Ensure material_type has permissions copied from material_group if missing
+            await db.execute(`
+                INSERT IGNORE INTO user_type_permissions (user_type_id, master_name, can_read, can_write, can_update, can_delete, can_approve)
+                SELECT user_type_id, 'material_type', can_read, can_write, can_update, can_delete, can_approve
+                FROM user_type_permissions
+                WHERE master_name = 'material_group'
+            `);
         } catch (err) {
             console.error("Error ensuring user_type_permissions columns:", err.message || err);
         }

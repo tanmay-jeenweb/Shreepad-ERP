@@ -1,17 +1,17 @@
 import { useEffect, useState, useMemo } from "react";
 import Navbar from "../../components/Navbar";
 import {
-  createMaterialType,
-  getMaterialTypes,
-  updateMaterialType,
-  deleteMaterialType,
-} from "../../api/materialTypeApi";
+  createMaterialGroup,
+  getMaterialGroups,
+  updateMaterialGroup,
+  deleteMaterialGroup,
+} from "../../api/materialGroupApi";
 import DataTable from "../../components/DataTable";
 import toast from "react-hot-toast";
 import { usePermission } from "../../context/PermissionContext";
 
-export default function MaterialTypeMaster() {
-  const [types, setTypes] = useState([]);
+export default function MaterialGroupMaster() {
+  const [groups, setGroups] = useState([]);
   const [newName, setNewName] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -21,46 +21,46 @@ export default function MaterialTypeMaster() {
 
   const { hasPermission } = usePermission();
 
-  const canRead = hasPermission("material_type", "read");
-  const canWrite = hasPermission("material_type", "write");
-  const canUpdate = hasPermission("material_type", "update");
-  const canDelete = hasPermission("material_type", "delete");
+  const canRead = hasPermission("material_group", "read") || hasPermission("material_type", "read");
+  const canWrite = hasPermission("material_group", "write") || hasPermission("material_type", "write");
+  const canUpdate = hasPermission("material_group", "update") || hasPermission("material_type", "update");
+  const canDelete = hasPermission("material_group", "delete") || hasPermission("material_type", "delete");
 
-  const loadTypes = async () => {
+  const loadGroups = async () => {
     setLoading(true);
     try {
-      const response = await getMaterialTypes();
-      setTypes(response.data.data || []);
+      const response = await getMaterialGroups();
+      setGroups(response.data.data || []);
     } catch (err) {
-      console.error("Failed to load material types", err);
-      toast.error("Unable to load material types. Please try again.");
+      console.error("Failed to load material groups", err);
+      toast.error("Unable to load material groups. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadTypes();
+    loadGroups();
   }, []);
 
-  const handleAddType = async (event) => {
+  const handleAddGroup = async (event) => {
     event.preventDefault();
     if (!newName.trim()) {
-      toast.error("Enter a valid material type name.");
+      toast.error("Enter a valid material group name.");
       return;
     }
 
     setSaving(true);
     try {
-      await createMaterialType({ materialTypeName: newName.trim() });
+      await createMaterialGroup({ materialGroupName: newName.trim() });
       setNewName("");
       setShowAddModal(false);
-      await loadTypes();
-      toast.success("Material type added successfully");
+      await loadGroups();
+      toast.success("Material group added successfully");
     } catch (err) {
-      console.error("Failed to add material type", err);
+      console.error("Failed to add material group", err);
       const serverMessage = err?.response?.data?.message;
-      toast.error(serverMessage || "Unable to add material type. Please try again.");
+      toast.error(serverMessage || "Unable to add material group. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -86,52 +86,51 @@ export default function MaterialTypeMaster() {
     setEditingName("");
   };
 
-  const handleUpdateType = async (id) => {
+  const handleUpdateGroup = async (id) => {
     if (!editingName.trim()) {
-      toast.error("Enter a valid material type name.");
+      toast.error("Enter a valid material group name.");
       return;
     }
 
     setSaving(true);
     try {
-      await updateMaterialType(id, { materialTypeName: editingName.trim() });
-      toast.success("Material type updated successfully");
+      await updateMaterialGroup(id, { materialGroupName: editingName.trim() });
+      toast.success("Material group updated successfully");
       setEditingId(null);
       setEditingName("");
-      await loadTypes();
+      await loadGroups();
     } catch (err) {
-      console.error("Failed to update material type", err);
-      toast.error(err?.response?.data?.message || "Unable to update material type.");
+      console.error("Failed to update material group", err);
+      toast.error(err?.response?.data?.message || "Unable to update material group.");
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDeleteType = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this material type?")) {
+  const handleDeleteGroup = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this material group?")) {
       return;
     }
 
     setSaving(true);
     try {
-      await deleteMaterialType(id);
-      toast.success("Material type deleted successfully");
-      await loadTypes();
+      await deleteMaterialGroup(id);
+      toast.success("Material group deleted successfully");
+      await loadGroups();
     } catch (err) {
-      console.error("Failed to delete material type", err);
-      toast.error(err?.response?.data?.message || "Unable to delete material type.");
+      console.error("Failed to delete material group", err);
+      toast.error(err?.response?.data?.message || "Unable to delete material group.");
     } finally {
       setSaving(false);
     }
   };
 
-  // Timestamps (created_at, updated_at) exist in backend/DB but are intentionally not shown in frontend
   const columns = useMemo(() => {
     const cols = [
       { key: "id", label: "ID", minWidth: "60px" },
       {
-        key: "material_type_name",
-        label: "Material Type Name",
+        key: "material_group_name",
+        label: "Material Group Name",
         render: (row) =>
           editingId === row.id ? (
             <input
@@ -142,7 +141,7 @@ export default function MaterialTypeMaster() {
             />
           ) : (
             <span className="font-semibold text-blue-900">
-              {row.material_type_name}
+              {row.material_group_name || row.material_type_name}
             </span>
           ),
       },
@@ -159,7 +158,7 @@ export default function MaterialTypeMaster() {
             {editingId === row.id ? (
               <>
                 <button
-                  onClick={() => handleUpdateType(row.id)}
+                  onClick={() => handleUpdateGroup(row.id)}
                   disabled={saving}
                   className="text-emerald-600 hover:text-emerald-800 disabled:opacity-50 font-medium text-xs bg-emerald-50 px-2 py-1 rounded cursor-pointer"
                 >
@@ -175,9 +174,14 @@ export default function MaterialTypeMaster() {
               </>
             ) : (
               <>
-                {canUpdate && (
+                {canUpdate && !row.is_system && (
                   <button
-                    onClick={() => handleStartEdit(row.id, row.material_type_name)}
+                    onClick={() =>
+                      handleStartEdit(
+                        row.id,
+                        row.material_group_name || row.material_type_name
+                      )
+                    }
                     className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#bcccdc] bg-[#f0f4f8] text-[#369ACF] hover:bg-[#e6ebf0] cursor-pointer"
                     title="Edit"
                   >
@@ -197,9 +201,9 @@ export default function MaterialTypeMaster() {
                     </svg>
                   </button>
                 )}
-                {canDelete && (
+                {canDelete && !row.is_system && (
                   <button
-                    onClick={() => handleDeleteType(row.id)}
+                    onClick={() => handleDeleteGroup(row.id)}
                     className="flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 cursor-pointer"
                     title="Delete"
                   >
@@ -235,18 +239,18 @@ export default function MaterialTypeMaster() {
 
       <main className="flex-1 flex flex-col w-full mx-auto py-8 px-4 sm:px-6 lg:px-8">
         <DataTable
-          tableId="material_type_master"
-          title="Material Type Master"
-          data={types}
+          tableId="material_group_master"
+          title="Material Group Master"
+          data={groups}
           columns={columns}
           loading={loading}
-          searchPlaceholder="Search material types..."
+          searchPlaceholder="Search material groups..."
           actionButton={
             canWrite ? (
               <button
                 onClick={openAddModal}
                 className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#369ACF] text-white hover:bg-[#2583b4] transition-colors cursor-pointer shadow-sm hover:shadow"
-                title="Add Material Type"
+                title="Add Material Group"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -272,8 +276,8 @@ export default function MaterialTypeMaster() {
             <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl animate-in zoom-in duration-200">
               <div className="mb-4 flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-xl font-semibold text-slate-900">Add Material Type</h2>
-                  <p className="text-sm text-slate-500">Create a new material type entry.</p>
+                  <h2 className="text-xl font-semibold text-slate-900">Add Material Group</h2>
+                  <p className="text-sm text-slate-500">Create a new material group master entry.</p>
                 </div>
                 <button
                   type="button"
@@ -285,15 +289,15 @@ export default function MaterialTypeMaster() {
                 </button>
               </div>
 
-              <form className="space-y-4" onSubmit={handleAddType}>
+              <form className="space-y-4" onSubmit={handleAddGroup}>
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">Material Type Name</label>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">Material Group Name</label>
                   <input
                     type="text"
                     value={newName}
                     onChange={(e) => setNewName(e.target.value)}
                     className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-[#369ACF] focus:ring-2 focus:ring-[#369ACF]/30"
-                    placeholder="Enter material type name"
+                    placeholder="Enter material group name"
                     autoFocus
                   />
                 </div>
@@ -310,7 +314,7 @@ export default function MaterialTypeMaster() {
                     disabled={saving}
                     className="rounded-xl bg-[#369ACF] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2583b4] disabled:opacity-60 cursor-pointer"
                   >
-                    {saving ? "Saving..." : "Add Material Type"}
+                    {saving ? "Saving..." : "Add Material Group"}
                   </button>
                 </div>
               </form>

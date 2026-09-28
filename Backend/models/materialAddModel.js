@@ -214,7 +214,7 @@ const getDistinctMaterialTypes = async () => {
 
 const getMaterialsByType = async (materialType) => {
     const [rows] = await db.execute(
-        `SELECT m.id, m.material_name, m.material_code, m.hsn_code, u.unit_name, m.gst_percent
+        `SELECT m.id, m.material_name, m.material_code, COALESCE(m.pst_code, m.hsn_code) AS pst_code, COALESCE(m.pst_code, m.hsn_code) AS hsn_code, u.unit_name, m.gst_percent
          FROM materials m
          LEFT JOIN units u ON m.unit_id = u.id
          WHERE m.material_type = ? AND (m.active = 1 OR m.active IS NULL)

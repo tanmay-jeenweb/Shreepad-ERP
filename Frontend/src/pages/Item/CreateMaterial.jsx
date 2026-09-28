@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import { createMaterial, updateMaterial, getMaterialById } from "../../api/materialApi";
+import { getMaterialGroups } from "../../api/materialGroupApi";
 import { getMaterialTypes } from "../../api/materialTypeApi";
 import { getUnits } from "../../api/unitApi";
 import toast from "react-hot-toast";
@@ -25,13 +26,10 @@ const emptyForm = {
   materialCode: "",
   materialName: "",
   unitId: "",
-  hsnCode: "",
+  ptsCode: "",
+  materialGroup: "",
   materialType: "",
   prefix: "",
-  gstPercent: "",
-  selfVal: "",
-  purchaseVal: "",
-  unitWeight: "",
   details: "",
   remarks: "",
 };
@@ -43,6 +41,7 @@ export default function CreateMaterial() {
   const isEditMode = Boolean(editId);
 
   const [form, setForm] = useState(emptyForm);
+  const [materialGroups, setMaterialGroups] = useState([]);
   const [materialTypes, setMaterialTypes] = useState([]);
   const [units, setUnits] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -54,11 +53,13 @@ export default function CreateMaterial() {
       setLoading(true);
       try {
         // Fetch dropdowns
-        const [unitRes, typeRes] = await Promise.all([
+        const [unitRes, groupRes, typeRes] = await Promise.all([
           getUnits(),
+          getMaterialGroups(),
           getMaterialTypes(),
         ]);
         setUnits(unitRes.data?.data || []);
+        setMaterialGroups(groupRes.data?.data || []);
         setMaterialTypes(typeRes.data?.data || []);
 
         // Fetch material details if in edit mode
@@ -66,17 +67,16 @@ export default function CreateMaterial() {
           const res = await getMaterialById(editId);
           const mat = res.data.data;
           if (mat) {
+            const currentGroup = mat.material_group || "";
+            const currentType = mat.material_type || "";
             setForm({
               materialCode: mat.material_code || "",
               materialName: mat.material_name || "",
               unitId: mat.unit_id ? String(mat.unit_id) : "",
-              hsnCode: mat.hsn_code || "",
-              materialType: mat.material_type || "",
-              prefix: mat.prefix || (mat.material_type ? DEFAULT_PREFIXES[mat.material_type] || "" : ""),
-              gstPercent: mat.gst_percent || "",
-              selfVal: mat.self_val !== null && mat.self_val !== undefined ? String(mat.self_val) : "",
-              purchaseVal: mat.purchase_val !== null && mat.purchase_val !== undefined ? String(mat.purchase_val) : "",
-              unitWeight: mat.unit_weight !== null && mat.unit_weight !== undefined ? String(mat.unit_weight) : "",
+              ptsCode: mat.pts_code || mat.pst_code || mat.hsn_code || "",
+              materialGroup: currentGroup,
+              materialType: currentType,
+              prefix: mat.prefix || (currentGroup ? DEFAULT_PREFIXES[currentGroup] || "" : ""),
               details: mat.details || "",
               remarks: mat.remarks || "",
             });
@@ -98,16 +98,16 @@ export default function CreateMaterial() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    if (name === "materialType") {
+    if (name === "materialGroup") {
       setForm((prev) => {
-        const prevDefault = DEFAULT_PREFIXES[prev.materialType] || "";
+        const prevDefault = DEFAULT_PREFIXES[prev.materialGroup] || "";
         const shouldAutoSetPrefix = !prev.prefix || prev.prefix === prevDefault;
         const newPrefix = shouldAutoSetPrefix
           ? (DEFAULT_PREFIXES[value] || "")
           : prev.prefix;
         return {
           ...prev,
-          materialType: value,
+          materialGroup: value,
           prefix: newPrefix,
         };
       });
@@ -130,8 +130,8 @@ export default function CreateMaterial() {
       return;
     }
 
-    if (form.materialType && !form.prefix.trim()) {
-      toast.error(`${form.materialType} Prefix is required.`);
+    if (form.materialGroup && !form.prefix.trim()) {
+      toast.error(`${form.materialGroup} Prefix is required.`);
       return;
     }
 
@@ -142,12 +142,11 @@ export default function CreateMaterial() {
         prefix: form.prefix ? form.prefix.trim().toUpperCase() : null,
         materialName: form.materialName.trim(),
         unitId: form.unitId ? Number(form.unitId) : null,
-        hsnCode: form.hsnCode.trim() || null,
+        ptsCode: form.ptsCode.trim() || null,
+        pstCode: form.ptsCode.trim() || null,
+        hsnCode: form.ptsCode.trim() || null,
+        materialGroup: form.materialGroup || null,
         materialType: form.materialType || null,
-        gstPercent: form.gstPercent.trim() || null,
-        selfVal: form.selfVal !== "" ? Number(form.selfVal) : null,
-        purchaseVal: form.purchaseVal !== "" ? Number(form.purchaseVal) : null,
-        unitWeight: form.unitWeight !== "" ? Number(form.unitWeight) : null,
         details: form.details.trim() || null,
         remarks: form.remarks.trim() || null,
       };
@@ -264,17 +263,35 @@ export default function CreateMaterial() {
                 </select>
               </div>
 
-              {/* HSN Code */}
+              {/* PTS Code */}
               <div>
-                <label className={labelCls}>HSN Code</label>
+                <label className={labelCls}>PTS Code</label>
                 <input
                   type="text"
-                  name="hsnCode"
-                  value={form.hsnCode}
+                  name="ptsCode"
+                  value={form.ptsCode}
                   onChange={handleChange}
-                  placeholder="Enter HSN code"
+                  placeholder="Enter PTS code"
                   className={inputCls}
                 />
+              </div>
+
+              {/* Material Group */}
+              <div>
+                <label className={labelCls}>Material Group</label>
+                <select
+                  name="materialGroup"
+                  value={form.materialGroup}
+                  onChange={handleChange}
+                  className={inputCls}
+                >
+                  <option value="">— Select Material Group —</option>
+                  {materialGroups.map((g) => (
+                    <option key={g.id} value={g.material_group_name || g.material_type_name}>
+                      {g.material_group_name || g.material_type_name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Material Type */}
@@ -295,18 +312,18 @@ export default function CreateMaterial() {
                 </select>
               </div>
 
-              {/* Prefix (Appears when Material Type is selected) */}
-              {form.materialType && (
+              {/* Prefix (Appears when Material Group is selected) */}
+              {form.materialGroup && (
                 <div>
                   <label className={labelCls}>
-                    {form.materialType} Prefix <span className="text-rose-500">*</span>
+                    {form.materialGroup} Prefix <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
                     name="prefix"
                     value={form.prefix}
                     onChange={handleChange}
-                    placeholder={`e.g. ${DEFAULT_PREFIXES[form.materialType] || "FG"}`}
+                    placeholder={`e.g. ${DEFAULT_PREFIXES[form.materialGroup] || "FG"}`}
                     maxLength={10}
                     className={`${inputCls} font-mono uppercase`}
                     required
@@ -316,65 +333,6 @@ export default function CreateMaterial() {
                   </p>
                 </div>
               )}
-
-              {/* Moulds Selection (Conditional) */}
-
-
-              {/* GST % */}
-              <div>
-                <label className={labelCls}>GST %</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  name="gstPercent"
-                  value={form.gstPercent}
-                  onChange={handleChange}
-                  placeholder="e.g. 18"
-                  className={inputCls}
-                />
-              </div>
-
-              {/* Self Val */}
-              <div>
-                <label className={labelCls}>Self Val</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  name="selfVal"
-                  value={form.selfVal}
-                  onChange={handleChange}
-                  placeholder="0.00"
-                  className={inputCls}
-                />
-              </div>
-
-              {/* Purchase Val */}
-              <div>
-                <label className={labelCls}>Purchase Val</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  name="purchaseVal"
-                  value={form.purchaseVal}
-                  onChange={handleChange}
-                  placeholder="0.00"
-                  className={inputCls}
-                />
-              </div>
-
-              {/* Unit Weight */}
-              <div>
-                <label className={labelCls}>Unit Weight</label>
-                <input
-                  type="number"
-                  step="0.0001"
-                  name="unitWeight"
-                  value={form.unitWeight}
-                  onChange={handleChange}
-                  placeholder="0.0000"
-                  className={inputCls}
-                />
-              </div>
 
               {/* Details — full width */}
               <div className="sm:col-span-2">

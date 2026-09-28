@@ -174,7 +174,7 @@ export default function DispatchMaster() {
                                     <span className="font-bold text-slate-800">{formatDate(viewItem.dispatch_date)}</span>
                                 </div>
                                 <div>
-                                    <span className="text-xs text-slate-400 block uppercase tracking-wider font-semibold">Material Type</span>
+                                    <span className="text-xs text-slate-400 block uppercase tracking-wider font-semibold">Material Group</span>
                                     <span className="font-semibold text-slate-700">{viewItem.material_type || "—"}</span>
                                 </div>
                             </div>

@@ -1,60 +1,29 @@
 const db = require('../config/db.js');
 
-const SYSTEM_MATERIAL_TYPES = [
-    'Finished Goods',
-    'Semi Finished Goods',
-    'Raw Materials',
-];
-
 const createMaterialTypesTable = async () => {
-    const query = `
-        CREATE TABLE IF NOT EXISTS material_types (
-            id                 INT AUTO_INCREMENT PRIMARY KEY,
-            material_type_name VARCHAR(100) NOT NULL UNIQUE,
-            is_system          TINYINT(1) DEFAULT 0,
-            added_by           INT NOT NULL,
-            device_id          VARCHAR(255),
-            created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE CASCADE
-        )
-    `;
-    await db.execute(query);
-    console.log('Material types table ready');
-};
-
-const seedSystemMaterialTypes = async () => {
     try {
-        const [users] = await db.execute('SELECT id FROM users ORDER BY id ASC LIMIT 1');
-        if (users.length === 0) {
-            console.log('No users found. Skipping system material types seeding.');
-            return;
-        }
-        const adminId = users[0].id;
-
-        for (const typeName of SYSTEM_MATERIAL_TYPES) {
-            await db.execute(
-                `INSERT IGNORE INTO material_types (material_type_name, is_system, added_by) VALUES (?, 1, ?)`,
-                [typeName, adminId]
-            );
-        }
-
-        const placeholders = SYSTEM_MATERIAL_TYPES.map(() => '?').join(', ');
-        await db.execute(
-            `DELETE FROM material_types WHERE is_system = 1 AND material_type_name NOT IN (${placeholders})`,
-            SYSTEM_MATERIAL_TYPES
-        );
-
-        console.log('System material types seeded and cleaned up successfully');
-    } catch (error) {
-        console.error('Error seeding system material types:', error);
+        const query = `
+            CREATE TABLE IF NOT EXISTS material_types (
+                id                 INT AUTO_INCREMENT PRIMARY KEY,
+                material_type_name VARCHAR(100) NOT NULL UNIQUE,
+                added_by           INT NOT NULL,
+                device_id          VARCHAR(255),
+                created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE CASCADE
+            )
+        `;
+        await db.execute(query);
+        console.log('Material types table ready');
+    } catch (err) {
+        console.error('Error creating material_types table:', err);
     }
 };
 
 const createMaterialType = async (materialTypeName, addedBy, deviceId) => {
     const query = `
-        INSERT INTO material_types (material_type_name, is_system, added_by, device_id)
-        VALUES (?, 0, ?, ?)
+        INSERT INTO material_types (material_type_name, added_by, device_id)
+        VALUES (?, ?, ?)
     `;
     const [results] = await db.execute(query, [materialTypeName, addedBy, deviceId]);
     return results;
@@ -65,13 +34,13 @@ const getAllMaterialTypes = async () => {
         SELECT
             mt.id,
             mt.material_type_name,
-            mt.is_system,
             COALESCE(u.name, 'Unknown') AS added_by_name,
             mt.device_id,
-            mt.created_at
+            mt.created_at,
+            mt.updated_at
         FROM material_types mt
         LEFT JOIN users u ON mt.added_by = u.id
-        ORDER BY mt.is_system DESC, mt.created_at ASC
+        ORDER BY mt.created_at DESC
     `;
     const [results] = await db.execute(query);
     return results;
@@ -101,7 +70,6 @@ const deleteMaterialType = async (id) => {
 
 module.exports = {
     createMaterialTypesTable,
-    seedSystemMaterialTypes,
     createMaterialType,
     getAllMaterialTypes,
     getMaterialTypeById,

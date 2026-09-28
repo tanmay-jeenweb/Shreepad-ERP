@@ -445,14 +445,14 @@ export default function CreateMaterialAdd() {
 
                                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
                                             <div>
-                                                <label className={itemLabelCls}>Material Type <span className="text-rose-500">*</span></label>
+                                                <label className={itemLabelCls}>Material Group <span className="text-rose-500">*</span></label>
                                                 <select
                                                     value={item.material_type}
                                                     required
                                                     onChange={(e) => handleItemChange(idx, "material_type", e.target.value)}
                                                     className={itemInputCls}
                                                 >
-                                                    <option value="">Select Type</option>
+                                                    <option value="">Select Group</option>
                                                     {materialTypes.map(t => (
                                                         <option key={t} value={t}>{t}</option>
                                                     ))}

@@ -67,7 +67,12 @@ export function PermissionProvider({ children }) {
         const user = JSON.parse(localStorage.getItem("user") || "null");
         if (user && user.role === "admin") return true;
 
-        const perm = permissions[masterName];
+        let perm = permissions[masterName];
+        if (!perm && masterName === "material_group") {
+            perm = permissions["material_type"];
+        } else if (!perm && masterName === "material_type") {
+            perm = permissions["material_group"];
+        }
         if (!perm) return false;
 
         return !!perm[action];

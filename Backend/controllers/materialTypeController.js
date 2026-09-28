@@ -87,13 +87,6 @@ const updateMaterialTypeController = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Material type not found' });
         }
 
-        if (beforeData.is_system) {
-            return res.status(403).json({
-                success: false,
-                message: 'System material types cannot be edited',
-            });
-        }
-
         await updateMaterialType(id, materialTypeName.trim());
 
         await createAuditLog(
@@ -128,13 +121,6 @@ const deleteMaterialTypeController = async (req, res) => {
 
         if (!beforeData) {
             return res.status(404).json({ success: false, message: 'Material type not found' });
-        }
-
-        if (beforeData.is_system) {
-            return res.status(403).json({
-                success: false,
-                message: 'System material types cannot be deleted',
-            });
         }
 
         await deleteMaterialType(id);

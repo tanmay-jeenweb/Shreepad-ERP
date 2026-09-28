@@ -100,9 +100,9 @@ const verifyPermission = (masterName, action) => {
             const query = `
                 SELECT ${column} AS permitted 
                 FROM user_type_permissions 
-                WHERE user_type_id = ? AND master_name = ?
+                WHERE user_type_id = ? AND (master_name = ? OR (master_name = 'material_type' AND ? = 'material_group') OR (master_name = 'material_group' AND ? = 'material_type'))
             `;
-            const [permRows] = await db.execute(query, [userTypeId, masterName]);
+            const [permRows] = await db.execute(query, [userTypeId, masterName, masterName, masterName]);
 
             if (permRows.length > 0 && permRows[0].permitted === 1) {
                 return next();

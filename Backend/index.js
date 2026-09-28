@@ -11,6 +11,7 @@ const userTypeMasterRoutes = require("./routes/userTypeMasterRoutes.js");
 const locationRoutes = require("./routes/locationRoutes.js");
 const machineRoutes = require("./routes/machineRoutes.js");
 const userPreferenceRoutes = require("./routes/userPreferenceRoutes.js");
+const materialGroupRoutes = require("./routes/materialGroupRoutes.js");
 const materialTypeRoutes = require("./routes/materialTypeRoutes.js");
 const unitRoutes = require("./routes/unitRoutes.js");
 const materialRoutes = require("./routes/materialRoutes.js");
@@ -38,7 +39,8 @@ const { createMachinesTable, ensureMachineColumns } = require("./models/machineM
 const { createUserTypesTable, createUserTypePermissionsTable } = require("./models/userTypeModel.js");
 const { createAuditLogsTable } = require("./models/auditLogModel.js");
 const { createUserPreferencesTable } = require("./models/userPreferenceModel.js");
-const { createMaterialTypesTable, seedSystemMaterialTypes } = require("./models/materialTypeModel.js");
+const { createMaterialGroupsTable, seedSystemMaterialGroups } = require("./models/materialGroupModel.js");
+const { createMaterialTypesTable } = require("./models/materialTypeModel.js");
 const { createUnitsTable } = require("./models/unitModel.js");
 const { createMaterialsTable, ensureMaterialColumns } = require("./models/materialModel.js");
 const { createBOMTable } = require("./models/bomModel.js");
@@ -92,6 +94,7 @@ app.use(["/api/usertypes", "/usertypes"], userTypeMasterRoutes);
 app.use(["/api/locations", "/locations"], locationRoutes);
 app.use(["/api/machines", "/machines"], machineRoutes);
 app.use(["/api/table-preferences", "/table-preferences"], userPreferenceRoutes);
+app.use(["/api/material-groups", "/material-groups"], materialGroupRoutes);
 app.use(["/api/material-types", "/material-types"], materialTypeRoutes);
 app.use(["/api/units", "/units"], unitRoutes);
 app.use(["/api/materials", "/materials"], materialRoutes);
@@ -137,21 +140,13 @@ const startServer = async () => {
         await createMachinesTable();
         await ensureMachineColumns();
         await createUserPreferencesTable();
+        await createMaterialGroupsTable();
+        await seedSystemMaterialGroups();
         await createMaterialTypesTable();
-        await seedSystemMaterialTypes();
         await createUnitsTable();
         await createProcessMastersTable();
         await createMaterialsTable();
         await ensureMaterialColumns();
-
-        // Cleanup material_groups table if exists
-        try {
-            const db = require("./config/db.js");
-            await db.execute("DROP TABLE IF EXISTS material_groups");
-            console.log("Cleaned up material_groups table");
-        } catch (dropErr) {
-            console.error("Error dropping material_groups table:", dropErr.message);
-        }
 
         await createBOMTable();
         await createTermsAndConditionsTable();

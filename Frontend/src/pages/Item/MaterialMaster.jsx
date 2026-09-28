@@ -115,22 +115,23 @@ export default function MaterialMaster() {
           ),
       },
       {
-        key: "hsn_code",
-        label: "HSN Code",
+        key: "pts_code",
+        label: "PTS Code",
         minWidth: "100px",
         render: (row) =>
-          row.hsn_code ? (
-            <span className="text-slate-700 font-mono text-sm">{row.hsn_code}</span>
+          (row.pts_code || row.pst_code || row.hsn_code) ? (
+            <span className="text-slate-700 font-mono text-sm">{row.pts_code || row.pst_code || row.hsn_code}</span>
           ) : (
             <span className="text-slate-400 italic text-xs">—</span>
           ),
       },
       {
-        key: "material_type",
-        label: "Material Type",
+        key: "material_group",
+        label: "Material Group",
         minWidth: "160px",
         render: (row) => {
-          if (!row.material_type)
+          const groupName = row.material_group;
+          if (!groupName)
             return <span className="text-slate-400 italic text-xs">—</span>;
           const colors = {
             "Finished Goods": "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -147,59 +148,22 @@ export default function MaterialMaster() {
           return (
             <span
               className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
-                colors[row.material_type] || "bg-slate-100 text-slate-600"
+                colors[groupName] || "bg-slate-100 text-slate-600"
               }`}
             >
-              {row.material_type}
+              {groupName}
             </span>
           );
         },
       },
       {
-        key: "gst_percent",
-        label: "GST %",
-        minWidth: "80px",
+        key: "material_type",
+        label: "Material Type",
+        minWidth: "150px",
         render: (row) =>
-          row.gst_percent ? (
-            <span className="text-slate-700">{row.gst_percent}</span>
-          ) : (
-            <span className="text-slate-400 italic text-xs">—</span>
-          ),
-      },
-      {
-        key: "self_val",
-        label: "Self Val",
-        minWidth: "100px",
-        render: (row) =>
-          row.self_val !== null && row.self_val !== undefined ? (
-            <span className="text-slate-700 font-mono text-sm">
-              {Number(row.self_val).toFixed(2)}
-            </span>
-          ) : (
-            <span className="text-slate-400 italic text-xs">—</span>
-          ),
-      },
-      {
-        key: "purchase_val",
-        label: "Purchase Val",
-        minWidth: "110px",
-        render: (row) =>
-          row.purchase_val !== null && row.purchase_val !== undefined ? (
-            <span className="text-slate-700 font-mono text-sm">
-              {Number(row.purchase_val).toFixed(2)}
-            </span>
-          ) : (
-            <span className="text-slate-400 italic text-xs">—</span>
-          ),
-      },
-      {
-        key: "unit_weight",
-        label: "Unit Weight",
-        minWidth: "100px",
-        render: (row) =>
-          row.unit_weight !== null && row.unit_weight !== undefined ? (
-            <span className="text-slate-700 font-mono text-sm">
-              {Number(row.unit_weight).toFixed(4)}
+          row.material_type ? (
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border bg-indigo-50 text-indigo-700 border-indigo-200">
+              {row.material_type}
             </span>
           ) : (
             <span className="text-slate-400 italic text-xs">—</span>

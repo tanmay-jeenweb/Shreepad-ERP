@@ -208,13 +208,22 @@ export default function Navbar({ title }) {
             desc: "Register & monitor machine operations"
         },
         {
-            name: "Material Type Master",
-            path: "/admin/material-types",
-            masterKey: "material_type",
+            name: "Material Group Master",
+            path: "/admin/material-groups",
+            masterKey: "material_group",
             icon: "fa-solid fa-tags",
             color: "bg-indigo-50 text-indigo-600 border border-indigo-100/50",
             activeColor: "bg-indigo-100 text-indigo-700",
-            desc: "Manage material types and classifications"
+            desc: "Manage material groups and classifications"
+        },
+        {
+            name: "Material Type Master",
+            path: "/admin/material-types",
+            masterKey: "material_type",
+            icon: "fa-solid fa-tag",
+            color: "bg-blue-50 text-blue-600 border border-blue-100/50",
+            activeColor: "bg-blue-100 text-blue-700",
+            desc: "Manage material types"
         },
         {
             name: "Unit Master",

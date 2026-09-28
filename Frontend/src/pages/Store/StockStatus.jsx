@@ -85,7 +85,7 @@ export default function StockStatus() {
         },
         {
             key: "material_type",
-            label: "Material Type",
+            label: "Material Group",
             minWidth: "140px",
             render: (row) => (
                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
@@ -157,15 +157,15 @@ export default function StockStatus() {
                         Filter Stock Status
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                        {/* Material Type Filter */}
+                        {/* Material Group Filter */}
                         <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Material Type</label>
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Material Group</label>
                             <select
                                 value={filters.material_type}
                                 onChange={(e) => setFilters(prev => ({ ...prev, material_type: e.target.value, material_id: "" }))}
                                 className="h-10 px-3 border border-slate-300 rounded-lg text-sm bg-slate-50 text-slate-700 outline-none focus:border-indigo-600 focus:bg-white transition-colors"
                             >
-                                <option value="">All Types</option>
+                                <option value="">All Groups</option>
                                 {materialTypes.map((t, idx) => (
                                     <option key={idx} value={t}>{t}</option>
                                 ))}
