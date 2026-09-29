@@ -223,22 +223,36 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                                     <td className="px-3 py-2 text-sm whitespace-nowrap text-center">
                                                         {canReadBOM ? (
                                                             (workOrder.status === 'Started' || workOrder.status === 'Completed') ? (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => {
-                                                                        onClose();
-                                                                        navigate(`/production/workshop-entry/${item.id}`);
-                                                                    }}
-                                                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-all cursor-pointer"
-                                                                    title="Open Workshop Entry"
-                                                                >
-                                                                    <i className="fa-solid fa-screwdriver-wrench text-[10px]"></i>
-                                                                    Workshop Entry
-                                                                </button>
+                                                                <div className="flex items-center justify-center gap-1.5">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            onClose();
+                                                                            navigate(`/production/job-card/${item.id}`);
+                                                                        }}
+                                                                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-all cursor-pointer"
+                                                                        title="Open Job Card"
+                                                                    >
+                                                                        <i className="fa-solid fa-id-card-clip text-[10px]"></i>
+                                                                        Job Card
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            onClose();
+                                                                            navigate(`/production/workshop-entry/${item.id}`);
+                                                                        }}
+                                                                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg shadow-xs transition-all cursor-pointer"
+                                                                        title="Open Workshop Entry"
+                                                                    >
+                                                                        <i className="fa-solid fa-screwdriver-wrench text-[10px]"></i>
+                                                                        Workshop
+                                                                    </button>
+                                                                </div>
                                                             ) : (
                                                                 <span
                                                                     className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-500 border border-slate-200"
-                                                                    title="Work order must be started to open Workshop Entry"
+                                                                    title="Work order must be started to open Job Card / Workshop Entry"
                                                                 >
                                                                     <i className="fa-regular fa-clock text-[10px]"></i>
                                                                     Unstarted

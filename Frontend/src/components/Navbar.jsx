@@ -363,10 +363,11 @@ export default function Navbar({ title }) {
     const availableProductionLinks = [
         { name: "Work Order", path: "/sales/work-orders", icon: "fa-solid fa-file-signature", masterKey: "work_order" },
         { name: "Bill of Material", path: "/production/bom", icon: "fa-solid fa-file-lines", masterKey: "bom" },
+        { name: "Job Card", path: "/production/job-card", icon: "fa-solid fa-id-card-clip", masterKey: "workshop_entry" },
         { name: "Workshop Entry", path: "/production/workshop-entry", icon: "fa-solid fa-screwdriver-wrench", masterKey: "workshop_entry" }
     ].filter(m => {
         if (isAdmin) return true;
-        if (m.name === "Workshop Entry") {
+        if (m.name === "Workshop Entry" || m.name === "Job Card") {
             return hasPermission("workshop_entry", "read") || hasPermission("bom", "read") || hasPermission("work_order", "read");
         }
         return hasPermission(m.masterKey, "read");

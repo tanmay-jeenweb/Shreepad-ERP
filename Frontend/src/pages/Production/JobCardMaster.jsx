@@ -4,7 +4,7 @@ import Navbar from "../../components/Navbar";
 import DataTable from "../../components/DataTable";
 import { getAllWorkshopEntries } from "../../api/workshopEntryApi";
 
-export default function WorkshopEntryMaster() {
+export default function JobCardMaster() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState([]);
@@ -17,8 +17,8 @@ export default function WorkshopEntryMaster() {
       const res = await getAllWorkshopEntries();
       setItems(res.data?.data || []);
     } catch (err) {
-      console.error("Failed to load workshop entries", err);
-      setError("Unable to load workshop entries");
+      console.error("Failed to load job card entries", err);
+      setError("Unable to load job card entries");
     } finally {
       setLoading(false);
     }
@@ -29,7 +29,7 @@ export default function WorkshopEntryMaster() {
   }, []);
 
   const displayItems = useMemo(() => {
-    return items.filter((it) => Number(it.production_quantity) > 0);
+    return items.filter((it) => Number(it.production_quantity || it.quantity || 0) > 0);
   }, [items]);
 
   const columns = useMemo(() => {
@@ -113,21 +113,21 @@ export default function WorkshopEntryMaster() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => navigate(`/production/workshop-entry/${row.work_order_item_id}`)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg shadow-sm bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer transition-all active:scale-95"
-              title="Open Workshop Entry Details"
+              onClick={() => navigate(`/production/job-card/${row.work_order_item_id}`)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg shadow-sm bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer transition-all active:scale-95"
+              title="Open Job Card"
             >
-              <i className="fa-solid fa-screwdriver-wrench text-xs"></i>
-              Workshop Entry
+              <i className="fa-solid fa-id-card-clip text-xs"></i>
+              Open Job Card
             </button>
             <button
               type="button"
-              onClick={() => navigate(`/production/job-card/${row.work_order_item_id}`)}
+              onClick={() => navigate(`/production/workshop-entry/${row.work_order_item_id}`)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg shadow-xs bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 cursor-pointer transition-all active:scale-95"
-              title="Open Unified Job Card"
+              title="Open Workshop Entry"
             >
-              <i className="fa-solid fa-id-card-clip text-xs"></i>
-              Job Card
+              <i className="fa-solid fa-screwdriver-wrench text-xs"></i>
+              Workshop
             </button>
           </div>
         ),
@@ -148,18 +148,18 @@ export default function WorkshopEntryMaster() {
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2.5">
-              <i className="fa-solid fa-screwdriver-wrench text-indigo-600 text-xl"></i>
-              Workshop Entry
+              <i className="fa-solid fa-id-card-clip text-indigo-600 text-xl"></i>
+              Job Card
             </h1>
             <p className="text-sm text-slate-500 mt-1 font-medium">
-              Displays active Started work orders for floor execution, raw material issues, and process tracking.
+              Complete manufacturing traveler sheet: Material Issue, Production Tracking, Material Return, and BOM Formulation.
             </p>
           </div>
         </div>
 
         <DataTable
-          tableId="workshop_entry_master"
-          title="Active Workshop Orders"
+          tableId="job_card_master"
+          title="Active Job Cards"
           data={displayItems}
           columns={columns}
           loading={loading}

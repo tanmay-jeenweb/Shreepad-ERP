@@ -51,6 +51,8 @@ import BillOfMaterial from "./pages/Production/BillOfMaterial";
 import CreateBOM from "./pages/Production/CreateBOM";
 import WorkshopEntryMaster from "./pages/Production/WorkshopEntryMaster";
 import WorkshopEntryDetails from "./pages/Production/WorkshopEntryDetails";
+import JobCardMaster from "./pages/Production/JobCardMaster";
+import JobCardDetails from "./pages/Production/JobCardDetails";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 import OrganizationDetails from "./pages/admin/organization/OrganizationDetails";
@@ -352,6 +354,8 @@ export default function AppRoutes() {
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="bom" requiredAction="read" />}>
                 <Route path="/production" element={<Navigate to="/production/workshop-entry" replace />} />
                 <Route path="/production/bom" element={<BillOfMaterial />} />
+                <Route path="/production/job-card" element={<JobCardMaster />} />
+                <Route path="/production/job-card/:workOrderItemId" element={<JobCardDetails />} />
                 <Route path="/production/workshop-entry" element={<WorkshopEntryMaster />} />
                 <Route path="/production/workshop-entry/:workOrderItemId" element={<WorkshopEntryDetails />} />
             </Route>

@@ -18,12 +18,12 @@ import toast from "react-hot-toast";
 import DateInput from "../../components/DateInput";
 import WorkshopRmIssueChit from "../../components/WorkshopRmIssueChit";
 
-export default function WorkshopEntryDetails() {
+export default function JobCardDetails() {
   const { workOrderItemId } = useParams();
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("production");
+  const [activeTab, setActiveTab] = useState("rm-issue");
 
   // Data states
   const [entryData, setEntryData] = useState(null);
@@ -127,7 +127,7 @@ export default function WorkshopEntryDetails() {
           setMachinesList(data.machines);
         }
       } else {
-        toast.error("Workshop entry not found");
+        toast.error("Job card details not found");
       }
 
       if (rmRes.status === "fulfilled") {
@@ -143,8 +143,8 @@ export default function WorkshopEntryDetails() {
         setMachinesList(mcRes.value.data.data);
       }
     } catch (err) {
-      console.error("Failed to load workshop details:", err);
-      toast.error(err.response?.data?.message || "Failed to load workshop details");
+      console.error("Failed to load job card details:", err);
+      toast.error(err.response?.data?.message || "Failed to load job card details");
     } finally {
       setLoading(false);
     }
@@ -430,7 +430,6 @@ export default function WorkshopEntryDetails() {
   const finishedGoodsQty = useMemo(() => {
     if (stageStats.length === 0) return 0;
     const lastStage = stageStats[stageStats.length - 1];
-    // Finished goods is strictly forward movements completed from the final stage (to_bom_process_id is null)
     return productionLogs
       .filter((l) => Number(l.bom_process_id) === Number(lastStage.id) && !l.to_bom_process_id && l.movement_type !== "revert")
       .reduce((sum, l) => sum + (parseFloat(l.quantity) || 0), 0);
@@ -446,7 +445,7 @@ export default function WorkshopEntryDetails() {
     return Math.min(100, Math.round((finishedGoodsQty / prodQtyNumber) * 100));
   }, [finishedGoodsQty, prodQtyNumber]);
 
-  // Eligible WIP stages for reverting (Only intermediate stages with stageNumber > 1. Stage 1 has no previous process, Finished Goods cannot move back)
+  // Eligible WIP stages for reverting
   const eligibleWipStages = useMemo(() => {
     return stageStats.filter((s) => s.stageNumber > 1);
   }, [stageStats]);
@@ -690,11 +689,11 @@ export default function WorkshopEntryDetails() {
   if (loading) {
     return (
       <div className="flex-1 flex flex-col bg-[#f8fafc] font-sans text-slate-900 min-h-screen">
-        <Navbar title="Workshop Entry" />
+        <Navbar title="Job Card" />
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="flex flex-col items-center gap-3">
             <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-slate-500 font-semibold text-sm">Loading Workshop Entry details...</p>
+            <p className="text-slate-500 font-semibold text-sm">Loading Job Card details...</p>
           </div>
         </div>
       </div>
@@ -704,15 +703,15 @@ export default function WorkshopEntryDetails() {
   if (!entryData) {
     return (
       <div className="flex-1 flex flex-col bg-[#f8fafc] font-sans text-slate-900 min-h-screen">
-        <Navbar title="Workshop Entry" />
+        <Navbar title="Job Card" />
         <main className="flex-1 flex flex-col w-full max-w-4xl mx-auto py-8 px-4 sm:px-6">
           <div className="bg-rose-50 border border-rose-200 text-rose-700 px-6 py-4 rounded-xl flex items-center justify-between">
-            <span>Workshop Entry details not found.</span>
+            <span>Job Card details not found.</span>
             <button
-              onClick={() => navigate("/production/workshop-entry")}
+              onClick={() => navigate("/production/job-card")}
               className="px-4 py-2 bg-rose-600 text-white text-xs font-bold rounded-lg hover:bg-rose-700 transition cursor-pointer"
             >
-              Back to Workshop Entries
+              Back to Job Cards
             </button>
           </div>
         </main>
@@ -722,7 +721,7 @@ export default function WorkshopEntryDetails() {
 
   return (
     <div className="flex-1 flex flex-col bg-[#f8fafc] font-sans text-slate-900 min-h-screen pb-16">
-      <Navbar title="Workshop Entry" />
+      <Navbar title="Job Card" />
 
       {/* CSS for chit label print mode */}
       <style>{`
@@ -753,11 +752,11 @@ export default function WorkshopEntryDetails() {
         {/* Navigation Top Bar */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link
-            to="/production/workshop-entry"
+            to="/production/job-card"
             className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors"
           >
             <i className="fa-solid fa-arrow-left text-xs"></i>
-            <span>Back to Workshop Entries</span>
+            <span>Back to Job Cards</span>
           </Link>
 
           <div className="flex items-center gap-2">
@@ -793,11 +792,11 @@ export default function WorkshopEntryDetails() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
             <div>
               <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">
-                Production Floor Entry
+                Manufacturing Traveler Sheet
               </span>
               <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2 mt-0.5">
-                <i className="fa-solid fa-screwdriver-wrench text-indigo-600"></i>
-                <span>Workshop Entry</span>
+                <i className="fa-solid fa-id-card-clip text-indigo-600"></i>
+                <span>Job Card</span>
               </h1>
             </div>
             {entryData.customer_name && (
@@ -838,15 +837,67 @@ export default function WorkshopEntryDetails() {
           </div>
         </div>
 
-        {/* Section Header */}
-        <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
-          <div className="flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 border-indigo-600 text-indigo-600 bg-indigo-50/50 rounded-t-lg">
+        {/* Section Tabs - All 4 together */}
+        <div className="flex items-center gap-2 border-b border-slate-200 overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setActiveTab("rm-issue")}
+            className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition cursor-pointer whitespace-nowrap ${activeTab === "rm-issue"
+                ? "border-indigo-600 text-indigo-600 bg-indigo-50/50 rounded-t-lg"
+                : "border-transparent text-slate-600 hover:text-slate-900"
+              }`}
+          >
+            <i className="fa-solid fa-arrow-up-from-bracket"></i>
+            <span>Raw Material Issues</span>
+            <span className="ml-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-indigo-100 text-indigo-800">
+              {entryData.rmIssues?.length || 0}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("production")}
+            className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition cursor-pointer whitespace-nowrap ${activeTab === "production"
+                ? "border-indigo-600 text-indigo-600 bg-indigo-50/50 rounded-t-lg"
+                : "border-transparent text-slate-600 hover:text-slate-900"
+              }`}
+          >
             <i className="fa-solid fa-industry"></i>
-            <span>Production Movement & Tracking</span>
+            <span>Production</span>
             <span className="ml-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-indigo-100 text-indigo-800">
               {productionLogs.length}
             </span>
-          </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("rm-return")}
+            className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition cursor-pointer whitespace-nowrap ${activeTab === "rm-return"
+                ? "border-indigo-600 text-indigo-600 bg-indigo-50/50 rounded-t-lg"
+                : "border-transparent text-slate-600 hover:text-slate-900"
+              }`}
+          >
+            <i className="fa-solid fa-arrow-rotate-left"></i>
+            <span>Raw Material Returns</span>
+            <span className="ml-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-200 text-slate-800">
+              {rmReturns.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("bom-specs")}
+            className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition cursor-pointer whitespace-nowrap ${activeTab === "bom-specs"
+                ? "border-indigo-600 text-indigo-600 bg-indigo-50/50 rounded-t-lg"
+                : "border-transparent text-slate-600 hover:text-slate-900"
+              }`}
+          >
+            <i className="fa-solid fa-boxes-stacked"></i>
+            <span>BOM Formulation & Processes</span>
+            <span className="ml-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-200 text-slate-800">
+              {rawMaterials.length}
+            </span>
+          </button>
         </div>
 
         {/* TAB 1: RM ISSUE & CHIT PRINTING */}
@@ -890,7 +941,7 @@ export default function WorkshopEntryDetails() {
                       <tr>
                         <td colSpan="5" className="py-8 text-center text-slate-400">
                           <i className="fa-solid fa-basket-shopping text-2xl mb-1 text-slate-300 block"></i>
-                          Click "+ Add Material" below to issue raw materials for this work order.
+                          Click "+ Add Material" below to issue raw materials for this job card.
                         </td>
                       </tr>
                     ) : (
@@ -1186,7 +1237,7 @@ export default function WorkshopEntryDetails() {
           </div>
         )}
 
-        {/* TAB: PRODUCTION MOVEMENT & TRACKING */}
+        {/* TAB 3: PRODUCTION MOVEMENT & TRACKING */}
         {activeTab === "production" && (
           <div className="space-y-6">
             {/* Top KPI Metrics Banner */}
@@ -1347,7 +1398,7 @@ export default function WorkshopEntryDetails() {
                           </div>
                         </div>
 
-                        {/* Available in Queue Metric (Focal Point) */}
+                        {/* Available in Queue Metric */}
                         <div className="my-4 p-3 bg-gradient-to-br from-indigo-50/70 to-slate-50 border border-indigo-100 rounded-xl">
                           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
                             Available In Queue
@@ -1395,7 +1446,6 @@ export default function WorkshopEntryDetails() {
                             )}
                           </button>
 
-                          {/* Revert Button: Available for stages > 1 (Stage 1 has no previous process stage) */}
                           {stage.stageNumber > 1 && (
                             <button
                               type="button"
@@ -1710,7 +1760,7 @@ export default function WorkshopEntryDetails() {
                                       ))}
                                     </select>
                                   </td>
-                                  <td className="py-2 px-2.5">
+                                  <td className="py-2.5 px-2.5">
                                     <select
                                       value={item.machine_id}
                                       onChange={(e) => handleMoveItemChange(idx, "machine_id", e.target.value)}
@@ -1724,7 +1774,7 @@ export default function WorkshopEntryDetails() {
                                       ))}
                                     </select>
                                   </td>
-                                  <td className="py-2 px-2.5">
+                                  <td className="py-2.5 px-2.5">
                                     <input
                                       type="number"
                                       step="any"
@@ -1736,7 +1786,7 @@ export default function WorkshopEntryDetails() {
                                       className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 text-right bg-white"
                                     />
                                   </td>
-                                  <td className="py-2 px-2.5">
+                                  <td className="py-2.5 px-2.5">
                                     <input
                                       type="text"
                                       value={item.remarks}
@@ -1745,7 +1795,7 @@ export default function WorkshopEntryDetails() {
                                       className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 bg-white"
                                     />
                                   </td>
-                                  <td className="py-2 px-2.5 text-center">
+                                  <td className="py-2.5 px-2.5 text-center">
                                     <button
                                       type="button"
                                       onClick={() => handleRemoveMoveItem(idx)}
@@ -1908,9 +1958,8 @@ export default function WorkshopEntryDetails() {
                   {/* Modal Body Form */}
                   <form onSubmit={handleRevertSubmit} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-3.5 text-xs flex flex-col justify-between">
                     <div className="space-y-3.5">
-                      {/* Grid for Stages: Source and Destination side-by-side on sm screens */}
+                      {/* Grid for Stages */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {/* Source Stage Selection */}
                         <div className="space-y-1">
                           <label className="block font-bold text-slate-700 text-[11px]">
                             From Stage (WIP) <span className="text-rose-500">*</span>
@@ -1930,7 +1979,6 @@ export default function WorkshopEntryDetails() {
                           </select>
                         </div>
 
-                        {/* Destination Previous Stage Selection */}
                         <div className="space-y-1">
                           <label className="block font-bold text-slate-700 text-[11px]">
                             To Previous Stage <span className="text-rose-500">*</span>
@@ -1979,7 +2027,6 @@ export default function WorkshopEntryDetails() {
 
                       {/* Quantity & Date Grid */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {/* Quantity Input with Quick Presets */}
                         <div className="space-y-1">
                           <label className="block font-bold text-slate-700 text-[11px]">
                             Quantity to Revert (Nos) <span className="text-rose-500">*</span>
@@ -1997,7 +2044,6 @@ export default function WorkshopEntryDetails() {
                             className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-600 transition disabled:bg-slate-100 disabled:text-slate-400"
                           />
 
-                          {/* Quick preset buttons */}
                           {revertFromStage && revertFromStage.availableQty > 0 && (
                             <div className="flex items-center gap-1.5 pt-0.5">
                               <span className="text-[10px] text-slate-400">Presets:</span>
@@ -2026,7 +2072,6 @@ export default function WorkshopEntryDetails() {
                           )}
                         </div>
 
-                        {/* Revert Date Input */}
                         <div className="space-y-1">
                           <label className="block font-bold text-slate-700 text-[11px]">
                             Revert Date <span className="text-rose-500">*</span>
@@ -2055,7 +2100,7 @@ export default function WorkshopEntryDetails() {
                       </div>
                     </div>
 
-                    {/* Modal Actions (Sticky bottom footer) */}
+                    {/* Modal Actions */}
                     <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 flex-shrink-0 mt-2">
                       <button
                         type="button"
@@ -2148,7 +2193,6 @@ export default function WorkshopEntryDetails() {
                     {/* Stage & Quantity Overview Banner */}
                     <div className="p-4 rounded-xl bg-gradient-to-r from-indigo-50/90 via-slate-50 to-indigo-50/60 border border-indigo-100/80 shadow-2xs">
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
-                        {/* Process Flow */}
                         <div className="sm:col-span-2 space-y-1">
                           <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block">
                             Process Movement Flow
@@ -2178,7 +2222,6 @@ export default function WorkshopEntryDetails() {
                           </div>
                         </div>
 
-                        {/* Total Movement Quantity */}
                         <div className="sm:text-right border-t sm:border-t-0 sm:border-l border-indigo-200/80 pt-2 sm:pt-0 sm:pl-4">
                           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
                             Total Movement Qty
@@ -2191,7 +2234,7 @@ export default function WorkshopEntryDetails() {
                       </div>
                     </div>
 
-                    {/* Overall Movement Remarks (if present) */}
+                    {/* Overall Movement Remarks */}
                     {selectedLogForDetails.remarks && selectedLogForDetails.remarks.trim() && (
                       <div className="p-3 bg-amber-50/80 border border-amber-200/80 rounded-xl flex items-start gap-2.5 text-xs text-amber-900 shadow-2xs">
                         <i className="fa-regular fa-comment-dots text-amber-600 text-sm mt-0.5 shrink-0"></i>
@@ -2354,9 +2397,124 @@ export default function WorkshopEntryDetails() {
           </div>
         )}
 
+        {/* TAB 4: BOM SPECS & PROCESSES */}
+        {activeTab === "bom-specs" && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Raw Materials Section */}
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-xs p-5 flex flex-col">
+              <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <i className="fa-solid fa-boxes-stacked text-indigo-600 text-sm"></i>
+                  <h2 className="text-sm font-bold text-slate-800">
+                    BOM Raw Material Formulation
+                  </h2>
+                </div>
+                <span className="text-[11px] font-bold text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
+                  {rawMaterials.length} {rawMaterials.length === 1 ? "Item" : "Items"}
+                </span>
+              </div>
 
+              {rawMaterials.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center py-8 text-center text-slate-400">
+                  <i className="fa-solid fa-box-open text-2xl mb-1.5 text-slate-300"></i>
+                  <p className="text-xs font-medium">No BOM raw materials configured for this product.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse bg-white rounded-lg overflow-hidden border border-slate-200 text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50">
+                        <th className="py-2 px-2.5">#</th>
+                        <th className="py-2 px-2.5">Material Name</th>
+                        <th className="py-2 px-2.5 text-right">BOM Qty</th>
+                        <th className="py-2 px-2.5 text-right">Total Req.</th>
+                        <th className="py-2 px-2.5 text-center">Unit</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {rawMaterials.map((rm, idx) => {
+                        const bomQty = Number(rm.bom_quantity) || 0;
+                        const totalReqQty = bomQty * prodQtyNumber;
+                        return (
+                          <tr key={rm.id || idx} className="hover:bg-slate-50/50 transition">
+                            <td className="py-2.5 px-2.5 font-semibold text-slate-400">{idx + 1}</td>
+                            <td className="py-2.5 px-2.5 font-semibold text-slate-800">
+                              <div>{rm.material_name}</div>
+                              {rm.material_code && (
+                                <span className="font-mono text-[10px] text-slate-400">
+                                  {rm.material_code}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-2.5 text-right font-medium text-slate-700">
+                              {bomQty.toFixed(4)}
+                            </td>
+                            <td className="py-2.5 px-2.5 text-right font-bold text-slate-900">
+                              {totalReqQty.toFixed(3)}
+                            </td>
+                            <td className="py-2.5 px-2.5 text-center font-medium text-slate-500">
+                              {rm.unit_name || "kg"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Processes Routing Section */}
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-xs p-5 flex flex-col">
+              <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <i className="fa-solid fa-gears text-indigo-600 text-sm"></i>
+                  <h2 className="text-sm font-bold text-slate-800">Processes Routing</h2>
+                </div>
+                <span className="text-[11px] font-bold text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
+                  {processes.length} {processes.length === 1 ? "Step" : "Steps"}
+                </span>
+              </div>
+
+              {processes.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center py-8 text-center text-slate-400">
+                  <i className="fa-solid fa-clock-rotate-left text-2xl mb-1.5 text-slate-300"></i>
+                  <p className="text-xs font-medium">No BOM processes configured for this product.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse bg-white rounded-lg overflow-hidden border border-slate-200 text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50">
+                        <th className="py-2 px-2.5">#</th>
+                        <th className="py-2 px-2.5">Process Name</th>
+                        <th className="py-2 px-2.5 text-right">Cycle Time</th>
+                        <th className="py-2 px-2.5 text-center">Unit</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {processes.map((proc, idx) => (
+                        <tr key={proc.id || idx} className="hover:bg-slate-50/50 transition">
+                          <td className="py-2.5 px-2.5 font-semibold text-slate-400">{idx + 1}</td>
+                          <td className="py-2.5 px-2.5 font-semibold text-slate-800">
+                            {proc.process_name || "—"}
+                          </td>
+                          <td className="py-2.5 px-2.5 text-right font-bold text-slate-900">
+                            {proc.time != null ? Number(proc.time).toFixed(2) : "—"}
+                          </td>
+                          <td className="py-2.5 px-2.5 text-center font-medium text-slate-500">
+                            {proc.unit_name || "Sec"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
 }
-

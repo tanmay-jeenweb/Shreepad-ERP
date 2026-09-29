@@ -27,6 +27,7 @@ export default function EditWorkOrder() {
   };
 
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [workOrder, setWorkOrder] = useState(null);
   const [workOrderStatus, setWorkOrderStatus] = useState("Draft");
   const [workOrderDate, setWorkOrderDate] = useState("");
@@ -100,8 +101,11 @@ export default function EditWorkOrder() {
 
         // Reconstruct Finished Goods vs Raw Materials
         const allItems = woData.items || [];
-        const finishedGoodItems = allItems.filter(it => Number(it.production_quantity) > 0);
-        const rawMaterialItems = allItems.filter(it => Number(it.production_quantity) === 0);
+        const finishedGoodItems = allItems.filter(it => {
+          if (it.production_quantity != null && Number(it.production_quantity) > 0) return true;
+          return !(it.remarks || "").startsWith("Allocated raw material for");
+        });
+        const rawMaterialItems = allItems.filter(it => !finishedGoodItems.includes(it));
 
         const mappedItems = await Promise.all(
           finishedGoodItems.map(async (fgItem) => {
@@ -110,8 +114,8 @@ export default function EditWorkOrder() {
               material_id: fgItem.material_id,
               material_name: fgItem.material_name || "Unknown Material",
               material_code: fgItem.material_code || "",
-              quantity: Number(fgItem.quantity),
-              production_quantity: Number(fgItem.production_quantity),
+              quantity: Number(fgItem.quantity) || 1,
+              production_quantity: Number(fgItem.production_quantity) || Number(fgItem.quantity) || 1,
               exp_delivery_date: fgItem.exp_delivery_date ? fgItem.exp_delivery_date.substring(0, 10) : "",
               batch_no: fgItem.batch_no || "",
               remarks: fgItem.remarks || "",
