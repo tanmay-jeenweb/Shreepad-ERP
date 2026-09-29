@@ -149,7 +149,24 @@ const createWorkOrdersTable = async () => {
 
     await db.execute(headerQuery);
     await db.execute(itemsQuery);
+    await createWorkOrderBatchesTable();
     console.log('Work Order tables ready');
+};
+
+const createWorkOrderBatchesTable = async () => {
+    const query = `
+        CREATE TABLE IF NOT EXISTS work_order_batches (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            work_order_id INT NOT NULL,
+            batch_no VARCHAR(100) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (work_order_id) REFERENCES work_orders(id) ON DELETE CASCADE,
+            INDEX idx_wob_work_order_id (work_order_id)
+        )
+    `;
+    await db.execute(query);
+    console.log('Work Order Batches table ready');
 };
 
 const ensureWorkOrderColumns = async () => {
@@ -418,6 +435,29 @@ const createWorkOrder = async (customerId, workOrderDate, addedBy, deviceId, ite
             const workOrderItemId = itemResult.insertId;
         }
 
+        // Process Work Order Batches
+        const fgItems = itemsArray.filter(it => !(it.remarks || '').startsWith('Allocated raw material for'));
+        const totalProductQuantity = (fgItems.length > 0 ? fgItems : itemsArray)
+            .reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
+
+        const rawBatches = Array.isArray(headerData.batches) ? headerData.batches : [];
+        const cleanBatches = rawBatches
+            .map(b => (typeof b === 'string' ? b : b?.batch_no))
+            .filter(b => b && String(b).trim() !== '')
+            .map(b => String(b).trim());
+
+        const uniqueBatches = [...new Set(cleanBatches)];
+        if (uniqueBatches.length > totalProductQuantity) {
+            throw new Error(`Maximum number of batch numbers (${uniqueBatches.length}) cannot be more than the total quantities specified for all products (${totalProductQuantity}).`);
+        }
+
+        for (const bNo of uniqueBatches) {
+            await connection.execute(
+                `INSERT INTO work_order_batches (work_order_id, batch_no) VALUES (?, ?)`,
+                [workOrderId, bNo]
+            );
+        }
+
         await connection.commit();
         return { workOrderId, workOrderNo };
     } catch (error) {
@@ -442,7 +482,8 @@ const getAllWorkOrders = async (includeHeld = false) => {
             woi.quantity AS wo_quantity,
             woi.production_quantity,
             woi.exp_delivery_date,
-            woi.batch_no,
+            COALESCE(wob.batch_numbers, woi.batch_no) AS batch_no,
+            wob.batch_numbers AS all_batches,
             woi.actual_delivery_date,
             woi.remarks,
             woi.machine_id,
@@ -497,6 +538,11 @@ const getAllWorkOrders = async (includeHeld = false) => {
             FROM machine_schedule
             GROUP BY work_order_item_id
         ) sched ON woi.id = sched.work_order_item_id
+        LEFT JOIN (
+            SELECT work_order_id, GROUP_CONCAT(batch_no ORDER BY id SEPARATOR ', ') AS batch_numbers
+            FROM work_order_batches
+            GROUP BY work_order_id
+        ) wob ON wo.id = wob.work_order_id
         WHERE 1 = 1 ${includeHeld ? '' : 'AND COALESCE(woi.is_on_hold, 0) = 0'}
         ORDER BY wo.work_order_no DESC, wo.created_at DESC
     `;
@@ -538,6 +584,12 @@ const getWorkOrderById = async (id) => {
     `;
     const [items] = await db.execute(itemsQuery, [id]);
     workOrder.items = items;
+
+    const [batchRows] = await db.execute(
+        `SELECT id, batch_no FROM work_order_batches WHERE work_order_id = ? ORDER BY id ASC`,
+        [id]
+    );
+    workOrder.batches = batchRows.map(b => b.batch_no);
     return workOrder;
 };
 
@@ -765,6 +817,36 @@ const updateWorkOrder = async (workOrderId, workOrderDate, itemsArray, headerDat
             );
         }
 
+        // 6. Process Work Order Batches
+        if (headerData && headerData.batches !== undefined) {
+            const [allItemsAfter] = await connection.execute(
+                `SELECT quantity, remarks, production_quantity FROM work_order_items WHERE work_order_id = ?`,
+                [workOrderId]
+            );
+            const fgItemsAfter = (allItemsAfter || []).filter(it => !(it.remarks || '').startsWith('Allocated raw material for'));
+            const totalProductQuantity = (fgItemsAfter.length > 0 ? fgItemsAfter : allItemsAfter || [])
+                .reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
+
+            const rawBatches = Array.isArray(headerData.batches) ? headerData.batches : [];
+            const cleanBatches = rawBatches
+                .map(b => (typeof b === 'string' ? b : b?.batch_no))
+                .filter(b => b && String(b).trim() !== '')
+                .map(b => String(b).trim());
+
+            const uniqueBatches = [...new Set(cleanBatches)];
+            if (uniqueBatches.length > totalProductQuantity) {
+                throw new Error(`Maximum number of batch numbers (${uniqueBatches.length}) cannot be more than the total quantities specified for all products (${totalProductQuantity}).`);
+            }
+
+            await connection.execute(`DELETE FROM work_order_batches WHERE work_order_id = ?`, [workOrderId]);
+            for (const bNo of uniqueBatches) {
+                await connection.execute(
+                    `INSERT INTO work_order_batches (work_order_id, batch_no) VALUES (?, ?)`,
+                    [workOrderId, bNo]
+                );
+            }
+        }
+
         await connection.commit();
         return true;
     } catch (error) {
@@ -815,5 +897,6 @@ module.exports = {
     updateWorkOrderItemRemarks,
     updateWorkOrder,
     ensureWorkOrderStatusColumns,
-    ensureWorkOrderHeaderColumns
+    ensureWorkOrderHeaderColumns,
+    createWorkOrderBatchesTable
 };

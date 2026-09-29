@@ -146,7 +146,8 @@ const addWorkshopProductionLogController = async (req, res) => {
             quantity,
             items,
             log_date,
-            remarks
+            remarks,
+            batch_no
         } = req.body;
 
         if (!work_order_item_id || !bom_process_id || (!quantity && (!items || items.length === 0))) {
@@ -164,7 +165,8 @@ const addWorkshopProductionLogController = async (req, res) => {
             log_date,
             remarks,
             added_by: addedBy,
-            device_id: deviceId
+            device_id: deviceId,
+            batch_no: batch_no ? String(batch_no).trim() : null
         });
 
         await createAuditLog(

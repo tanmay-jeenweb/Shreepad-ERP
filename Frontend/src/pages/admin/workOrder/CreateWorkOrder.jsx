@@ -31,6 +31,31 @@ export default function CreateWorkOrder() {
   const [inspectionId, setInspectionId] = useState("");
   const [remark, setRemark] = useState("");
   const [items, setItems] = useState([]);
+  const [batches, setBatches] = useState([]);
+  const [newBatchInput, setNewBatchInput] = useState("");
+
+  const totalProductQty = useMemo(() => {
+    return items.reduce((sum, it) => sum + (parseFloat(it.quantity) || 0), 0);
+  }, [items]);
+
+  const handleAddBatch = () => {
+    const val = newBatchInput.trim();
+    if (!val) return;
+    if (batches.includes(val)) {
+      toast.error(`Batch "${val}" is already added.`);
+      return;
+    }
+    if (batches.length >= totalProductQty) {
+      toast.error(`Maximum batch count reached (${totalProductQty} for total product quantity).`);
+      return;
+    }
+    setBatches([...batches, val]);
+    setNewBatchInput("");
+  };
+
+  const handleRemoveBatch = (index) => {
+    setBatches(batches.filter((_, i) => i !== index));
+  };
 
   // Modal states for work order configuration (common modal on save)
   const [showModal, setShowModal] = useState(false);
@@ -236,7 +261,6 @@ export default function CreateWorkOrder() {
   const isItemConfigured = (item) => {
     if (!item) return false;
     return Boolean(
-      item.batch_no ||
       item.exp_delivery_date ||
       item.remarks ||
       (item.production_quantity !== undefined && Number(item.production_quantity) !== Number(item.quantity)) ||
@@ -423,6 +447,12 @@ export default function CreateWorkOrder() {
         }
       }
 
+      if (batches.length > totalProductQty) {
+        toast.error(`Total batches (${batches.length}) cannot exceed total quantity (${totalProductQty}) of all products.`);
+        setLoading(false);
+        return;
+      }
+
       const payload = {
         customer_id: Number(selectedCustomerId),
         work_order_date: workOrderDate,
@@ -431,7 +461,8 @@ export default function CreateWorkOrder() {
         project_name: projectName.trim() || null,
         inspection_id: inspectionId ? Number(inspectionId) : null,
         remark: remark.trim() || null,
-        items: flattenedItems
+        items: flattenedItems,
+        batches: batches
       };
 
       await createWorkOrder(payload);
@@ -586,6 +617,80 @@ export default function CreateWorkOrder() {
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500"
                 />
               </div>
+
+              {/* Section: Batch Numbers */}
+              <div className="md:col-span-2 pt-3 border-t border-slate-100 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                    <i className="fa-solid fa-tags text-[#369ACF]"></i>
+                    Batch Numbers
+                    <span className="text-[11px] font-normal text-slate-400 normal-case">
+                      (Max allowed: {totalProductQty} {totalProductQty === 1 ? 'batch' : 'batches'} based on total quantities specified for all products)
+                    </span>
+                  </label>
+                  <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
+                    batches.length > totalProductQty
+                      ? 'bg-rose-50 text-rose-600 border border-rose-200'
+                      : batches.length === totalProductQty && totalProductQty > 0
+                      ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                      : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                  }`}>
+                    {batches.length} / {totalProductQty} Batches
+                  </span>
+                </div>
+
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Enter batch number and click Add or press Enter (e.g. BATCH-001)"
+                    value={newBatchInput}
+                    onChange={(e) => setNewBatchInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddBatch();
+                      }
+                    }}
+                    disabled={batches.length >= totalProductQty}
+                    className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500 disabled:bg-slate-50 disabled:text-slate-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddBatch}
+                    disabled={!newBatchInput.trim() || batches.length >= totalProductQty}
+                    className="px-4 py-2 bg-[#369ACF] hover:bg-[#2b82b0] disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer disabled:cursor-not-allowed shadow-2xs"
+                  >
+                    <i className="fa-solid fa-plus text-[10px]"></i>
+                    <span>Add Batch</span>
+                  </button>
+                </div>
+
+                {batches.length > 0 ? (
+                  <div className="flex flex-wrap gap-2 p-3 bg-slate-50/70 border border-slate-200 rounded-xl">
+                    {batches.map((batch, idx) => (
+                      <span
+                        key={idx}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-mono font-bold text-slate-800 shadow-2xs group"
+                      >
+                        <i className="fa-solid fa-tag text-[9px] text-[#369ACF]"></i>
+                        <span>{batch}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveBatch(idx)}
+                          className="text-slate-400 hover:text-rose-500 transition cursor-pointer ml-0.5"
+                          title="Remove batch"
+                        >
+                          <i className="fa-solid fa-xmark text-[11px]"></i>
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400 italic">
+                    No batch numbers added yet. You can add up to {totalProductQty} batch {totalProductQty === 1 ? 'number' : 'numbers'} for this work order.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
@@ -613,7 +718,6 @@ export default function CreateWorkOrder() {
                     <th className="px-6 py-3.5 w-32 text-right">Quantity *</th>
                     <th className="px-6 py-3.5 w-32 text-right">Prod Qty</th>
                     <th className="px-6 py-3.5">Exp Deliv.</th>
-                    <th className="px-6 py-3.5">Batch No</th>
                     <th className="px-6 py-3.5 text-center">Action</th>
                   </tr>
                 </thead>
@@ -644,9 +748,6 @@ export default function CreateWorkOrder() {
 
                         <td className="px-6 py-4 text-xs font-mono">
                           {item.exp_delivery_date ? formatDate(item.exp_delivery_date) : <span className="text-slate-400 italic">Not Set</span>}
-                        </td>
-                        <td className="px-6 py-4 font-mono text-xs">
-                          {item.batch_no || <span className="text-slate-400 italic">Not Set</span>}
                         </td>
                         <td className="px-6 py-4 text-center">
                           <div className="flex items-center justify-center gap-2">
@@ -843,18 +944,7 @@ export default function CreateWorkOrder() {
                           />
                         </div>
 
-                        <div>
-                          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                            Batch Number
-                          </label>
-                          <input
-                            type="text"
-                            placeholder="Enter batch number"
-                            value={item.batch_no || ""}
-                            onChange={(e) => handleModalItemChange(idx, "batch_no", e.target.value)}
-                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500"
-                          />
-                        </div>
+
 
                         <div>
                           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">

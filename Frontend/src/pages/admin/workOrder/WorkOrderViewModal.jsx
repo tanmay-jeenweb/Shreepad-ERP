@@ -173,6 +173,26 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                             {formatDateTime(workOrder.created_at)}
                                         </p>
                                     </div>
+
+                                    {Array.isArray(workOrder.batches) && workOrder.batches.length > 0 && (
+                                        <div className="sm:col-span-4 pt-3 border-t border-slate-200/80">
+                                            <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                                <i className="fa-solid fa-tags text-[#369ACF]"></i>
+                                                <span>Work Order Batch Numbers ({workOrder.batches.length})</span>
+                                            </p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {workOrder.batches.map((batchName, bIdx) => (
+                                                    <span
+                                                        key={bIdx}
+                                                        className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-mono font-bold text-slate-800 shadow-2xs"
+                                                    >
+                                                        <i className="fa-solid fa-tag text-[9px] text-[#369ACF]"></i>
+                                                        <span>{batchName}</span>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -196,7 +216,6 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                                 <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Order Qty</th>
                                                 <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Prod Qty</th>
                                                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Exp. Delivery</th>
-                                                <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Batch No.</th>
                                                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Remarks</th>
                                                 <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Actions</th>
                                             </tr>
@@ -216,7 +235,6 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                                     <td className="px-3 py-2 text-sm text-slate-700 whitespace-nowrap font-mono text-xs">
                                                         {formatDate(item.exp_delivery_date)}
                                                     </td>
-                                                    <td className="px-3 py-2 text-sm text-slate-800 font-mono text-xs">{item.batch_no || "—"}</td>
                                                     <td className="px-3 py-2 text-sm text-slate-500 max-w-[150px] truncate" title={item.remarks}>
                                                         {item.remarks || "—"}
                                                     </td>

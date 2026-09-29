@@ -11,7 +11,8 @@ const addWorkOrder = async (req, res) => {
             purchase_order_date,
             project_name,
             inspection_id,
-            remark
+            remark,
+            batches
         } = req.body;
         const addedBy = req.user.id;
         const deviceId = req.headers['device-id'] || null;
@@ -36,7 +37,8 @@ const addWorkOrder = async (req, res) => {
                 purchase_order_date,
                 project_name,
                 inspection_id,
-                remark
+                remark,
+                batches
             }
         );
 
@@ -224,7 +226,8 @@ const updateWorkOrderController = async (req, res) => {
             purchase_order_date,
             project_name,
             inspection_id,
-            remark
+            remark,
+            batches
         } = req.body;
 
         if (!work_order_date || !items || !Array.isArray(items) || items.length === 0) {
@@ -239,7 +242,8 @@ const updateWorkOrderController = async (req, res) => {
             purchase_order_date,
             project_name,
             inspection_id,
-            remark
+            remark,
+            batches
         });
 
         return res.status(200).json({

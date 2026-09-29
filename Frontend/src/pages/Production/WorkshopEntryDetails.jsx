@@ -52,6 +52,9 @@ export default function WorkshopEntryDetails() {
   ]);
   const [moveDate, setMoveDate] = useState(new Date().toISOString().split("T")[0]);
   const [moveRemarks, setMoveRemarks] = useState("");
+  const [selectedBatch, setSelectedBatch] = useState("");
+  const [customBatchInput, setCustomBatchInput] = useState("");
+  const [isCustomBatch, setIsCustomBatch] = useState(false);
   const [movingProduction, setMovingProduction] = useState(false);
   const [deletingLogId, setDeletingLogId] = useState(null);
   const [selectedLogForDetails, setSelectedLogForDetails] = useState(null);
@@ -500,6 +503,19 @@ export default function WorkshopEntryDetails() {
     ]);
     setMoveDate(new Date().toISOString().split("T")[0]);
     setMoveRemarks("");
+
+    const batches = entryData?.work_order_batches || [];
+    if (batches.length > 0) {
+      setSelectedBatch(batches[0]);
+      setIsCustomBatch(false);
+    } else if (entryData?.batch_no) {
+      setSelectedBatch(entryData.batch_no);
+      setIsCustomBatch(false);
+    } else {
+      setSelectedBatch("");
+      setIsCustomBatch(true);
+    }
+    setCustomBatchInput("");
     setMoveModalOpen(true);
   };
 
@@ -538,6 +554,15 @@ export default function WorkshopEntryDetails() {
       );
     }
 
+    const isMovingToFG = selectedStage.nextStageName === "Finished Goods" || !selectedStage.nextProc;
+    let finalBatch = "";
+    if (isMovingToFG) {
+      finalBatch = (isCustomBatch ? customBatchInput : selectedBatch)?.trim();
+      if (!finalBatch) {
+        return toast.error("Please select or enter a Batch Number for Finished Goods.");
+      }
+    }
+
     try {
       setMovingProduction(true);
       const res = await addProductionLog({
@@ -552,6 +577,7 @@ export default function WorkshopEntryDetails() {
         })),
         log_date: moveDate,
         remarks: moveRemarks.trim(),
+        batch_no: isMovingToFG ? finalBatch : undefined,
       });
 
       toast.success(res.data?.message || "Quantity moved successfully!");
@@ -823,7 +849,17 @@ export default function WorkshopEntryDetails() {
                 Batch No.
               </span>
               <span className="font-mono font-bold text-slate-900 text-sm block">
-                {entryData.batch_no || "—"}
+                {Array.isArray(entryData.work_order_batches) && entryData.work_order_batches.length > 0 ? (
+                  <span className="flex flex-wrap gap-1">
+                    {entryData.work_order_batches.map((b, i) => (
+                      <span key={i} className="px-1.5 py-0.5 bg-white border border-slate-200 rounded text-xs">
+                        {b}
+                      </span>
+                    ))}
+                  </span>
+                ) : (
+                  entryData.batch_no || "—"
+                )}
               </span>
             </div>
 
@@ -1491,10 +1527,18 @@ export default function WorkshopEntryDetails() {
                                   {log.to_process_name}
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 text-emerald-700 font-black">
-                                  <i className="fa-solid fa-circle-check text-[11px]"></i>
-                                  Finished Goods
-                                </span>
+                                <div className="inline-flex flex-col gap-0.5">
+                                  <span className="inline-flex items-center gap-1 text-emerald-700 font-black">
+                                    <i className="fa-solid fa-circle-check text-[11px]"></i>
+                                    Finished Goods
+                                  </span>
+                                  {log.batch_no && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 w-fit">
+                                      <i className="fa-solid fa-tag text-[8px]"></i>
+                                      {log.batch_no}
+                                    </span>
+                                  )}
+                                </div>
                               )}
                             </td>
                             <td
@@ -1808,6 +1852,104 @@ export default function WorkshopEntryDetails() {
                           </div>
                         )}
                       </div>
+
+                      {/* Finished Goods Batch Number Selection */}
+                      {(selectedStage.nextStageName === "Finished Goods" || !selectedStage.nextProc) && (
+                        <div className="p-3.5 rounded-xl bg-gradient-to-r from-emerald-50/70 via-white to-emerald-50/50 border border-emerald-200 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="block font-bold text-emerald-950 text-[12px] flex items-center gap-1.5">
+                              <i className="fa-solid fa-tag text-emerald-600 text-xs"></i>
+                              <span>Finished Goods Batch Number</span>
+                              <span className="text-rose-500">*</span>
+                            </label>
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full">
+                              Required for Stock Entry
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500">
+                            Select which batch this completed production belongs to. The Stock Status and Stock Book will be updated under this batch number.
+                          </p>
+
+                          {entryData?.work_order_batches && entryData.work_order_batches.length > 0 ? (
+                            <div className="space-y-2 pt-1">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {entryData.work_order_batches.map((batchName, bIdx) => (
+                                  <label
+                                    key={bIdx}
+                                    onClick={() => {
+                                      setSelectedBatch(batchName);
+                                      setIsCustomBatch(false);
+                                    }}
+                                    className={`flex items-center gap-2.5 p-2.5 rounded-xl border transition cursor-pointer text-xs ${
+                                      !isCustomBatch && selectedBatch === batchName
+                                        ? "border-emerald-500 bg-emerald-50 text-emerald-900 font-bold shadow-xs"
+                                        : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                                    }`}
+                                  >
+                                    <input
+                                      type="radio"
+                                      name="fg_batch_selection"
+                                      checked={!isCustomBatch && selectedBatch === batchName}
+                                      onChange={() => {
+                                        setSelectedBatch(batchName);
+                                        setIsCustomBatch(false);
+                                      }}
+                                      className="text-emerald-600 focus:ring-emerald-500"
+                                    />
+                                    <span className="font-mono text-xs">{batchName}</span>
+                                  </label>
+                                ))}
+
+                                <label
+                                  onClick={() => setIsCustomBatch(true)}
+                                  className={`flex items-center gap-2.5 p-2.5 rounded-xl border transition cursor-pointer text-xs ${
+                                    isCustomBatch
+                                      ? "border-emerald-500 bg-emerald-50 text-emerald-900 font-bold shadow-xs"
+                                      : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                                  }`}
+                                >
+                                  <input
+                                    type="radio"
+                                    name="fg_batch_selection"
+                                    checked={isCustomBatch}
+                                    onChange={() => setIsCustomBatch(true)}
+                                    className="text-emerald-600 focus:ring-emerald-500"
+                                  />
+                                  <span>Custom / Other Batch</span>
+                                </label>
+                              </div>
+
+                              {isCustomBatch && (
+                                <div className="pt-1.5">
+                                  <input
+                                    type="text"
+                                    placeholder="Enter custom batch number (e.g. BATCH-001)"
+                                    value={customBatchInput}
+                                    onChange={(e) => setCustomBatchInput(e.target.value)}
+                                    required={isCustomBatch}
+                                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 bg-white"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="pt-1">
+                              <input
+                                type="text"
+                                placeholder="Enter batch number for this production (e.g. BATCH-001)"
+                                value={customBatchInput || selectedBatch}
+                                onChange={(e) => {
+                                  setCustomBatchInput(e.target.value);
+                                  setSelectedBatch(e.target.value);
+                                  setIsCustomBatch(true);
+                                }}
+                                required
+                                className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 bg-white"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {/* Date & Overall Remarks */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">

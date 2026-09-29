@@ -154,7 +154,7 @@ const getStockBookRecords = async (filters = {}) => {
                 wpl.log_date AS date,
                 'FG Produced' AS particular,
                 m.material_name AS product,
-                COALESCE(woi.batch_no, CONCAT('WO-', LPAD(wo.work_order_no, 4, '0'))) AS internal_batch_number,
+                COALESCE(NULLIF(wpl.batch_no, ''), woi.batch_no, CONCAT('WO-', LPAD(wo.work_order_no, 4, '0'))) AS internal_batch_number,
                 '' AS supplier_batch_number,
                 COALESCE(c.customer_name, 'In-House Production') AS vendor_name,
                 NULL AS job_party_name,

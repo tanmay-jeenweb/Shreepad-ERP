@@ -69,6 +69,7 @@ const createWorkshopProductionLogsTable = async () => {
             to_bom_process_id INT DEFAULT NULL,
             quantity DECIMAL(15,4) NOT NULL,
             movement_type VARCHAR(20) NOT NULL DEFAULT 'forward',
+            batch_no VARCHAR(100) DEFAULT NULL,
             log_date DATE NOT NULL,
             remarks TEXT DEFAULT NULL,
             added_by INT NOT NULL,
@@ -96,6 +97,19 @@ const ensureWorkshopProductionLogColumns = async () => {
         if (col.length === 0) {
             await db.execute(`ALTER TABLE workshop_production_logs ADD COLUMN movement_type VARCHAR(20) NOT NULL DEFAULT 'forward'`);
             console.log('Added movement_type column to workshop_production_logs');
+        }
+
+        const [batchCol] = await db.execute(`
+            SELECT COLUMN_NAME 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+              AND TABLE_NAME = 'workshop_production_logs' 
+              AND COLUMN_NAME = 'batch_no'
+        `);
+
+        if (batchCol.length === 0) {
+            await db.execute(`ALTER TABLE workshop_production_logs ADD COLUMN batch_no VARCHAR(100) DEFAULT NULL`);
+            console.log('Added batch_no column to workshop_production_logs');
         }
     } catch (err) {
         console.error('Error ensuring workshop_production_logs columns:', err.message || err);
@@ -176,7 +190,7 @@ const getAllWorkshopEntries = async () => {
         SELECT 
             woi.id AS work_order_item_id,
             woi.work_order_id,
-            woi.batch_no,
+            COALESCE(wob.batches, woi.batch_no) AS batch_no,
             woi.quantity,
             woi.production_quantity,
             wo.work_order_no,
@@ -192,6 +206,11 @@ const getAllWorkshopEntries = async () => {
         JOIN materials m ON woi.material_id = m.id
         LEFT JOIN customer_master c ON wo.customer_id = c.id
         LEFT JOIN bill_of_materials bom ON m.id = bom.material_id
+        LEFT JOIN (
+            SELECT work_order_id, GROUP_CONCAT(batch_no ORDER BY id SEPARATOR ', ') AS batches
+            FROM work_order_batches
+            GROUP BY work_order_id
+        ) wob ON wo.id = wob.work_order_id
         LEFT JOIN (
             SELECT work_order_item_id, COUNT(*) AS issued_rm_count
             FROM workshop_rm_issues
@@ -236,6 +255,24 @@ const getWorkshopEntryByWorkOrderItemId = async (workOrderItemId) => {
     if (rows.length === 0) return null;
 
     const entry = rows[0];
+
+    // Fetch work order batches
+    let workOrderBatches = [];
+    try {
+        const [batchRows] = await db.execute(`
+            SELECT id, batch_no 
+            FROM work_order_batches 
+            WHERE work_order_id = ?
+            ORDER BY id ASC
+        `, [entry.work_order_id]);
+        workOrderBatches = batchRows.map(b => b.batch_no);
+    } catch (bErr) {
+        console.error("Error fetching work order batches:", bErr.message);
+    }
+    if (workOrderBatches.length === 0 && entry.batch_no) {
+        workOrderBatches = [entry.batch_no];
+    }
+    entry.work_order_batches = workOrderBatches;
 
     // 1. Fetch BOM raw materials
     let rawMaterials = [];
@@ -356,6 +393,7 @@ const getWorkshopEntryByWorkOrderItemId = async (workOrderItemId) => {
                 to_pm.process_name AS to_process_name,
                 wpl.quantity,
                 COALESCE(wpl.movement_type, 'forward') AS movement_type,
+                wpl.batch_no,
                 wpl.log_date,
                 wpl.remarks,
                 wpl.added_by,
@@ -595,7 +633,8 @@ const addWorkshopProductionLog = async ({
     log_date,
     remarks,
     added_by,
-    device_id
+    device_id,
+    batch_no
 }) => {
     let moveQty = Number(quantity);
 
@@ -677,6 +716,10 @@ const addWorkshopProductionLog = async ({
             throw new Error(`Cannot move ${moveQty} units. Only ${currentStat.available} units available in ${currentStage.process_name}.`);
         }
 
+        const effectiveBatchNo = (!nextStage)
+            ? ((batch_no && String(batch_no).trim()) || woiRows[0].batch_no || `WO-${String(woiRows[0].work_order_no).padStart(4, '0')}`)
+            : (batch_no ? String(batch_no).trim() : null);
+
         // 4. Insert production log
         const insertQuery = `
             INSERT INTO workshop_production_logs (
@@ -687,11 +730,12 @@ const addWorkshopProductionLog = async ({
                 to_bom_process_id,
                 quantity,
                 movement_type,
+                batch_no,
                 log_date,
                 remarks,
                 added_by,
                 device_id
-            ) VALUES (?, ?, ?, ?, ?, ?, 'forward', ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, 'forward', ?, ?, ?, ?, ?)
         `;
 
         const [insertResult] = await connection.execute(insertQuery, [
@@ -701,6 +745,7 @@ const addWorkshopProductionLog = async ({
             stageIndex + 1,
             nextStage ? nextStage.id : null,
             moveQty,
+            effectiveBatchNo,
             log_date || new Date().toISOString().split('T')[0],
             remarks || null,
             added_by,
@@ -737,13 +782,12 @@ const addWorkshopProductionLog = async ({
 
         // 7. If moving to Finished Goods (final process), update stock_status
         if (!nextStage) {
-            const batchNo = woiRows[0].batch_no || `WO-${String(woiRows[0].work_order_no).padStart(4, '0')}`;
             await upsertStockStatusForFinishedGoods(connection, {
                 work_order_item_id,
                 material_id: materialId,
                 material_name: woiRows[0].material_name,
                 material_type: woiRows[0].material_type || 'Finished Goods',
-                batch_no: batchNo,
+                batch_no: effectiveBatchNo,
                 quantity: moveQty,
                 customer_name: woiRows[0].customer_name || 'In-House Production'
             });
@@ -1005,9 +1049,10 @@ const deleteWorkshopProductionLog = async (logId) => {
         }
 
         // If this log moved forward to Finished Goods, roll back stock_status
-        if (targetLog.movement_type !== 'revert' && !targetLog.to_bom_process_id && batchNo) {
+        const batchToRollback = targetLog.batch_no || batchNo;
+        if (targetLog.movement_type !== 'revert' && !targetLog.to_bom_process_id && batchToRollback) {
             await rollbackStockStatusForFinishedGoods(connection, {
-                batch_no: batchNo,
+                batch_no: batchToRollback,
                 quantity: targetLog.quantity
             });
         }

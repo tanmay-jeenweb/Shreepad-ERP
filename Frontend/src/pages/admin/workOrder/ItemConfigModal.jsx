@@ -209,19 +209,6 @@ export default function ItemConfigModal({
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                  Batch Number
-                </label>
-                <input
-                  type="text"
-                  placeholder="Enter batch number"
-                  value={formData.batch_no || ""}
-                  onChange={(e) => handleFieldChange("batch_no", e.target.value)}
-                  disabled={disabled}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500 disabled:bg-slate-50"
-                />
-              </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
