@@ -374,8 +374,8 @@ export default function Navbar({ title }) {
     });
 
     const availableDispatchLinks = [
-        { name: "New Dispatch", path: "/dispatch/create", icon: "fa-solid fa-truck-fast", masterKey: "dispatch" },
-        { name: "Dispatch History", path: "/dispatch", icon: "fa-solid fa-clipboard-list", masterKey: "dispatch" }
+        { name: "Work Order Dispatches", path: "/dispatch", icon: "fa-solid fa-truck-fast", masterKey: "dispatch" },
+        { name: "Direct Stock Dispatch", path: "/dispatch/create", icon: "fa-solid fa-boxes-packing", masterKey: "dispatch" }
     ].filter(m => {
         if (isAdmin) return true;
         return hasPermission("dispatch", "read") || hasPermission("stock_book", "read") || hasPermission("stock_status", "read");

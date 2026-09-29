@@ -155,9 +155,9 @@ export default function CreateDispatch() {
                                 <i className="fa-solid fa-truck-fast text-lg"></i>
                             </span>
                             <div>
-                                <h1 className="text-2xl font-bold text-slate-900">New Material Dispatch</h1>
+                                <h1 className="text-2xl font-bold text-slate-900">Direct Stock Dispatch <span className="text-lg text-slate-500 font-normal">(Without WO)</span></h1>
                                 <p className="text-slate-500 text-sm mt-0.5">
-                                    Deduct material from Stock Status and log outward ledger movement in Stock Book.
+                                    Dispatch raw materials, trading goods, or manual stock created without a Work Order directly from Stock Status.
                                 </p>
                             </div>
                         </div>
@@ -167,7 +167,7 @@ export default function CreateDispatch() {
                         className="text-slate-600 hover:text-slate-900 font-medium text-sm flex items-center gap-1.5 transition-colors cursor-pointer px-3 py-2 rounded-lg hover:bg-slate-200/60"
                     >
                         <i className="fa-solid fa-arrow-left text-xs"></i>
-                        Dispatch History
+                        Work Order Dispatches & History
                     </button>
                 </div>
 

@@ -41,14 +41,17 @@ export default function StockBook() {
     const [loadingHistory, setLoadingHistory] = useState(false);
 
     const fetchRecords = async () => {
-        if (!filters.material_id || !filters.start_date || !filters.end_date) {
-            setRecords([]);
-            setLoading(false);
-            return;
-        }
         setLoading(true);
         try {
-            const res = await getStockBook(filters);
+            const activeFilters = {};
+            if (filters.material_type) activeFilters.material_type = filters.material_type;
+            if (filters.material_id) activeFilters.material_id = filters.material_id;
+            if (filters.vendor_id) activeFilters.vendor_id = filters.vendor_id;
+            if (filters.location_id) activeFilters.location_id = filters.location_id;
+            if (filters.start_date) activeFilters.start_date = filters.start_date;
+            if (filters.end_date) activeFilters.end_date = filters.end_date;
+
+            const res = await getStockBook(activeFilters);
             setRecords(res.data?.data || []);
         } catch (error) {
             console.error("Failed to fetch stock book records:", error);
@@ -84,12 +87,15 @@ export default function StockBook() {
         fetchRecords();
     }, [filters]);
 
-    // Filter materials dynamically based on selected material type
+    // Filter materials dynamically based on selected material type / group
     const filteredMaterials = useMemo(() => {
         if (!filters.material_type) return allMaterials;
-        return allMaterials.filter(
-            (m) => String(m.material_type).toLowerCase() === String(filters.material_type).toLowerCase()
-        );
+        const target = String(filters.material_type).trim().toLowerCase();
+        return allMaterials.filter((m) => {
+            const group = String(m.material_group || "").trim().toLowerCase();
+            const type = String(m.material_type || "").trim().toLowerCase();
+            return group === target || type === target;
+        });
     }, [allMaterials, filters.material_type]);
 
     const handleOpenIssueModal = (item) => {
@@ -291,13 +297,13 @@ export default function StockBook() {
 
                         {/* Material Filter */}
                         <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Material <span className="text-rose-500">*</span></label>
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Material</label>
                             <select
                                 value={filters.material_id}
                                 onChange={(e) => setFilters(prev => ({ ...prev, material_id: e.target.value }))}
                                 className="h-10 px-3 border border-slate-300 rounded-lg text-sm bg-slate-50 text-slate-700 outline-none focus:border-indigo-600 focus:bg-white transition-colors"
                             >
-                                <option value="">Select Material</option>
+                                <option value="">All Materials</option>
                                 {filteredMaterials.map(m => (
                                     <option key={m.id} value={m.id}>{m.material_name}</option>
                                 ))}
@@ -336,7 +342,7 @@ export default function StockBook() {
 
                         {/* Start Date */}
                         <div className="flex flex-col gap-1.5 w-full min-w-[130px]">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Start Date <span className="text-rose-500">*</span></label>
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Start Date</label>
                             <DateInput
                                 value={filters.start_date}
                                 onChange={(e) => setFilters(prev => ({ ...prev, start_date: e.target.value }))}
@@ -345,7 +351,7 @@ export default function StockBook() {
 
                         {/* End Date */}
                         <div className="flex flex-col gap-1.5 w-full min-w-[130px]">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">End Date <span className="text-rose-500">*</span></label>
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">End Date</label>
                             <DateInput
                                 value={filters.end_date}
                                 onChange={(e) => setFilters(prev => ({ ...prev, end_date: e.target.value }))}
@@ -374,29 +380,17 @@ export default function StockBook() {
                     )}
                 </div>
 
-                {/* Table or Empty State */}
-                {(!filters.material_id || !filters.start_date || !filters.end_date) ? (
-                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-12 text-center">
-                        <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl shadow-inner">
-                            <i className="fa-solid fa-filter"></i>
-                        </div>
-                        <h3 className="text-lg font-bold text-slate-800 mb-2">Select Required Filters</h3>
-                        <p className="text-sm text-slate-500 max-w-md mx-auto">
-                            Please select a <span className="font-semibold text-indigo-600">Material</span>, <span className="font-semibold text-indigo-600">Start Date</span>, and <span className="font-semibold text-indigo-600">End Date</span> to view the Stock Book ledger.
-                        </p>
-                    </div>
-                ) : (
-                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                        <DataTable
-                            tableId="stock_book_table"
-                            title="Stock Book Records"
-                            data={records}
-                            columns={columns}
-                            loading={loading}
-                            searchPlaceholder="Search particular, batch number, vendor, invoice..."
-                        />
-                    </div>
-                )}
+                {/* Table */}
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <DataTable
+                        tableId="stock_book_table"
+                        title="Stock Book Records"
+                        data={records}
+                        columns={columns}
+                        loading={loading}
+                        searchPlaceholder="Search particular, batch number, vendor, invoice..."
+                    />
+                </div>
             </main>
 
             {/* Issue Stock Modal */}

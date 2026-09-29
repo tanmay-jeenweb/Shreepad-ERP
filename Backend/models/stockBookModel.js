@@ -214,6 +214,10 @@ const getStockBookRecords = async (filters = {}) => {
         query += ` AND t.material_id = ?`;
         queryParams.push(filters.material_id);
     }
+    if (filters.vendor_id && filters.vendor_id !== 'all' && filters.vendor_id !== '') {
+        query += ` AND t.vendor_id = ?`;
+        queryParams.push(filters.vendor_id);
+    }
     if (filters.location_id && filters.location_id !== 'all' && filters.location_id !== '') {
         query += ` AND t.location_id = ?`;
         queryParams.push(filters.location_id);

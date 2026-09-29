@@ -12,6 +12,14 @@ export const createDispatch = (data) => {
     return apiClient.post('/dispatch', data);
 };
 
+export const getWorkOrdersForDispatch = (tab = 'ongoing') => {
+    return apiClient.get('/dispatch/work-orders', { params: { tab } });
+};
+
+export const createWorkOrderDispatch = (data) => {
+    return apiClient.post('/dispatch/work-order', data);
+};
+
 export const getDispatchById = (id) => {
     return apiClient.get(`/dispatch/${id}`);
 };

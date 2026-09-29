@@ -408,7 +408,8 @@ export default function JobCardDetails() {
       const totalIn = forwardIn + revertIn;
       const totalOut = forwardOut + revertOut;
       const available = Math.max(0, totalIn - totalOut);
-      const nextProc = index < processes.length - 1 ? processes[index + 1] : null;
+      const isLastStage = index === processes.length - 1;
+      const nextProc = isLastStage ? null : processes[index + 1];
 
       // All logs where this stage was the source
       const logsForStage = productionLogs.filter(
@@ -424,6 +425,9 @@ export default function JobCardDetails() {
         revertedOutQty: revertOut,
         availableQty: available,
         nextStageName: nextProc ? nextProc.process_name : "Finished Goods",
+        isLastStage: isLastStage,
+        nextProc: nextProc,
+        hasNextStage: !isLastStage,
         isComplete: totalIn > 0 && available === 0,
         logs: logsForStage,
       };
@@ -503,18 +507,24 @@ export default function JobCardDetails() {
     setMoveDate(new Date().toISOString().split("T")[0]);
     setMoveRemarks("");
 
-    const batches = entryData?.work_order_batches || [];
-    if (batches.length > 0) {
-      setSelectedBatch(batches[0]);
-      setIsCustomBatch(false);
-    } else if (entryData?.batch_no) {
-      setSelectedBatch(entryData.batch_no);
-      setIsCustomBatch(false);
+    const isLast = Boolean(stage.isLastStage || stage.nextStageName === "Finished Goods" || !stage.nextProc);
+    if (isLast) {
+      const batches = entryData?.work_order_batches || [];
+      if (batches.length > 0) {
+        setSelectedBatch(batches[0]);
+        setIsCustomBatch(false);
+        setCustomBatchInput("");
+      } else {
+        const defaultBatch = entryData?.batch_no || (entryData?.work_order_no ? `WO-${String(entryData.work_order_no).padStart(4, "0")}` : "BATCH-001");
+        setSelectedBatch(defaultBatch);
+        setCustomBatchInput(defaultBatch);
+        setIsCustomBatch(true);
+      }
     } else {
       setSelectedBatch("");
-      setIsCustomBatch(true);
+      setCustomBatchInput("");
+      setIsCustomBatch(false);
     }
-    setCustomBatchInput("");
     setMoveModalOpen(true);
   };
 
@@ -553,12 +563,15 @@ export default function JobCardDetails() {
       );
     }
 
-    const isMovingToFG = selectedStage.nextStageName === "Finished Goods" || !selectedStage.nextProc;
+    const isMovingToFG = Boolean(selectedStage.isLastStage || selectedStage.nextStageName === "Finished Goods");
     let finalBatch = "";
     if (isMovingToFG) {
       finalBatch = (isCustomBatch ? customBatchInput : selectedBatch)?.trim();
       if (!finalBatch) {
-        return toast.error("Please select or enter a Batch Number for Finished Goods.");
+        finalBatch = entryData?.batch_no || (entryData?.work_order_no ? `WO-${String(entryData.work_order_no).padStart(4, "0")}` : "BATCH-001");
+      }
+      if (!finalBatch) {
+        return toast.error("Please enter a Batch Number for Finished Goods.");
       }
     }
 
@@ -1903,8 +1916,8 @@ export default function JobCardDetails() {
                         )}
                       </div>
 
-                      {/* Finished Goods Batch Number Selection */}
-                      {(selectedStage.nextStageName === "Finished Goods" || !selectedStage.nextProc) && (
+                      {/* Finished Goods Batch Number Selection (Only for final process stage) */}
+                      {Boolean(selectedStage?.isLastStage || selectedStage?.nextStageName === "Finished Goods") && (
                         <div className="p-3.5 rounded-xl bg-gradient-to-r from-emerald-50/70 via-white to-emerald-50/50 border border-emerald-200 space-y-2">
                           <div className="flex items-center justify-between">
                             <label className="block font-bold text-emerald-950 text-[12px] flex items-center gap-1.5">
@@ -2046,7 +2059,11 @@ export default function JobCardDetails() {
                           totalMoveQuantity > selectedStage.availableQty ||
                           moveItems.some(it => !it.operator_id || !it.quantity || parseFloat(it.quantity) <= 0)
                         }
-                        className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-xs transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                        className={`px-5 py-2 text-white rounded-xl font-bold shadow-xs transition flex items-center gap-2 cursor-pointer disabled:opacity-50 ${
+                          Boolean(selectedStage?.isLastStage || selectedStage?.nextStageName === "Finished Goods")
+                            ? "bg-emerald-600 hover:bg-emerald-700"
+                            : "bg-indigo-600 hover:bg-indigo-700"
+                        }`}
                       >
                         {movingProduction ? (
                           <>
@@ -2056,7 +2073,11 @@ export default function JobCardDetails() {
                         ) : (
                           <>
                             <i className="fa-solid fa-check"></i>
-                            <span>Confirm & Move ({totalMoveQuantity.toLocaleString()} Nos)</span>
+                            <span>
+                              {Boolean(selectedStage?.isLastStage || selectedStage?.nextStageName === "Finished Goods")
+                                ? `Complete to Finished Goods (${totalMoveQuantity.toLocaleString()} Nos)`
+                                : `Confirm & Move (${totalMoveQuantity.toLocaleString()} Nos)`}
+                            </span>
                           </>
                         )}
                       </button>

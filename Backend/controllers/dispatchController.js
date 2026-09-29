@@ -119,8 +119,82 @@ const getDispatchById = async (req, res) => {
     }
 };
 
+const getWorkOrdersForDispatch = async (req, res) => {
+    try {
+        const tab = req.query.tab === 'completed' ? 'completed' : 'ongoing';
+        const records = await dispatchModel.getWorkOrdersForDispatch(tab);
+        return res.status(200).json({
+            success: true,
+            data: records
+        });
+    } catch (error) {
+        console.error('Error fetching work orders for dispatch:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to fetch work orders for dispatch'
+        });
+    }
+};
+
+const createWorkOrderDispatch = async (req, res) => {
+    try {
+        const {
+            work_order_item_id,
+            quantity,
+            dispatch_date,
+            party_name,
+            vehicle_no,
+            remarks,
+            internal_batch_number,
+            dispatch_no
+        } = req.body;
+
+        const addedBy = req.user?.id || 1;
+
+        if (!work_order_item_id) {
+            return res.status(400).json({
+                success: false,
+                message: 'Work order item ID is required'
+            });
+        }
+
+        const qty = parseFloat(quantity);
+        if (isNaN(qty) || qty <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Dispatch quantity must be greater than zero'
+            });
+        }
+
+        const result = await dispatchModel.createWorkOrderDispatch({
+            work_order_item_id,
+            quantity: qty,
+            dispatch_date,
+            party_name,
+            vehicle_no,
+            remarks,
+            internal_batch_number,
+            dispatch_no
+        }, addedBy);
+
+        return res.status(201).json({
+            success: true,
+            message: `Work Order WO-${String(result.work_order_no).padStart(4, '0')} finished goods (${result.quantity} ${result.unit}) dispatched successfully!`,
+            data: result
+        });
+    } catch (error) {
+        console.error('Error creating work order dispatch:', error);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Failed to dispatch work order finished goods'
+        });
+    }
+};
+
 module.exports = {
     createDispatch,
+    createWorkOrderDispatch,
+    getWorkOrdersForDispatch,
     getAllDispatches,
     getAvailableStockBatches,
     getDispatchById
