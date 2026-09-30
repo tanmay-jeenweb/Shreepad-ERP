@@ -334,12 +334,15 @@ const getAllStockStatus = async (typeFilter, filters = {}) => {
     const matType = filters.material_type || typeFilter;
     if (matType && matType !== 'all' && matType !== '') {
         if (matType === 'rm') {
-            whereClause += ` AND ss.material_type = 'Raw Materials'`;
+            whereClause += ` AND (ss.material_type = 'Raw Materials' OR m.material_group = 'Raw Materials')`;
         } else if (matType === 'general') {
-            whereClause += ` AND (ss.material_type != 'Raw Materials' OR ss.material_type IS NULL)`;
+            whereClause += ` AND (
+                (ss.material_type != 'Raw Materials' OR ss.material_type IS NULL)
+                AND (m.material_group != 'Raw Materials' OR m.material_group IS NULL)
+            )`;
         } else {
-            whereClause += ` AND ss.material_type = ?`;
-            params.push(matType);
+            whereClause += ` AND (ss.material_type = ? OR m.material_group = ? OR m.material_type = ?)`;
+            params.push(matType, matType, matType);
         }
     }
 
@@ -347,9 +350,13 @@ const getAllStockStatus = async (typeFilter, filters = {}) => {
         whereClause += ` AND ss.material_id = ?`;
         params.push(filters.material_id);
     }
+    if (filters.vendor_id && filters.vendor_id !== 'all' && filters.vendor_id !== '') {
+        whereClause += ` AND (ma.vendor_id = ? OR ss.party IN (SELECT vendor_name FROM vendor_master WHERE id = ?))`;
+        params.push(filters.vendor_id, filters.vendor_id);
+    }
     if (filters.location_id && filters.location_id !== 'all' && filters.location_id !== '') {
-        whereClause += ` AND (ma.location_id = ? OR r.location_id = ?)`;
-        params.push(filters.location_id, filters.location_id);
+        whereClause += ` AND (ma.location_id = ? OR r.location_id = ? OR ss.location IN (SELECT location_name FROM locations WHERE id = ?))`;
+        params.push(filters.location_id, filters.location_id, filters.location_id);
     }
     if (filters.start_date && filters.start_date !== '') {
         whereClause += ` AND COALESCE(ma.ma_date, r.return_date, ss.created_at) >= ?`;
@@ -367,8 +374,8 @@ const getAllStockStatus = async (typeFilter, filters = {}) => {
             COALESCE(mai.supplier_batch_number, '') AS supplier_batch_number,
             ss.party,
             ss.location,
-            ss.material_name,
-            ss.material_type,
+            COALESCE(m.material_name, ss.material_name) AS material_name,
+            COALESCE(m.material_group, ss.material_type) AS material_type,
             (COALESCE(r.quantity, ss.total_kg) - COALESCE(issue_agg.issued_qty, 0)) AS total_kg,
             ss.grn_id,
             ss.ma_id,

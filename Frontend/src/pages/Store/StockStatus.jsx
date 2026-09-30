@@ -71,9 +71,12 @@ export default function StockStatus() {
     // Filter displayed materials based on selected material type
     const filteredMaterials = useMemo(() => {
         if (!filters.material_type) return allMaterialsList;
-        return allMaterialsList.filter(
-            (m) => String(m.material_type).toLowerCase() === String(filters.material_type).toLowerCase()
-        );
+        const target = String(filters.material_type).trim().toLowerCase();
+        return allMaterialsList.filter((m) => {
+            const group = String(m.material_group || "").trim().toLowerCase();
+            const type = String(m.material_type || "").trim().toLowerCase();
+            return group === target || type === target;
+        });
     }, [allMaterialsList, filters.material_type]);
 
     const columns = useMemo(() => [
