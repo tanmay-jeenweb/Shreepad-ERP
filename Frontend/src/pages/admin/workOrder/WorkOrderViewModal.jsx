@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { getWorkOrderById } from "../../../api/workOrderApi";
+import { getWorkOrderById, getMaterialStock } from "../../../api/workOrderApi";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import { usePermission } from "../../../context/PermissionContext";
@@ -9,6 +9,7 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
     const { hasPermission } = usePermission();
     const canReadBOM = hasPermission("bom", "read");
     const [workOrder, setWorkOrder] = useState(null);
+    const [stockMap, setStockMap] = useState({});
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -17,7 +18,26 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
             setLoading(true);
             try {
                 const res = await getWorkOrderById(workOrderId);
-                setWorkOrder(res.data?.data);
+                const woData = res.data?.data;
+                setWorkOrder(woData);
+
+                if (woData?.items) {
+                    const fgItems = woData.items.filter(it => Number(it.production_quantity) > 0 || !it.remarks?.startsWith("Allocated raw material for"));
+                    const uniqueMatIds = [...new Set(fgItems.map(it => it.material_id).filter(Boolean))];
+                    const stockResults = {};
+                    await Promise.all(uniqueMatIds.map(async (mId) => {
+                        try {
+                            const sRes = await getMaterialStock(mId);
+                            stockResults[mId] = {
+                                stock: sRes.data?.stock ?? 0,
+                                unit_name: sRes.data?.unit_name || "Nos"
+                            };
+                        } catch (e) {
+                            console.error(`Failed to load stock for material ${mId}`, e);
+                        }
+                    }));
+                    setStockMap(stockResults);
+                }
             } catch (err) {
                 console.error("Failed to load work order details", err);
                 toast.error("Failed to load work order details");
@@ -192,6 +212,7 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                         <thead className="bg-slate-50">
                                             <tr>
                                                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Material</th>
+                                                <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Current Stock</th>
                                                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Job of Party</th>
                                                 <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Order Qty</th>
                                                 <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Prod Qty</th>
@@ -207,6 +228,14 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                                     <td className="px-3 py-2 text-sm text-slate-800">
                                                         <span className="font-semibold">{item.material_name}</span>
                                                         <span className="text-xs text-slate-400 block font-mono mt-0.5">Code: {item.material_code}</span>
+                                                    </td>
+                                                    <td className="px-3 py-2 text-sm text-right whitespace-nowrap">
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-bold text-xs bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                            <i className="fa-solid fa-boxes-stacked text-[10px] text-emerald-600"></i>
+                                                            {stockMap[item.material_id]?.stock !== undefined
+                                                                ? `${stockMap[item.material_id].stock} ${stockMap[item.material_id].unit_name || 'Nos'}`
+                                                                : '—'}
+                                                        </span>
                                                     </td>
                                                     <td className="px-3 py-2 text-sm text-slate-800 font-medium whitespace-nowrap">
                                                         {item.job_party_name || "—"}

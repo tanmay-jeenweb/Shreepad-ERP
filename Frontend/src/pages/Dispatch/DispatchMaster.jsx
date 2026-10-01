@@ -33,8 +33,17 @@ export default function DispatchMaster() {
                 getWorkOrdersForDispatch("ongoing"),
                 getWorkOrdersForDispatch("completed")
             ]);
-            setOngoingWorkOrders(ongoingRes.data?.data || []);
-            setCompletedWorkOrders(completedRes.data?.data || []);
+            const isFinishedProduct = (row) => {
+                if (row.remarks && String(row.remarks).toLowerCase().startsWith("allocated raw material")) {
+                    return false;
+                }
+                if (row.material_group && String(row.material_group).toLowerCase().includes("raw")) {
+                    return false;
+                }
+                return true;
+            };
+            setOngoingWorkOrders((ongoingRes.data?.data || []).filter(isFinishedProduct));
+            setCompletedWorkOrders((completedRes.data?.data || []).filter(isFinishedProduct));
         } catch (err) {
             console.error("Failed to load work orders for dispatch:", err);
             toast.error("Failed to load work orders");
@@ -82,7 +91,7 @@ export default function DispatchMaster() {
         {
             key: "work_order_no",
             label: "Work Order #",
-            minWidth: "150px",
+            minWidth: "140px",
             render: (row) => (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono bg-indigo-50 text-indigo-700 border border-indigo-200">
                     <i className="fa-solid fa-file-lines text-[11px]"></i>
@@ -99,7 +108,7 @@ export default function DispatchMaster() {
         {
             key: "customer_name",
             label: "Customer / Client",
-            minWidth: "190px",
+            minWidth: "180px",
             render: (row) => (
                 <div>
                     <span className="font-bold text-slate-800 text-sm block">{row.customer_name || "—"}</span>
@@ -112,7 +121,7 @@ export default function DispatchMaster() {
         {
             key: "material_name",
             label: "Finished Product",
-            minWidth: "210px",
+            minWidth: "200px",
             render: (row) => (
                 <div>
                     <span className="font-bold text-slate-900 text-sm block">{row.material_name}</span>
@@ -121,41 +130,27 @@ export default function DispatchMaster() {
             ),
         },
         {
-            key: "batch_no",
-            label: "Batch No.",
-            minWidth: "140px",
+            key: "order_quantity",
+            label: "Order Qty",
+            minWidth: "110px",
             render: (row) => {
-                const batches = (row.available_batches || []).filter(b => parseFloat(b.available_quantity) > 0);
-                if (batches.length > 1) {
-                    return (
-                        <span
-                            className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 text-blue-700 font-mono text-xs font-bold rounded border border-blue-200/80 cursor-help"
-                            title={batches.map(b => `${b.batch_no}: ${b.available_quantity} ${row.unit} available`).join('\n')}
-                        >
-                            <i className="fa-solid fa-layer-group text-[10px]"></i>
-                            {batches.length} Batches
-                        </span>
-                    );
-                }
-                if (batches.length === 1) {
-                    return (
-                        <span className="inline-flex items-center px-2 py-0.5 bg-blue-50 text-blue-700 font-mono text-xs font-semibold rounded border border-blue-200/80">
-                            {batches[0].batch_no}
-                        </span>
-                    );
-                }
-                return <span className="text-slate-400 font-mono text-xs">—</span>;
+                const order = parseFloat(row.order_quantity || row.target_quantity || 0);
+                return (
+                    <span className="font-extrabold text-slate-900 text-xs">
+                        {order % 1 === 0 ? order : order.toFixed(2)} {row.unit}
+                    </span>
+                );
             },
         },
         {
-            key: "target_quantity",
-            label: "Target Qty",
-            minWidth: "115px",
+            key: "production_quantity",
+            label: "Prod Qty",
+            minWidth: "100px",
             render: (row) => {
-                const target = parseFloat(row.target_quantity || 0);
+                const prod = parseFloat(row.production_quantity || 0);
                 return (
-                    <span className="font-bold text-slate-800 text-xs">
-                        {target % 1 === 0 ? target : target.toFixed(2)} {row.unit}
+                    <span className="font-bold text-indigo-700 text-xs">
+                        {prod % 1 === 0 ? prod : prod.toFixed(2)} {row.unit}
                     </span>
                 );
             },
@@ -166,8 +161,8 @@ export default function DispatchMaster() {
             minWidth: "145px",
             render: (row) => {
                 const completed = parseFloat(row.completed_quantity || 0);
-                const target = parseFloat(row.target_quantity || 0);
-                const percent = target > 0 ? Math.min(100, Math.round((completed / target) * 100)) : 0;
+                const order = parseFloat(row.order_quantity || row.target_quantity || 0);
+                const percent = order > 0 ? Math.min(100, Math.round((completed / order) * 100)) : 0;
                 return (
                     <div className="space-y-1">
                         <div className="flex items-center justify-between text-xs">
@@ -191,7 +186,7 @@ export default function DispatchMaster() {
         {
             key: "dispatched_quantity",
             label: "Dispatched",
-            minWidth: "115px",
+            minWidth: "110px",
             render: (row) => {
                 const disp = parseFloat(row.dispatched_quantity || 0);
                 return (
@@ -202,17 +197,50 @@ export default function DispatchMaster() {
             },
         },
         {
-            key: "available_to_dispatch",
-            label: "Available to Dispatch",
-            minWidth: "160px",
+            key: "remaining_order_quantity",
+            label: "Remaining Order",
+            minWidth: "135px",
             render: (row) => {
-                const avail = parseFloat(row.available_to_dispatch || 0);
+                const order = parseFloat(row.order_quantity || row.target_quantity || 0);
+                const disp = parseFloat(row.dispatched_quantity || 0);
+                const rem = parseFloat(row.remaining_order_quantity ?? Math.max(0, order - disp));
+                if (rem > 0) {
+                    return (
+                        <span className="inline-flex items-center gap-1 font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg text-xs">
+                            {rem % 1 === 0 ? rem : rem.toFixed(2)} {row.unit}
+                        </span>
+                    );
+                }
+                return (
+                    <span className="inline-flex items-center gap-1 font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg text-xs">
+                        <i className="fa-solid fa-check text-[10px]"></i>
+                        Fulfilled
+                    </span>
+                );
+            },
+        },
+        {
+            key: "available_to_dispatch",
+            label: "Available Stock",
+            minWidth: "155px",
+            render: (row) => {
+                const avail = parseFloat(row.available_to_dispatch || row.total_available_stock || 0);
+                const woBatches = row.wo_batches || [];
+                const stockBatches = row.stock_batches || [];
+
                 if (avail > 0) {
                     return (
-                        <span className="inline-flex items-center gap-1.5 font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-300/80 px-2.5 py-1 rounded-lg text-xs shadow-2xs">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                            {avail % 1 === 0 ? avail : avail.toFixed(2)} {row.unit}
-                        </span>
+                        <div className="space-y-0.5">
+                            <span className="inline-flex items-center gap-1.5 font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-300/80 px-2 py-0.5 rounded-lg text-xs shadow-2xs">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                {avail % 1 === 0 ? avail : avail.toFixed(2)} {row.unit}
+                            </span>
+                            {stockBatches.length > 0 && woBatches.length > 0 && (
+                                <span className="text-[10px] text-slate-400 block font-medium">
+                                    WO + Stock batches
+                                </span>
+                            )}
+                        </div>
                     );
                 }
                 return (
@@ -226,32 +254,46 @@ export default function DispatchMaster() {
         {
             key: "actions",
             label: "Dispatch Action",
-            minWidth: "140px",
+            minWidth: "135px",
             sortable: false,
             render: (row) => {
-                const avail = parseFloat(row.available_to_dispatch || 0);
+                const avail = parseFloat(row.available_to_dispatch || row.total_available_stock || 0);
+                const order = parseFloat(row.order_quantity || row.target_quantity || 0);
+                const disp = parseFloat(row.dispatched_quantity || 0);
+                const remaining = parseFloat(row.remaining_order_quantity ?? Math.max(0, order - disp));
+
+                if (remaining <= 0) {
+                    return (
+                        <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-lg border border-emerald-200">
+                            <i className="fa-solid fa-check text-[11px]"></i>
+                            Completed
+                        </span>
+                    );
+                }
+
                 if (avail > 0) {
                     return (
                         <button
                             type="button"
                             onClick={() => setDispatchingWoItem(row)}
                             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#369ACF] hover:bg-[#2884b2] text-white text-xs font-bold rounded-lg shadow-sm hover:shadow transition-all cursor-pointer"
-                            title={`Dispatch up to ${avail} ${row.unit}`}
+                            title={`Dispatch from available batches (Stock: ${avail} ${row.unit})`}
                         >
                             <i className="fa-solid fa-truck-fast text-[11px]"></i>
                             Dispatch
                         </button>
                     );
                 }
+
                 return (
                     <button
                         type="button"
                         disabled
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-400 text-xs font-semibold rounded-lg border border-slate-200 cursor-not-allowed"
-                        title="No finished goods currently available to dispatch. Complete production logs first."
+                        title="No finished goods or warehouse stock currently available to dispatch for this material."
                     >
                         <i className="fa-solid fa-lock text-[10px]"></i>
-                        0 Available
+                        0 Stock
                     </button>
                 );
             },
@@ -457,11 +499,11 @@ export default function DispatchMaster() {
                             <div className="flex items-center gap-2.5">
                                 <i className="fa-solid fa-circle-info text-amber-600 text-sm"></i>
                                 <span>
-                                    Displaying started work orders in active production. Finished goods can only be dispatched when completed quantities exist.
+                                    Displaying started work orders in active fulfillment. Finished goods can be dispatched from work order production batches and available warehouse inventory.
                                 </span>
                             </div>
                             <span className="font-bold shrink-0">
-                                {ongoingWorkOrders.filter(w => parseFloat(w.available_to_dispatch) > 0).length} Ready to Dispatch
+                                {ongoingWorkOrders.filter(w => (parseFloat(w.available_to_dispatch || w.total_available_stock || 0) > 0) && parseFloat(w.remaining_order_quantity || 0) > 0).length} Ready to Dispatch
                             </span>
                         </div>
 
@@ -538,7 +580,7 @@ export default function DispatchMaster() {
             {/* View Dispatch Modal */}
             {viewItem && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-                    <div className="bg-white rounded-3xl shadow-xl border border-slate-200 max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-150">
+                    <div className="bg-white rounded-3xl shadow-xl border border-slate-200 max-w-2xl w-full overflow-hidden animate-in zoom-in-95 duration-150">
                         <div className="border-b border-slate-100 bg-slate-50/70 px-6 py-4 flex items-center justify-between">
                             <div className="flex items-center gap-2.5">
                                 <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#369ACF]/10 text-[#369ACF]">

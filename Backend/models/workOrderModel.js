@@ -667,24 +667,92 @@ const deleteWorkOrder = async (id) => {
 };
 
 const getMaterialStock = async (materialId) => {
-    const query = `
+    const stockQuery = `
         SELECT 
-            SUM(COALESCE(r.quantity, ss.total_kg) - COALESCE(issue_agg.issued_qty, 0)) AS available_stock
+            COALESCE(SUM(GREATEST(0, COALESCE(r.quantity, ss.total_kg, 0) - COALESCE(issue_agg.issued_qty, 0))), 0) AS available_stock,
+            (
+                SELECT u.unit_name 
+                FROM materials m 
+                LEFT JOIN units u ON m.unit_id = u.id 
+                WHERE m.id = ?
+            ) AS unit_name
         FROM stock_status ss
         LEFT JOIN rm_returns r ON ss.rm_return_id = r.id
         LEFT JOIN (
             SELECT 
-                COALESCE(mai_sub2.internal_batch_number, r_sub.internal_batch_number) AS internal_batch_number,
-                SUM(si.issue_quantity) AS issued_qty
-            FROM stock_issues si
-            LEFT JOIN material_add_items mai_sub2 ON si.ma_item_id = mai_sub2.id
-            LEFT JOIN rm_returns r_sub ON si.rm_return_id = r_sub.id
-            GROUP BY COALESCE(mai_sub2.internal_batch_number, r_sub.internal_batch_number)
+                internal_batch_number,
+                SUM(qty) AS issued_qty
+            FROM (
+                SELECT 
+                    COALESCE(mai_sub2.internal_batch_number, r_sub.internal_batch_number) AS internal_batch_number,
+                    si.issue_quantity AS qty
+                FROM stock_issues si
+                LEFT JOIN material_add_items mai_sub2 ON si.ma_item_id = mai_sub2.id
+                LEFT JOIN rm_returns r_sub ON si.rm_return_id = r_sub.id
+
+                UNION ALL
+
+                SELECT 
+                    d_sub.internal_batch_number,
+                    d_sub.quantity AS qty
+                FROM dispatches d_sub
+            ) all_issues
+            WHERE internal_batch_number IS NOT NULL
+            GROUP BY internal_batch_number
         ) issue_agg ON ss.internal_batch_number = issue_agg.internal_batch_number
         WHERE ss.material_id = ?
     `;
-    const [rows] = await db.execute(query, [materialId]);
-    return rows[0]?.available_stock ? parseFloat(rows[0].available_stock) : 0;
+
+    const batchQuery = `
+        SELECT 
+            ss.id,
+            ss.internal_batch_number AS batch_no,
+            ss.location,
+            ss.party,
+            GREATEST(0, COALESCE(r.quantity, ss.total_kg, 0) - COALESCE(issue_agg.issued_qty, 0)) AS available_qty
+        FROM stock_status ss
+        LEFT JOIN rm_returns r ON ss.rm_return_id = r.id
+        LEFT JOIN (
+            SELECT 
+                internal_batch_number,
+                SUM(qty) AS issued_qty
+            FROM (
+                SELECT 
+                    COALESCE(mai_sub2.internal_batch_number, r_sub.internal_batch_number) AS internal_batch_number,
+                    si.issue_quantity AS qty
+                FROM stock_issues si
+                LEFT JOIN material_add_items mai_sub2 ON si.ma_item_id = mai_sub2.id
+                LEFT JOIN rm_returns r_sub ON si.rm_return_id = r_sub.id
+
+                UNION ALL
+
+                SELECT 
+                    d_sub.internal_batch_number,
+                    d_sub.quantity AS qty
+                FROM dispatches d_sub
+            ) all_issues
+            WHERE internal_batch_number IS NOT NULL
+            GROUP BY internal_batch_number
+        ) issue_agg ON ss.internal_batch_number = issue_agg.internal_batch_number
+        WHERE ss.material_id = ?
+        HAVING available_qty > 0
+        ORDER BY ss.created_at ASC
+    `;
+
+    const [stockRows] = await db.execute(stockQuery, [materialId, materialId]);
+    const [batchRows] = await db.execute(batchQuery, [materialId]);
+
+    return {
+        stock: stockRows[0]?.available_stock ? parseFloat(stockRows[0].available_stock) : 0,
+        unit_name: stockRows[0]?.unit_name || "Nos",
+        batches: (batchRows || []).map(b => ({
+            id: b.id,
+            batch_no: b.batch_no,
+            location: b.location || "—",
+            party: b.party || "—",
+            available_qty: parseFloat(b.available_qty) || 0
+        }))
+    };
 };
 
 const ensureDelayColumns = async () => {

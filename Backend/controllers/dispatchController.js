@@ -146,6 +146,7 @@ const createWorkOrderDispatch = async (req, res) => {
             vehicle_no,
             remarks,
             internal_batch_number,
+            batches,
             dispatch_no
         } = req.body;
 
@@ -158,8 +159,9 @@ const createWorkOrderDispatch = async (req, res) => {
             });
         }
 
+        const hasBatches = Array.isArray(batches) && batches.some(b => parseFloat(b.quantity) > 0);
         const qty = parseFloat(quantity);
-        if (isNaN(qty) || qty <= 0) {
+        if (!hasBatches && (isNaN(qty) || qty <= 0)) {
             return res.status(400).json({
                 success: false,
                 message: 'Dispatch quantity must be greater than zero'
@@ -174,12 +176,14 @@ const createWorkOrderDispatch = async (req, res) => {
             vehicle_no,
             remarks,
             internal_batch_number,
+            batches,
             dispatch_no
         }, addedBy);
 
+        const totalQty = result.total_quantity || result.quantity;
         return res.status(201).json({
             success: true,
-            message: `Work Order WO-${String(result.work_order_no).padStart(4, '0')} finished goods (${result.quantity} ${result.unit}) dispatched successfully!`,
+            message: `Work Order WO-${String(result.work_order_no).padStart(4, '0')} finished goods (${totalQty} ${result.unit}) dispatched successfully!`,
             data: result
         });
     } catch (error) {

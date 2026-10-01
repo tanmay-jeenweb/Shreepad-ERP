@@ -52,9 +52,7 @@ export default function JobCardDetails() {
   ]);
   const [moveDate, setMoveDate] = useState(new Date().toISOString().split("T")[0]);
   const [moveRemarks, setMoveRemarks] = useState("");
-  const [selectedBatch, setSelectedBatch] = useState("");
-  const [customBatchInput, setCustomBatchInput] = useState("");
-  const [isCustomBatch, setIsCustomBatch] = useState(false);
+
   const [movingProduction, setMovingProduction] = useState(false);
   const [deletingLogId, setDeletingLogId] = useState(null);
   const [selectedLogForDetails, setSelectedLogForDetails] = useState(null);
@@ -463,17 +461,13 @@ export default function JobCardDetails() {
     return stageStats.filter((s) => s.stageNumber < revertFromStage.stageNumber);
   }, [revertFromStage, stageStats]);
 
-  // Available batch options for finished goods conversion
+  // Available batch options for finished goods conversion (from Work Order item batches)
   const availableBatchOptions = useMemo(() => {
-    const list = Array.isArray(entryData?.work_order_batches) && entryData.work_order_batches.length > 0
+    return Array.isArray(entryData?.work_order_batches) && entryData.work_order_batches.length > 0
       ? [...entryData.work_order_batches]
       : entryData?.batch_no
         ? String(entryData.batch_no).split(",").map((s) => s.trim()).filter(Boolean)
         : [];
-    if (list.length === 0 && entryData?.work_order_no) {
-      list.push(`WO-${String(entryData.work_order_no).padStart(4, "0")}`);
-    }
-    return list;
   }, [entryData]);
 
   // Sync selectedLogForDetails if productionLogs updates
@@ -537,10 +531,32 @@ export default function JobCardDetails() {
     return moveItems.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
   }, [moveItems]);
 
-  const handleOpenMoveModal = (stage) => {
+  const handleOpenMoveModal = async (stage) => {
     setSelectedStage(stage);
     const isLast = Boolean(stage.isLastStage || stage.nextStageName === "Finished Goods" || !stage.nextProc);
-    const initialBatch = isLast && availableBatchOptions.length > 0 ? availableBatchOptions[0] : "";
+
+    let freshBatches = [...availableBatchOptions];
+    if (isLast) {
+      try {
+        const freshRes = await getWorkshopEntryDetails(workOrderItemId);
+        if (freshRes.data?.success && freshRes.data.data) {
+          const freshData = freshRes.data.data;
+          setEntryData(freshData);
+          const list = Array.isArray(freshData.work_order_batches) && freshData.work_order_batches.length > 0
+            ? [...freshData.work_order_batches]
+            : freshData.batch_no
+              ? String(freshData.batch_no).split(",").map((s) => s.trim()).filter(Boolean)
+              : [];
+          if (list.length > 0) {
+            freshBatches = list;
+          }
+        }
+      } catch (err) {
+        console.warn("Could not refresh entry details on modal open", err);
+      }
+    }
+
+    const initialBatch = isLast && freshBatches.length > 0 ? freshBatches[0] : "";
 
     setMoveItems([
       {
@@ -1805,24 +1821,26 @@ export default function JobCardDetails() {
                                 </div>
                               </div>
                             </div>
-                            {availableBatchOptions.length > 0 && moveItems.length > 1 && (
-                              <div className="flex items-center gap-1.5 text-xs">
-                                <span className="text-[10px] font-bold text-slate-500">Apply to all:</span>
-                                <select
-                                  onChange={(e) => {
-                                    if (e.target.value) handleApplyBatchToAllRows(e.target.value);
-                                    e.target.value = "";
-                                  }}
-                                  defaultValue=""
-                                  className="px-2 py-1 text-[11px] font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer shadow-2xs"
-                                >
-                                  <option value="" disabled>Choose batch...</option>
-                                  {availableBatchOptions.map((b, i) => (
-                                    <option key={i} value={b}>{b}</option>
-                                  ))}
-                                </select>
-                              </div>
-                            )}
+                            <div className="flex items-center gap-2">
+                              {availableBatchOptions.length > 0 && moveItems.length > 1 && (
+                                <div className="flex items-center gap-1.5 text-xs">
+                                  <span className="text-[10px] font-bold text-slate-500">Apply to all:</span>
+                                  <select
+                                    onChange={(e) => {
+                                      if (e.target.value) handleApplyBatchToAllRows(e.target.value);
+                                      e.target.value = "";
+                                    }}
+                                    defaultValue=""
+                                    className="px-2 py-1 text-[11px] font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer shadow-2xs"
+                                  >
+                                    <option value="" disabled>Choose batch...</option>
+                                    {availableBatchOptions.map((b, i) => (
+                                      <option key={i} value={b}>{b}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
 
@@ -1904,22 +1922,22 @@ export default function JobCardDetails() {
                                       </select>
                                     </td>
                                     {isMovingToFG && (
-                                      <td className="py-2.5 px-2.5">
-                                        <select
-                                          value={item.batch_no || ""}
-                                          onChange={(e) => handleMoveItemChange(idx, "batch_no", e.target.value)}
-                                          required
-                                          className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 bg-white"
-                                        >
-                                          <option value="">-- Select Batch * --</option>
-                                          {availableBatchOptions.map((bName, bIdx) => (
-                                            <option key={bIdx} value={bName}>
-                                              {bName}
-                                            </option>
-                                          ))}
-                                        </select>
-                                      </td>
-                                    )}
+                                       <td className="py-2.5 px-2.5">
+                                         <select
+                                           value={item.batch_no || ""}
+                                           onChange={(e) => handleMoveItemChange(idx, "batch_no", e.target.value)}
+                                           required
+                                           className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 bg-white"
+                                         >
+                                           <option value="">-- Select Batch * --</option>
+                                           {availableBatchOptions.map((bName, bIdx) => (
+                                             <option key={bIdx} value={bName}>
+                                               {bName}
+                                             </option>
+                                           ))}
+                                         </select>
+                                       </td>
+                                     )}
                                     <td className="py-2.5 px-2.5">
                                       <input
                                         type="number"

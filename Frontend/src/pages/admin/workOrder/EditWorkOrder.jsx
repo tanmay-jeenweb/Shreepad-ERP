@@ -79,7 +79,6 @@ export default function EditWorkOrder() {
         setProjectName(woData.project_name || "");
         setInspectionId(woData.inspection_id || "");
         setRemark(woData.remark || "");
-        setBatches(Array.isArray(woData.batches) ? woData.batches : []);
         setInspections(inspRes.data?.data || []);
         
         const bomsList = bomRes.data?.data || [];
@@ -109,11 +108,26 @@ export default function EditWorkOrder() {
 
         const mappedItems = await Promise.all(
           finishedGoodItems.map(async (fgItem) => {
+            let fgStock = 0;
+            let fgUnit = fgItem.unit_name || "Nos";
+            let fgBatches = [];
+            try {
+              const fgStockRes = await getMaterialStock(fgItem.material_id);
+              fgStock = fgStockRes.data?.stock ?? 0;
+              if (fgStockRes.data?.unit_name) fgUnit = fgStockRes.data.unit_name;
+              if (fgStockRes.data?.batches) fgBatches = fgStockRes.data.batches;
+            } catch (err) {
+              console.error(`Failed to fetch stock for FG ${fgItem.material_id}`, err);
+            }
+
             const itemObj = {
               id: fgItem.id,
               material_id: fgItem.material_id,
               material_name: fgItem.material_name || "Unknown Material",
               material_code: fgItem.material_code || "",
+              current_stock: fgStock,
+              unit_name: fgUnit,
+              stock_batches: fgBatches,
               quantity: Number(fgItem.quantity) || 1,
               production_quantity: Number(fgItem.production_quantity) || Number(fgItem.quantity) || 1,
               exp_delivery_date: fgItem.exp_delivery_date ? fgItem.exp_delivery_date.substring(0, 10) : "",
@@ -192,6 +206,9 @@ export default function EditWorkOrder() {
         material_id: "",
         material_name: "",
         material_code: "",
+        current_stock: 0,
+        unit_name: "Nos",
+        stock_batches: [],
         job_party_id: "",
         exp_delivery_date: "",
         batch_no: "",
@@ -202,11 +219,27 @@ export default function EditWorkOrder() {
       return;
     }
 
+    let fgStock = 0;
+    let fgUnit = material?.unit_name || "Nos";
+    let fgBatches = [];
+
+    try {
+      const fgStockRes = await getMaterialStock(materialId);
+      fgStock = fgStockRes.data?.stock ?? 0;
+      if (fgStockRes.data?.unit_name) fgUnit = fgStockRes.data.unit_name;
+      if (fgStockRes.data?.batches) fgBatches = fgStockRes.data.batches;
+    } catch (err) {
+      console.error(`Failed to fetch stock for FG ${materialId}`, err);
+    }
+
     updated[index] = {
       ...updated[index],
       material_id: materialId,
       material_name: material ? material.material_name : "",
       material_code: material ? material.material_code : "",
+      current_stock: fgStock,
+      unit_name: fgUnit,
+      stock_batches: fgBatches,
       job_party_id: "",
       exp_delivery_date: "",
       batch_no: "",
@@ -252,6 +285,9 @@ export default function EditWorkOrder() {
           const next = [...prev];
           if (next[index]) {
             next[index].rawMaterials = rawMaterialsWithStock;
+            next[index].current_stock = fgStock;
+            next[index].unit_name = fgUnit;
+            next[index].stock_batches = fgBatches;
           }
           return next;
         });
@@ -750,6 +786,14 @@ export default function EditWorkOrder() {
                             onSelect={(selectedId) => handleMaterialChange(idx, selectedId)}
                             disabled={workOrderStatus === 'Started'}
                           />
+                          {item.material_id && item.current_stock !== undefined && (
+                            <div className="mt-1.5 flex items-center gap-1.5">
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200 text-[11px] shadow-2xs">
+                                <i className="fa-solid fa-boxes-stacked text-[10px] text-emerald-600"></i>
+                                Current Stock: <strong className="text-emerald-900">{item.current_stock} {item.unit_name || "Nos"}</strong>
+                              </span>
+                            </div>
+                          )}
                         </td>
                         <td className="px-6 py-4 text-right">
                           <input
@@ -939,6 +983,10 @@ export default function EditWorkOrder() {
                         </div>
 
                         <div className="flex items-center gap-2.5 text-xs">
+                          <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-lg font-medium border border-emerald-200 flex items-center gap-1.5 shadow-2xs">
+                            <i className="fa-solid fa-warehouse text-[11px] text-emerald-600"></i>
+                            Current Stock: <strong className="text-emerald-900">{item.current_stock !== undefined ? item.current_stock : 0} {item.unit_name || "Nos"}</strong>
+                          </span>
                           <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg font-medium">
                             Order Qty: <strong className="text-slate-800">{item.quantity}</strong>
                           </span>
@@ -949,7 +997,20 @@ export default function EditWorkOrder() {
                       </div>
 
                       {/* Production Details Form */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                            Stock in Store
+                          </label>
+                          <div className="px-3 py-2 bg-emerald-50/80 border border-emerald-200 rounded-lg text-emerald-800 text-sm font-bold flex items-center justify-between">
+                            <span className="flex items-center gap-1.5 truncate">
+                              <i className="fa-solid fa-boxes-stacked text-emerald-600 text-xs"></i>
+                              <span>{item.current_stock !== undefined ? item.current_stock : 0} {item.unit_name || "Nos"}</span>
+                            </span>
+                            <span className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wider shrink-0">Available</span>
+                          </div>
+                        </div>
+
                         <div>
                           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
                             Order Quantity <span className="text-red-500">*</span>
@@ -988,9 +1049,7 @@ export default function EditWorkOrder() {
                           />
                         </div>
 
-
-
-                        <div>
+                        <div className="md:col-span-2 lg:col-span-4">
                           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
                             Remarks
                           </label>
@@ -1004,7 +1063,7 @@ export default function EditWorkOrder() {
                         </div>
 
                         {/* Item Batch Numbers */}
-                        <div className="md:col-span-2 lg:col-span-3 pt-3 border-t border-slate-100 space-y-2">
+                        <div className="md:col-span-2 lg:col-span-4 pt-3 border-t border-slate-100 space-y-2">
                           <div className="flex items-center justify-between">
                             <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
                               <i className="fa-solid fa-tags text-[#369ACF]"></i>

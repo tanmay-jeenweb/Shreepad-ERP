@@ -286,12 +286,17 @@ const getWorkOrdersForDispatch = async (tab = 'ongoing') => {
             woi.material_id,
             m.material_name,
             m.material_code,
+            m.material_group,
+            m.material_type,
+            woi.remarks,
             COALESCE(u.unit_name, 'Nos') AS unit,
             COALESCE(wob.batches, woi.batch_no, CONCAT('WO-', LPAD(wo.work_order_no, 4, '0'))) AS batch_no,
-            COALESCE(woi.production_quantity, woi.quantity, 0) AS target_quantity,
+            COALESCE(woi.quantity, woi.production_quantity, 0) AS order_quantity,
+            COALESCE(woi.production_quantity, 0) AS production_quantity,
+            COALESCE(woi.quantity, woi.production_quantity, 0) AS target_quantity,
             COALESCE(fg_agg.completed_quantity, 0) AS completed_quantity,
             COALESCE(dsp_agg.dispatched_quantity, 0) AS dispatched_quantity,
-            GREATEST(0, COALESCE(fg_agg.completed_quantity, 0) - COALESCE(dsp_agg.dispatched_quantity, 0)) AS available_to_dispatch
+            GREATEST(0, COALESCE(woi.quantity, woi.production_quantity, 0) - COALESCE(dsp_agg.dispatched_quantity, 0)) AS remaining_order_quantity
         FROM work_order_items woi
         JOIN work_orders wo ON woi.work_order_id = wo.id
         JOIN materials m ON woi.material_id = m.id
@@ -325,23 +330,25 @@ const getWorkOrdersForDispatch = async (tab = 'ongoing') => {
             GROUP BY COALESCE(d.work_order_item_id, ss.work_order_item_id)
         ) dsp_agg ON woi.id = dsp_agg.work_order_item_id
         WHERE COALESCE(woi.is_on_hold, 0) = 0
-          AND COALESCE(woi.production_quantity, 0) > 0
+          AND (COALESCE(woi.quantity, 0) > 0 OR COALESCE(woi.production_quantity, 0) > 0)
           AND (wo.status = 'Started' OR wo.status = 'Completed')
+          AND COALESCE(woi.remarks, '') NOT LIKE 'Allocated raw material%'
+          AND LOWER(COALESCE(m.material_group, '')) NOT LIKE '%raw%'
     `;
 
     if (tab === 'completed') {
         query += `
           AND (
-            (COALESCE(dsp_agg.dispatched_quantity, 0) >= COALESCE(woi.production_quantity, woi.quantity, 0) AND COALESCE(woi.production_quantity, woi.quantity, 0) > 0)
+            (COALESCE(dsp_agg.dispatched_quantity, 0) >= COALESCE(woi.quantity, woi.production_quantity, 0) AND COALESCE(woi.quantity, woi.production_quantity, 0) > 0)
             OR wo.status = 'Completed'
           )
         `;
     } else {
-        // Ongoing: production / dispatch is pending
+        // Ongoing: order dispatch is pending
         query += `
           AND (
-            COALESCE(dsp_agg.dispatched_quantity, 0) < COALESCE(woi.production_quantity, woi.quantity, 0)
-            OR COALESCE(woi.production_quantity, woi.quantity, 0) = 0
+            COALESCE(dsp_agg.dispatched_quantity, 0) < COALESCE(woi.quantity, woi.production_quantity, 0)
+            OR COALESCE(woi.quantity, woi.production_quantity, 0) = 0
           )
           AND wo.status = 'Started'
         `;
@@ -352,10 +359,10 @@ const getWorkOrdersForDispatch = async (tab = 'ongoing') => {
     const [rows] = await db.execute(query);
     if (rows.length === 0) return [];
 
-    // Fetch batch-level finished quantities and dispatches
     const itemIds = rows.map(r => r.work_order_item_id);
     const placeholders = itemIds.map(() => '?').join(',');
 
+    // 1. Fetch batch-level finished quantities and dispatches for active Work Orders
     const [batchRows] = await db.execute(`
         SELECT 
             wpl.work_order_item_id,
@@ -382,24 +389,116 @@ const getWorkOrdersForDispatch = async (tab = 'ongoing') => {
         ORDER BY available_qty DESC, batch_no ASC
     `, itemIds);
 
-    const batchMap = {};
+    const woBatchMap = {};
     for (const b of batchRows) {
-        if (!batchMap[b.work_order_item_id]) {
-            batchMap[b.work_order_item_id] = [];
+        if (!woBatchMap[b.work_order_item_id]) {
+            woBatchMap[b.work_order_item_id] = [];
         }
-        batchMap[b.work_order_item_id].push({
+        woBatchMap[b.work_order_item_id].push({
             batch_no: b.batch_no,
+            source_type: 'wo_production',
+            source_label: 'WO Production',
             completed_quantity: parseFloat(b.completed_qty),
             dispatched_quantity: parseFloat(b.dispatched_qty),
-            available_quantity: parseFloat(b.available_qty)
+            available_quantity: parseFloat(b.available_qty),
+            location: 'Workshop FG Bay'
         });
     }
 
+    // 2. Fetch available stock batches in warehouse (stock_status) for these materials
+    const uniqueMaterialIds = [...new Set(rows.map(r => r.material_id))];
+    const matPlaceholders = uniqueMaterialIds.map(() => '?').join(',');
+
+    const [stockStatusBatches] = await db.execute(`
+        SELECT
+            ss.id AS stock_status_id,
+            ss.material_id,
+            ss.internal_batch_number AS batch_no,
+            ss.party,
+            ss.location,
+            ss.total_kg,
+            ss.remaining_kg,
+            ss.work_order_item_id,
+            (COALESCE(r.quantity, ss.total_kg, 0) - COALESCE(issue_agg.issued_qty, 0)) AS available_quantity
+        FROM stock_status ss
+        LEFT JOIN rm_returns r ON ss.rm_return_id = r.id
+        LEFT JOIN (
+            SELECT 
+                internal_batch_number,
+                SUM(qty) AS issued_qty
+            FROM (
+                SELECT 
+                    COALESCE(mai_sub2.internal_batch_number, r_sub.internal_batch_number) AS internal_batch_number,
+                    si.issue_quantity AS qty
+                FROM stock_issues si
+                LEFT JOIN material_add_items mai_sub2 ON si.ma_item_id = mai_sub2.id
+                LEFT JOIN rm_returns r_sub ON si.rm_return_id = r_sub.id
+
+                UNION ALL
+
+                SELECT 
+                    d_sub.internal_batch_number,
+                    d_sub.quantity AS qty
+                FROM dispatches d_sub
+            ) all_issues
+            WHERE internal_batch_number IS NOT NULL
+            GROUP BY internal_batch_number
+        ) issue_agg ON ss.internal_batch_number = issue_agg.internal_batch_number
+        WHERE ss.material_id IN (${matPlaceholders})
+        HAVING available_quantity > 0
+        ORDER BY ss.internal_batch_number ASC
+    `, uniqueMaterialIds);
+
+    const stockBatchMap = {};
+    for (const sb of stockStatusBatches) {
+        if (!stockBatchMap[sb.material_id]) {
+            stockBatchMap[sb.material_id] = [];
+        }
+        stockBatchMap[sb.material_id].push({
+            stock_status_id: sb.stock_status_id,
+            material_id: sb.material_id,
+            batch_no: sb.batch_no,
+            source_type: 'warehouse_stock',
+            source_label: 'Warehouse Stock',
+            work_order_item_id: sb.work_order_item_id,
+            available_quantity: parseFloat(sb.available_quantity),
+            location: sb.location || 'Store / Godown',
+            party: sb.party
+        });
+    }
+
+    // 3. Map batches and calculate balance metrics for each work order item
     for (const row of rows) {
-        const availableBatches = batchMap[row.work_order_item_id] || [];
-        row.available_batches = availableBatches;
-        if (availableBatches.length > 0) {
-            row.batch_no = availableBatches.map(b => b.batch_no).join(', ');
+        const woBatches = woBatchMap[row.work_order_item_id] || [];
+        const allStockForMat = stockBatchMap[row.material_id] || [];
+
+        // Exclude stock_status batches that share the same batch_no as one of the active WO batches to prevent duplicate listing
+        const woBatchNames = new Set(woBatches.map(b => String(b.batch_no).trim()));
+        const otherStockBatches = allStockForMat.filter(sb => !woBatchNames.has(String(sb.batch_no).trim()));
+
+        // Combined batches with WO batches first, followed by warehouse stock batches
+        const combinedBatches = [...woBatches, ...otherStockBatches];
+
+        row.wo_batches = woBatches;
+        row.stock_batches = otherStockBatches;
+        row.available_batches = combinedBatches;
+
+        const totalAvailableStock = combinedBatches.reduce((sum, b) => sum + parseFloat(b.available_quantity || 0), 0);
+        const orderQty = parseFloat(row.order_quantity || 0);
+        const completedQty = parseFloat(row.completed_quantity || 0);
+        const dispatchedQty = parseFloat(row.dispatched_quantity || 0);
+        const remainingOrder = Math.max(0, orderQty - dispatchedQty);
+
+        row.total_available_stock = totalAvailableStock;
+        row.available_to_dispatch = totalAvailableStock;
+        row.remaining_order_quantity = remainingOrder;
+        row.production_difference = Math.max(0, orderQty - completedQty);
+        row.needs_stock_fulfillment = orderQty > completedQty;
+
+        if (combinedBatches.length > 1) {
+            row.batch_no = `${combinedBatches.length} Batches (${woBatches.length} WO + ${otherStockBatches.length} Stock)`;
+        } else if (combinedBatches.length === 1) {
+            row.batch_no = combinedBatches[0].batch_no;
         } else {
             row.batch_no = "—";
         }
@@ -414,10 +513,6 @@ const createWorkOrderDispatch = async (data, addedBy) => {
         await connection.beginTransaction();
 
         const workOrderItemId = data.work_order_item_id;
-        const qty = parseFloat(data.quantity);
-        if (isNaN(qty) || qty <= 0) {
-            throw new Error('Dispatch quantity must be greater than zero');
-        }
 
         // 1. Lock and fetch Work Order Item details
         const [woiRows] = await connection.execute(`
@@ -426,7 +521,8 @@ const createWorkOrderDispatch = async (data, addedBy) => {
                 woi.work_order_id,
                 woi.material_id,
                 woi.batch_no,
-                COALESCE(woi.production_quantity, woi.quantity, 0) AS production_quantity,
+                COALESCE(woi.quantity, woi.production_quantity, 0) AS order_quantity,
+                COALESCE(woi.production_quantity, 0) AS production_quantity,
                 wo.work_order_no,
                 wo.status AS work_order_status,
                 wo.customer_id,
@@ -452,149 +548,167 @@ const createWorkOrderDispatch = async (data, addedBy) => {
             throw new Error(`Cannot dispatch: Work Order WO-${String(woItem.work_order_no).padStart(4, '0')} has not been started yet.`);
         }
 
-        let selectedBatch = (data.internal_batch_number && data.internal_batch_number.trim()) || null;
-
-        // 2. Compute completed and dispatched quantities (at batch level if batch specified)
-        let fgQuery = `
-            SELECT 
-                COALESCE(NULLIF(TRIM(wpl.batch_no), ''), ?) AS effective_batch,
-                COALESCE(SUM(
-                    CASE 
-                        WHEN wpl.movement_type = 'revert' THEN -wpl.quantity 
-                        ELSE wpl.quantity 
-                    END
-                ), 0) AS completed_quantity
-            FROM workshop_production_logs wpl
-            WHERE wpl.work_order_item_id = ? AND wpl.to_bom_process_id IS NULL
-        `;
-        const defaultFallbackBatch = woItem.batch_no || `WO-${String(woItem.work_order_no).padStart(4, '0')}`;
-        const fgParams = [defaultFallbackBatch, workOrderItemId];
-
-        if (selectedBatch) {
-            fgQuery += ` AND COALESCE(NULLIF(TRIM(wpl.batch_no), ''), ?) = ?`;
-            fgParams.push(defaultFallbackBatch, selectedBatch);
-        }
-        fgQuery += ` GROUP BY effective_batch`;
-
-        const [fgRows] = await connection.execute(fgQuery, fgParams);
-        const completedQty = fgRows.reduce((sum, r) => sum + parseFloat(r.completed_quantity || 0), 0);
-
-        let dspQuery = `
-            SELECT COALESCE(SUM(d.quantity), 0) AS total_dispatched
-            FROM dispatches d
-            LEFT JOIN stock_status ss ON d.stock_status_id = ss.id
-            WHERE (d.work_order_item_id = ? OR ss.work_order_item_id = ?)
-        `;
-        const dspParams = [workOrderItemId, workOrderItemId];
-        if (selectedBatch) {
-            dspQuery += ` AND (d.internal_batch_number = ? OR ss.internal_batch_number = ?)`;
-            dspParams.push(selectedBatch, selectedBatch);
+        // 2. Normalize batches list (support multi-batch allocation array or single batch input)
+        let batchList = [];
+        if (Array.isArray(data.batches) && data.batches.length > 0) {
+            batchList = data.batches
+                .filter(b => parseFloat(b.quantity) > 0)
+                .map(b => ({
+                    internal_batch_number: String(b.internal_batch_number || b.batch_no).trim(),
+                    quantity: parseFloat(b.quantity),
+                    stock_status_id: b.stock_status_id || null
+                }));
+        } else if (data.internal_batch_number && parseFloat(data.quantity) > 0) {
+            batchList = [{
+                internal_batch_number: String(data.internal_batch_number).trim(),
+                quantity: parseFloat(data.quantity),
+                stock_status_id: data.stock_status_id || null
+            }];
         }
 
-        const [dspRows] = await connection.execute(dspQuery, dspParams);
-        const alreadyDispatched = parseFloat(dspRows[0]?.total_dispatched || 0);
-        const availableToDispatch = Math.max(0, completedQty - alreadyDispatched);
-
-        if (availableToDispatch <= 0) {
-            throw new Error(`No finished goods are currently available to dispatch for batch '${selectedBatch || "default"}'. Completed: ${completedQty}, Already Dispatched: ${alreadyDispatched}.`);
+        if (batchList.length === 0) {
+            throw new Error('Please select at least one batch with quantity greater than zero to dispatch.');
         }
-
-        if (qty > availableToDispatch) {
-            throw new Error(`Cannot dispatch ${qty} ${woItem.unit}. Only ${availableToDispatch} ${woItem.unit} completed finished goods are available in batch '${selectedBatch || "default"}'.`);
-        }
-
-        // 3. Find or update stock_status row for this work order item & batch
-        let ssQuery = `
-            SELECT id, remaining_kg, total_kg, internal_batch_number
-            FROM stock_status
-            WHERE work_order_item_id = ?
-        `;
-        const ssParams = [workOrderItemId];
-        if (selectedBatch) {
-            ssQuery += ` AND internal_batch_number = ?`;
-            ssParams.push(selectedBatch);
-        }
-        ssQuery += ` ORDER BY id DESC LIMIT 1 FOR UPDATE`;
-
-        const [ssRows] = await connection.execute(ssQuery, ssParams);
-
-        let stockStatusId = null;
-        let batchNumber = selectedBatch || defaultFallbackBatch;
-
-        if (ssRows.length > 0) {
-            stockStatusId = ssRows[0].id;
-            batchNumber = ssRows[0].internal_batch_number || batchNumber;
-
-            // Deduct remaining_kg
-            const curRem = parseFloat(ssRows[0].remaining_kg) || 0;
-            const newRem = Math.max(0, curRem - qty);
-            await connection.execute(`
-                UPDATE stock_status 
-                SET remaining_kg = ?, updated_at = CURRENT_TIMESTAMP 
-                WHERE id = ?
-            `, [newRem, stockStatusId]);
-        } else {
-            // Create stock_status record if none existed
-            const [insertSs] = await connection.execute(`
-                INSERT INTO stock_status 
-                    (internal_batch_number, party, material_id, material_name, material_type, total_kg, remaining_kg, work_order_item_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            `, [
-                batchNumber,
-                woItem.customer_name || 'In-House Production',
-                woItem.material_id,
-                woItem.material_name,
-                woItem.material_type || 'Finished Goods',
-                completedQty,
-                Math.max(0, completedQty - (alreadyDispatched + qty)),
-                workOrderItemId
-            ]);
-            stockStatusId = insertSs.insertId;
-        }
-
-        // 4. Generate dispatch_no
-        const dispatchNo = data.dispatch_no && data.dispatch_no.trim()
-            ? data.dispatch_no.trim()
-            : await generateDispatchNo(connection);
 
         const dispatchDate = data.dispatch_date || new Date().toISOString().split('T')[0];
         const partyName = data.party_name || woItem.customer_name || null;
+        const vehicleNo = data.vehicle_no || null;
+        const remarks = data.remarks || null;
 
-        // 5. Insert into dispatches
-        const insertDispatchQuery = `
-            INSERT INTO dispatches (
-                dispatch_no,
-                dispatch_date,
-                stock_status_id,
-                material_id,
-                internal_batch_number,
-                quantity,
-                party_name,
-                vehicle_no,
+        const createdDispatches = [];
+        let totalDispatchedInRequest = 0;
+
+        // 3. Process each batch allocation
+        for (const item of batchList) {
+            const batchNo = item.internal_batch_number;
+            const batchQty = item.quantity;
+            totalDispatchedInRequest += batchQty;
+
+            // Check if batch exists in stock_status
+            const [statusRows] = await connection.execute(`
+                SELECT 
+                    id, material_id, material_name, material_type, party, location,
+                    total_kg, remaining_kg, work_order_item_id
+                FROM stock_status
+                WHERE internal_batch_number = ?
+                FOR UPDATE
+            `, [batchNo]);
+
+            let stockRow = statusRows[0] || null;
+
+            // If not found in stock_status, check if it's a finished goods batch from workshop_production_logs
+            if (!stockRow) {
+                const [fgRows] = await connection.execute(`
+                    SELECT 
+                        SUM(CASE WHEN movement_type = 'revert' THEN -quantity ELSE quantity END) AS completed_quantity
+                    FROM workshop_production_logs
+                    WHERE work_order_item_id = ? AND to_bom_process_id IS NULL
+                      AND COALESCE(NULLIF(TRIM(batch_no), ''), ?) = ?
+                `, [workOrderItemId, woItem.batch_no || `WO-${String(woItem.work_order_no).padStart(4, '0')}`, batchNo]);
+
+                const fgCompleted = parseFloat(fgRows[0]?.completed_quantity || 0);
+                if (fgCompleted > 0) {
+                    const [insertSs] = await connection.execute(`
+                        INSERT INTO stock_status 
+                            (internal_batch_number, party, material_id, material_name, material_type, total_kg, remaining_kg, work_order_item_id)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    `, [
+                        batchNo,
+                        woItem.customer_name || 'In-House Production',
+                        woItem.material_id,
+                        woItem.material_name,
+                        woItem.material_type || 'Finished Goods',
+                        fgCompleted,
+                        fgCompleted,
+                        workOrderItemId
+                    ]);
+
+                    const [newSs] = await connection.execute(`SELECT * FROM stock_status WHERE id = ? FOR UPDATE`, [insertSs.insertId]);
+                    stockRow = newSs[0];
+                } else {
+                    throw new Error(`Batch '${batchNo}' not found in stock status or workshop production.`);
+                }
+            }
+
+            // Calculate aggregate issued/dispatched for this batch
+            const [issueRows] = await connection.execute(`
+                SELECT SUM(qty) AS total_issued
+                FROM (
+                    SELECT si.issue_quantity AS qty
+                    FROM stock_issues si
+                    LEFT JOIN material_add_items mai ON si.ma_item_id = mai.id
+                    LEFT JOIN rm_returns r ON si.rm_return_id = r.id
+                    WHERE mai.internal_batch_number = ? OR r.internal_batch_number = ?
+
+                    UNION ALL
+
+                    SELECT d.quantity AS qty
+                    FROM dispatches d
+                    WHERE d.internal_batch_number = ?
+                ) t
+            `, [batchNo, batchNo, batchNo]);
+
+            const totalIssued = parseFloat(issueRows[0]?.total_issued || 0);
+            const baseQty = parseFloat(stockRow.total_kg || 0);
+            const availableQty = baseQty - totalIssued;
+
+            if (batchQty > availableQty) {
+                throw new Error(
+                    `Cannot dispatch ${batchQty} ${woItem.unit} from batch '${batchNo}'. Only ${availableQty > 0 ? availableQty : 0} ${woItem.unit} is available.`
+                );
+            }
+
+            // Generate unique dispatch number for this line
+            const dispatchNo = await generateDispatchNo(connection);
+
+            // Insert into dispatches
+            const [insertRes] = await connection.execute(`
+                INSERT INTO dispatches (
+                    dispatch_no,
+                    dispatch_date,
+                    stock_status_id,
+                    material_id,
+                    internal_batch_number,
+                    quantity,
+                    party_name,
+                    vehicle_no,
+                    remarks,
+                    work_order_id,
+                    work_order_item_id,
+                    added_by
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+                dispatchNo,
+                dispatchDate,
+                stockRow.id,
+                woItem.material_id,
+                batchNo,
+                batchQty,
+                partyName,
+                vehicleNo,
                 remarks,
-                work_order_id,
-                work_order_item_id,
-                added_by
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `;
+                woItem.work_order_id,
+                workOrderItemId,
+                addedBy
+            ]);
 
-        const [insertRes] = await connection.execute(insertDispatchQuery, [
-            dispatchNo,
-            dispatchDate,
-            stockStatusId,
-            woItem.material_id,
-            batchNumber,
-            qty,
-            partyName,
-            data.vehicle_no || null,
-            data.remarks || null,
-            woItem.work_order_id,
-            workOrderItemId,
-            addedBy
-        ]);
+            // Deduct remaining_kg in stock_status
+            const newRemaining = Math.max(0, (parseFloat(stockRow.remaining_kg) || availableQty) - batchQty);
+            await connection.execute(`
+                UPDATE stock_status SET remaining_kg = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+            `, [newRemaining, stockRow.id]);
 
-        // 6. Check if all items in this work order are now fully dispatched
-        const targetQty = parseFloat(woItem.production_quantity) || 0;
+            createdDispatches.push({
+                dispatch_id: insertRes.insertId,
+                dispatch_no: dispatchNo,
+                batch_no: batchNo,
+                quantity: batchQty,
+                available_after: availableQty - batchQty
+            });
+        }
+
+        // 4. Calculate total dispatched against the Order Quantity (woi.quantity)
+        const orderQty = parseFloat(woItem.order_quantity) || 0;
         const [totalDispRows] = await connection.execute(`
             SELECT COALESCE(SUM(quantity), 0) AS total_disp
             FROM dispatches
@@ -602,18 +716,23 @@ const createWorkOrderDispatch = async (data, addedBy) => {
         `, [workOrderItemId]);
         const newTotalDispatched = parseFloat(totalDispRows[0]?.total_disp || 0);
 
-        if (targetQty > 0 && newTotalDispatched >= targetQty) {
+        // If order_quantity is fully fulfilled, check if the entire work order is complete
+        if (orderQty > 0 && newTotalDispatched >= orderQty) {
             const [otherItems] = await connection.execute(`
-                SELECT woi.id, COALESCE(woi.production_quantity, woi.quantity, 0) AS target_qty,
+                SELECT woi.id, COALESCE(woi.quantity, woi.production_quantity, 0) AS target_qty,
                        COALESCE(d_sub.total_disp, 0) AS total_disp
                 FROM work_order_items woi
+                JOIN materials m ON woi.material_id = m.id
                 LEFT JOIN (
                     SELECT work_order_item_id, SUM(quantity) AS total_disp
                     FROM dispatches
                     WHERE work_order_item_id IS NOT NULL
                     GROUP BY work_order_item_id
                 ) d_sub ON woi.id = d_sub.work_order_item_id
-                WHERE woi.work_order_id = ? AND woi.id != ? AND COALESCE(woi.production_quantity, 0) > 0
+                WHERE woi.work_order_id = ? AND woi.id != ? 
+                  AND COALESCE(woi.quantity, woi.production_quantity, 0) > 0
+                  AND COALESCE(woi.remarks, '') NOT LIKE 'Allocated raw material%'
+                  AND LOWER(COALESCE(m.material_group, '')) NOT LIKE '%raw%'
             `, [woItem.work_order_id, workOrderItemId]);
 
             const allOthersDone = otherItems.every(it => parseFloat(it.total_disp) >= parseFloat(it.target_qty));
@@ -627,22 +746,21 @@ const createWorkOrderDispatch = async (data, addedBy) => {
         await connection.commit();
 
         return {
-            id: insertRes.insertId,
-            dispatch_no: dispatchNo,
-            dispatch_date: dispatchDate,
-            stock_status_id: stockStatusId,
             work_order_id: woItem.work_order_id,
             work_order_no: woItem.work_order_no,
             work_order_item_id: workOrderItemId,
             material_id: woItem.material_id,
             material_name: woItem.material_name,
-            internal_batch_number: batchNumber,
-            quantity: qty,
             unit: woItem.unit,
             party_name: partyName,
-            completed_quantity: completedQty,
+            dispatch_date: dispatchDate,
+            quantity: totalDispatchedInRequest,
+            total_quantity: totalDispatchedInRequest,
+            dispatches_created: createdDispatches,
+            order_quantity: orderQty,
             dispatched_quantity: newTotalDispatched,
-            available_after_dispatch: availableToDispatch - qty
+            remaining_order_quantity: Math.max(0, orderQty - newTotalDispatched),
+            available_after_dispatch: Math.max(0, orderQty - newTotalDispatched)
         };
     } catch (error) {
         await connection.rollback();

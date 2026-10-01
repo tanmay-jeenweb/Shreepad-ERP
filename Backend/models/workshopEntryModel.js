@@ -210,7 +210,7 @@ const getAllWorkshopEntries = async () => {
         SELECT 
             woi.id AS work_order_item_id,
             woi.work_order_id,
-            COALESCE(wob.batches, woi.batch_no) AS batch_no,
+            COALESCE(wob.batches, wob_wo.batches, woi.batch_no) AS batch_no,
             woi.quantity,
             woi.production_quantity,
             wo.work_order_no,
@@ -232,6 +232,12 @@ const getAllWorkshopEntries = async () => {
             WHERE work_order_item_id IS NOT NULL
             GROUP BY work_order_item_id
         ) wob ON woi.id = wob.work_order_item_id
+        LEFT JOIN (
+            SELECT work_order_id, GROUP_CONCAT(batch_no ORDER BY id SEPARATOR ', ') AS batches
+            FROM work_order_batches
+            WHERE work_order_item_id IS NULL
+            GROUP BY work_order_id
+        ) wob_wo ON wo.id = wob_wo.work_order_id
         LEFT JOIN (
             SELECT work_order_item_id, COUNT(*) AS issued_rm_count
             FROM workshop_rm_issues
@@ -286,14 +292,47 @@ const getWorkshopEntryByWorkOrderItemId = async (workOrderItemId) => {
             WHERE work_order_item_id = ?
             ORDER BY id ASC
         `, [entry.work_order_item_id]);
-        workOrderBatches = batchRows.map(b => b.batch_no);
+        workOrderBatches = batchRows.map(b => b.batch_no).filter(Boolean);
     } catch (bErr) {
         console.error("Error fetching work order item batches:", bErr.message);
     }
+
+    // Fallback: If no item-specific batches found, check for batches linked to the work order
+    if (workOrderBatches.length === 0 && entry.work_order_id) {
+        try {
+            const [woBatchRows] = await db.execute(`
+                SELECT id, batch_no 
+                FROM work_order_batches 
+                WHERE work_order_id = ? AND (work_order_item_id IS NULL OR work_order_item_id = ?)
+                ORDER BY id ASC
+            `, [entry.work_order_id, entry.work_order_item_id]);
+            workOrderBatches = woBatchRows.map(b => b.batch_no).filter(Boolean);
+        } catch (woErr) {
+            console.error("Error fetching work order general batches:", woErr.message);
+        }
+    }
+
     if (workOrderBatches.length === 0 && entry.batch_no) {
         workOrderBatches = String(entry.batch_no).split(',').map(s => s.trim()).filter(Boolean);
     }
-    entry.work_order_batches = workOrderBatches;
+
+    // Also include any batches already recorded in production logs for this item
+    try {
+        const [loggedBatches] = await db.execute(`
+            SELECT DISTINCT batch_no 
+            FROM workshop_production_logs 
+            WHERE work_order_item_id = ? AND batch_no IS NOT NULL AND TRIM(batch_no) != ''
+        `, [entry.work_order_item_id]);
+        for (const lb of loggedBatches) {
+            if (lb.batch_no && !workOrderBatches.includes(lb.batch_no)) {
+                workOrderBatches.push(lb.batch_no);
+            }
+        }
+    } catch (lErr) {
+        console.error("Error fetching logged batches:", lErr.message);
+    }
+
+    entry.work_order_batches = [...new Set(workOrderBatches)];
 
     // 1. Fetch BOM raw materials
     let rawMaterials = [];

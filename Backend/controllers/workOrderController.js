@@ -135,10 +135,12 @@ const deleteWorkOrderController = async (req, res) => {
 const getMaterialStockController = async (req, res) => {
     try {
         const { materialId } = req.params;
-        const stock = await workOrderModel.getMaterialStock(materialId);
+        const result = await workOrderModel.getMaterialStock(materialId);
         return res.status(200).json({
             success: true,
-            stock
+            stock: typeof result === 'object' ? result.stock : result,
+            unit_name: typeof result === 'object' ? result.unit_name : "Nos",
+            batches: typeof result === 'object' ? result.batches : []
         });
     } catch (error) {
         console.error("Error in getMaterialStockController:", error);

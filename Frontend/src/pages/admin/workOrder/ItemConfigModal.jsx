@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import DateInput from "../../../components/DateInput";
+import { getMaterialStock } from "../../../api/workOrderApi";
 
 export default function ItemConfigModal({
   isOpen,
@@ -11,8 +12,12 @@ export default function ItemConfigModal({
   disabled = false
 }) {
   const [formData, setFormData] = useState(null);
-
   const [newBatchInput, setNewBatchInput] = useState("");
+  const [fgStock, setFgStock] = useState(null);
+  const [fgUnit, setFgUnit] = useState("Nos");
+  const [stockBatches, setStockBatches] = useState([]);
+  const [loadingStock, setLoadingStock] = useState(false);
+  const [showBatchList, setShowBatchList] = useState(false);
 
   useEffect(() => {
     if (isOpen && item) {
@@ -39,6 +44,41 @@ export default function ItemConfigModal({
       }
       setFormData(cloned);
       setNewBatchInput("");
+      setFgStock(cloned.current_stock !== undefined ? cloned.current_stock : null);
+      setFgUnit(cloned.unit_name || "Nos");
+      setStockBatches(cloned.stock_batches || []);
+      setShowBatchList(false);
+
+      if (cloned.material_id) {
+        let isMounted = true;
+        setLoadingStock(true);
+        getMaterialStock(cloned.material_id)
+          .then(res => {
+            if (!isMounted) return;
+            const stockVal = res.data?.stock ?? 0;
+            const unitVal = res.data?.unit_name || cloned.unit_name || "Nos";
+            const batchesVal = res.data?.batches || [];
+            setFgStock(stockVal);
+            setFgUnit(unitVal);
+            setStockBatches(batchesVal);
+            setFormData(prev => prev ? ({
+              ...prev,
+              current_stock: stockVal,
+              unit_name: unitVal,
+              stock_batches: batchesVal
+            }) : prev);
+          })
+          .catch(err => {
+            console.error("Failed to load FG stock in ItemConfigModal", err);
+          })
+          .finally(() => {
+            if (isMounted) setLoadingStock(false);
+          });
+
+        return () => {
+          isMounted = false;
+        };
+      }
     }
   }, [isOpen, item]);
 
@@ -191,25 +231,172 @@ export default function ItemConfigModal({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 text-2xl font-bold cursor-pointer transition-colors p-1"
-          >
-            &times;
-          </button>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-xl shadow-2xs">
+              <div className="h-7 w-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs">
+                <i className="fa-solid fa-warehouse"></i>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Current Stock</div>
+                <div className="text-sm font-extrabold text-emerald-900 leading-none">
+                  {loadingStock ? (
+                    <span className="text-xs text-slate-400 font-normal">Loading...</span>
+                  ) : (
+                    `${fgStock !== null ? fgStock : (formData.current_stock ?? 0)} ${fgUnit}`
+                  )}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-slate-400 hover:text-slate-600 text-2xl font-bold cursor-pointer transition-colors p-1"
+            >
+              &times;
+            </button>
+          </div>
         </div>
 
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Production Details */}
           <div className="border border-slate-200 rounded-xl p-5 bg-white shadow-xs space-y-4">
-            <h4 className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-2">
-              <i className="fa-solid fa-sliders text-[#369ACF]"></i>
-              Production Details
-            </h4>
+            <div className="flex items-center justify-between pb-1">
+              <h4 className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-2">
+                <i className="fa-solid fa-sliders text-[#369ACF]"></i>
+                Production Details
+              </h4>
+              <span className="text-xs text-slate-400">
+                Unit: <strong className="text-slate-700">{fgUnit}</strong>
+              </span>
+            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Inventory Stock & Production Overview */}
+            <div className="bg-gradient-to-r from-slate-50 to-indigo-50/30 border border-slate-200 rounded-xl p-4 shadow-2xs space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <i className="fa-solid fa-warehouse text-emerald-600 text-sm"></i>
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Inventory Stock Snapshot
+                  </span>
+                </div>
+                {stockBatches.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowBatchList(!showBatchList)}
+                    className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 bg-emerald-100/60 hover:bg-emerald-100 px-2.5 py-1 rounded-lg border border-emerald-200 flex items-center gap-1.5 transition cursor-pointer"
+                  >
+                    <i className={`fa-solid ${showBatchList ? 'fa-chevron-up' : 'fa-list-check'} text-[10px]`}></i>
+                    <span>{showBatchList ? "Hide Batches" : `${stockBatches.length} Batch${stockBatches.length > 1 ? 'es' : ''} in Store`}</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Current Stock */}
+                <div className="bg-white rounded-lg p-3 border border-emerald-200 shadow-2xs flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-base shrink-0 border border-emerald-100">
+                    <i className="fa-solid fa-boxes-stacked"></i>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Current Stock in Store</p>
+                    <p className="text-lg font-black text-emerald-700 truncate">
+                      {loadingStock ? "..." : `${fgStock !== null ? fgStock : (formData.current_stock ?? 0)} ${fgUnit}`}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Order Qty */}
+                <div className="bg-white rounded-lg p-3 border border-slate-200 shadow-2xs flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-base shrink-0 border border-blue-100">
+                    <i className="fa-solid fa-cart-shopping"></i>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Order Quantity</p>
+                    <p className="text-lg font-black text-slate-800 truncate">
+                      {formData.quantity || 0} {fgUnit}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Production Qty */}
+                <div className="bg-white rounded-lg p-3 border border-indigo-200 shadow-2xs flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-base shrink-0 border border-indigo-100">
+                    <i className="fa-solid fa-industry"></i>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Planned Production</p>
+                    <p className="text-lg font-black text-indigo-700 truncate">
+                      {formData.production_quantity || 0} {fgUnit}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Stock Batches Dropdown Table */}
+              {showBatchList && stockBatches.length > 0 && (
+                <div className="pt-2 animate-in fade-in duration-150">
+                  <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-2xs">
+                    <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 text-[11px] font-bold text-slate-600 uppercase flex items-center justify-between">
+                      <span>Available Inventory Batches in Warehouse</span>
+                      <span className="text-emerald-700 font-mono font-bold">{stockBatches.length} Batches Total</span>
+                    </div>
+                    <div className="max-h-40 overflow-y-auto">
+                      <table className="w-full text-left text-xs text-slate-600">
+                        <thead className="bg-slate-50/50 text-[10px] uppercase font-semibold text-slate-400 border-b border-slate-100">
+                          <tr>
+                            <th className="px-3 py-1.5">Batch No</th>
+                            <th className="px-3 py-1.5 text-right">Available Qty</th>
+                            <th className="px-3 py-1.5">Location</th>
+                            <th className="px-3 py-1.5">Party / Source</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {stockBatches.map((b, bIdx) => (
+                            <tr key={bIdx} className="hover:bg-slate-50/50">
+                              <td className="px-3 py-1.5 font-mono font-bold text-slate-800">{b.batch_no}</td>
+                              <td className="px-3 py-1.5 text-right font-mono font-bold text-emerald-700">{b.available_qty} {fgUnit}</td>
+                              <td className="px-3 py-1.5 text-slate-500">{b.location || "—"}</td>
+                              <td className="px-3 py-1.5 text-slate-500 truncate max-w-[140px]">{b.party || "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Contextual intelligent note */}
+              {fgStock !== null && !loadingStock && (
+                <div className="pt-1">
+                  {Number(fgStock) >= Number(formData.quantity) ? (
+                    <div className="flex items-start gap-2 p-2.5 bg-emerald-50/90 border border-emerald-200 rounded-lg text-xs text-emerald-800">
+                      <i className="fa-solid fa-circle-check text-emerald-600 mt-0.5 shrink-0 text-sm"></i>
+                      <span>
+                        <strong>Sufficient Stock in Store:</strong> Current inventory has <strong>{fgStock} {fgUnit}</strong>, which is enough to satisfy this order quantity ({formData.quantity} {fgUnit}). You can adjust Planned Production Quantity if you wish to fulfill directly from stock.
+                      </span>
+                    </div>
+                  ) : Number(fgStock) > 0 ? (
+                    <div className="flex items-start gap-2 p-2.5 bg-sky-50/90 border border-sky-200 rounded-lg text-xs text-sky-800">
+                      <i className="fa-solid fa-circle-info text-sky-600 mt-0.5 shrink-0 text-sm"></i>
+                      <span>
+                        <strong>Partial Stock in Store:</strong> <strong>{fgStock} {fgUnit}</strong> is currently available in store. Remaining shortfall for order: <strong>{(Number(formData.quantity) - Number(fgStock)).toFixed(3).replace(/\.?0+$/, '')} {fgUnit}</strong>.
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-start gap-2 p-2.5 bg-slate-100/90 border border-slate-200 rounded-lg text-xs text-slate-600">
+                      <i className="fa-solid fa-warehouse text-slate-400 mt-0.5 shrink-0 text-sm"></i>
+                      <span>
+                        No finished goods currently in store for this item. Full order quantity ({formData.quantity} {fgUnit}) must be manufactured.
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
                   Order Quantity <span className="text-red-500">*</span>
