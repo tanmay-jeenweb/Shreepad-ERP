@@ -62,7 +62,7 @@ const { createStockStatusTable, ensureStockStatusColumns } = require("./models/s
 const { createMaterialAddTables, ensureMaterialAddColumns } = require("./models/materialAddModel.js");
 const { createWorkOrdersTable, ensureWorkOrderColumns, ensureSortOrderColumn, ensureIsOnHoldColumn, ensurePlannedDateColumns, ensureDelayColumns, ensurePriorityColumn, ensureWorkOrderStatusColumns, ensureWorkOrderHeaderColumns } = require("./models/workOrderModel.js");
 const { createRmReturnsTable, ensureRmReturnColumns } = require("./models/rmReturnModel.js");
-const { createWorkshopEntriesTable, createWorkshopRmIssuesTable, createWorkshopProductionLogsTable, createWorkshopProductionLogItemsTable, ensureWorkshopEntryColumns, ensureWorkshopProductionLogColumns } = require("./models/workshopEntryModel.js");
+const { createWorkshopEntriesTable, createWorkshopRmIssuesTable, createWorkshopProductionLogsTable, createWorkshopProductionLogItemsTable, ensureWorkshopEntryColumns, ensureWorkshopProductionLogColumns, ensureWorkshopProductionLogItemColumns } = require("./models/workshopEntryModel.js");
 const { createDispatchTable } = require("./models/dispatchModel.js");
 const { createInspectionTable } = require("./models/inspectionModel.js");
 
@@ -267,6 +267,7 @@ const startServer = async () => {
         await createWorkshopProductionLogsTable();
         await ensureWorkshopProductionLogColumns();
         await createWorkshopProductionLogItemsTable();
+        await ensureWorkshopProductionLogItemColumns();
         await createDispatchTable();
 
 

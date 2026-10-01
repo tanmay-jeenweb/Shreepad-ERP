@@ -12,11 +12,16 @@ export default function ItemConfigModal({
 }) {
   const [formData, setFormData] = useState(null);
 
+  const [newBatchInput, setNewBatchInput] = useState("");
+
   useEffect(() => {
     if (isOpen && item) {
       const cloned = JSON.parse(JSON.stringify(item));
       const prodQty = Number(cloned.production_quantity) || Number(cloned.quantity) || 1;
       cloned.production_quantity = prodQty;
+      if (!Array.isArray(cloned.batches)) {
+        cloned.batches = cloned.batch_no ? String(cloned.batch_no).split(',').map(s => s.trim()).filter(Boolean) : [];
+      }
       if (cloned.rawMaterials) {
         cloned.rawMaterials = cloned.rawMaterials.map(rm => {
           const req = Number((Number(rm.bomQty) * prodQty).toFixed(3));
@@ -33,10 +38,42 @@ export default function ItemConfigModal({
         });
       }
       setFormData(cloned);
+      setNewBatchInput("");
     }
   }, [isOpen, item]);
 
   if (!isOpen || !formData) return null;
+
+  const handleAddBatch = () => {
+    const val = newBatchInput.trim();
+    if (!val) return;
+    const currentBatches = formData?.batches || [];
+    if (currentBatches.includes(val)) {
+      toast.error(`Batch "${val}" is already added.`);
+      return;
+    }
+    const maxAllowed = Number(formData?.production_quantity || formData?.quantity) || 1;
+    if (currentBatches.length >= maxAllowed) {
+      toast.error(`Maximum batch count reached (${maxAllowed} for this item's quantity).`);
+      return;
+    }
+    const updatedBatches = [...currentBatches, val];
+    setFormData(prev => ({
+      ...prev,
+      batches: updatedBatches,
+      batch_no: updatedBatches.join(', ')
+    }));
+    setNewBatchInput("");
+  };
+
+  const handleRemoveBatch = (index) => {
+    const updatedBatches = (formData?.batches || []).filter((_, i) => i !== index);
+    setFormData(prev => ({
+      ...prev,
+      batches: updatedBatches,
+      batch_no: updatedBatches.join(', ')
+    }));
+  };
 
   const handleFieldChange = (field, value) => {
     setFormData(prev => {
@@ -117,6 +154,11 @@ export default function ItemConfigModal({
     }
     if (Number(formData.production_quantity) <= 0) {
       toast.error("Production Quantity must be greater than 0");
+      return;
+    }
+    const maxAllowed = Number(formData.production_quantity || formData.quantity) || 1;
+    if ((formData.batches?.length || 0) > maxAllowed) {
+      toast.error(`Maximum batch count reached (${maxAllowed} for this item).`);
       return;
     }
     onSave(formData);
@@ -224,6 +266,85 @@ export default function ItemConfigModal({
                 />
               </div>
             </div>
+          </div>
+
+          {/* Item Batch Numbers Section */}
+          <div className="border border-slate-200 rounded-xl p-5 bg-white shadow-xs space-y-3.5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <i className="fa-solid fa-tags text-[#369ACF]"></i>
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Batch Numbers for this Item
+                </h4>
+              </div>
+              <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
+                (formData.batches?.length || 0) > (Number(formData.production_quantity || formData.quantity) || 1)
+                  ? 'bg-rose-50 text-rose-600 border border-rose-200'
+                  : (formData.batches?.length || 0) === (Number(formData.production_quantity || formData.quantity) || 1)
+                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                  : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+              }`}>
+                {formData.batches?.length || 0} / {Number(formData.production_quantity || formData.quantity) || 1} Max Batches
+              </span>
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Assign batch numbers specific to this item. In production, only these batch numbers will be prompted when moving to Finished Goods.
+            </p>
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Enter batch number and click Add or press Enter (e.g. BATCH-001)"
+                value={newBatchInput}
+                onChange={(e) => setNewBatchInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddBatch();
+                  }
+                }}
+                disabled={disabled || (formData.batches?.length || 0) >= (Number(formData.production_quantity || formData.quantity) || 1)}
+                className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500 disabled:bg-slate-50 disabled:text-slate-400"
+              />
+              <button
+                type="button"
+                onClick={handleAddBatch}
+                disabled={disabled || !newBatchInput.trim() || (formData.batches?.length || 0) >= (Number(formData.production_quantity || formData.quantity) || 1)}
+                className="px-4 py-2 bg-[#369ACF] hover:bg-[#2b82b0] disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer disabled:cursor-not-allowed shadow-2xs"
+              >
+                <i className="fa-solid fa-plus text-[10px]"></i>
+                <span>Add Batch</span>
+              </button>
+            </div>
+
+            {formData.batches && formData.batches.length > 0 ? (
+              <div className="flex flex-wrap gap-2 p-3 bg-slate-50/70 border border-slate-200 rounded-xl">
+                {formData.batches.map((batch, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-mono font-bold text-slate-800 shadow-2xs group"
+                  >
+                    <i className="fa-solid fa-tag text-[9px] text-[#369ACF]"></i>
+                    <span>{batch}</span>
+                    {!disabled && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveBatch(idx)}
+                        className="text-slate-400 hover:text-rose-500 transition cursor-pointer ml-0.5"
+                        title="Remove batch"
+                      >
+                        <i className="fa-solid fa-xmark text-[11px]"></i>
+                      </button>
+                    )}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[11px] text-slate-400 italic">
+                No batch numbers added yet for this item. You can add up to {Number(formData.production_quantity || formData.quantity) || 1} batch number(s).
+              </p>
+            )}
           </div>
 
           {/* Raw Materials Allocation Section for this item */}

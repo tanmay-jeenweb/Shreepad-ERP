@@ -31,32 +31,6 @@ export default function CreateWorkOrder() {
   const [inspectionId, setInspectionId] = useState("");
   const [remark, setRemark] = useState("");
   const [items, setItems] = useState([]);
-  const [batches, setBatches] = useState([]);
-  const [newBatchInput, setNewBatchInput] = useState("");
-
-  const totalProductQty = useMemo(() => {
-    return items.reduce((sum, it) => sum + (parseFloat(it.quantity) || 0), 0);
-  }, [items]);
-
-  const handleAddBatch = () => {
-    const val = newBatchInput.trim();
-    if (!val) return;
-    if (batches.includes(val)) {
-      toast.error(`Batch "${val}" is already added.`);
-      return;
-    }
-    if (batches.length >= totalProductQty) {
-      toast.error(`Maximum batch count reached (${totalProductQty} for total product quantity).`);
-      return;
-    }
-    setBatches([...batches, val]);
-    setNewBatchInput("");
-  };
-
-  const handleRemoveBatch = (index) => {
-    setBatches(batches.filter((_, i) => i !== index));
-  };
-
   // Modal states for work order configuration (common modal on save)
   const [showModal, setShowModal] = useState(false);
   const [modalItems, setModalItems] = useState([]);
@@ -244,6 +218,7 @@ export default function CreateWorkOrder() {
       quantity: 1,
       production_quantity: 1,
       exp_delivery_date: "",
+      batches: [],
       batch_no: "",
       remarks: "",
       job_party_id: ""
@@ -261,6 +236,8 @@ export default function CreateWorkOrder() {
   const isItemConfigured = (item) => {
     if (!item) return false;
     return Boolean(
+      (item.batches && item.batches.length > 0) ||
+      item.batch_no ||
       item.exp_delivery_date ||
       item.remarks ||
       (item.production_quantity !== undefined && Number(item.production_quantity) !== Number(item.quantity)) ||
@@ -418,12 +395,24 @@ export default function CreateWorkOrder() {
       const flattenedItems = [];
       for (const it of modalItems) {
         // Add Finished Good row
+        const itemBatches = Array.isArray(it.batches)
+          ? it.batches
+          : (it.batch_no ? String(it.batch_no).split(',').map(s => s.trim()).filter(Boolean) : []);
+
+        const maxItemBatches = Number(it.production_quantity || it.quantity) || 1;
+        if (itemBatches.length > maxItemBatches) {
+          toast.error(`Item "${it.material_name || 'Item'}" has ${itemBatches.length} batches, exceeding maximum of ${maxItemBatches}.`);
+          setLoading(false);
+          return;
+        }
+
         flattenedItems.push({
           material_id: Number(it.material_id),
           quantity: Number(it.quantity),
           production_quantity: Number(it.production_quantity),
           exp_delivery_date: it.exp_delivery_date || null,
-          batch_no: it.batch_no || null,
+          batches: itemBatches,
+          batch_no: itemBatches.join(', ') || it.batch_no || null,
           remarks: it.remarks || null,
           job_party_id: it.job_party_id ? Number(it.job_party_id) : null
         });
@@ -438,19 +427,13 @@ export default function CreateWorkOrder() {
                 quantity: requiredQty,
                 production_quantity: 0,
                 exp_delivery_date: it.exp_delivery_date || null,
-                batch_no: it.batch_no || null,
+                batch_no: null,
                 remarks: `Allocated raw material for ${it.material_name} (${it.material_code})`,
                 job_party_id: it.job_party_id ? Number(it.job_party_id) : null
               });
             }
           }
         }
-      }
-
-      if (batches.length > totalProductQty) {
-        toast.error(`Total batches (${batches.length}) cannot exceed total quantity (${totalProductQty}) of all products.`);
-        setLoading(false);
-        return;
       }
 
       const payload = {
@@ -461,8 +444,7 @@ export default function CreateWorkOrder() {
         project_name: projectName.trim() || null,
         inspection_id: inspectionId ? Number(inspectionId) : null,
         remark: remark.trim() || null,
-        items: flattenedItems,
-        batches: batches
+        items: flattenedItems
       };
 
       await createWorkOrder(payload);
@@ -618,79 +600,6 @@ export default function CreateWorkOrder() {
                 />
               </div>
 
-              {/* Section: Batch Numbers */}
-              <div className="md:col-span-2 pt-3 border-t border-slate-100 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
-                    <i className="fa-solid fa-tags text-[#369ACF]"></i>
-                    Batch Numbers
-                    <span className="text-[11px] font-normal text-slate-400 normal-case">
-                      (Max allowed: {totalProductQty} {totalProductQty === 1 ? 'batch' : 'batches'} based on total quantities specified for all products)
-                    </span>
-                  </label>
-                  <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
-                    batches.length > totalProductQty
-                      ? 'bg-rose-50 text-rose-600 border border-rose-200'
-                      : batches.length === totalProductQty && totalProductQty > 0
-                      ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                      : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-                  }`}>
-                    {batches.length} / {totalProductQty} Batches
-                  </span>
-                </div>
-
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Enter batch number and click Add or press Enter (e.g. BATCH-001)"
-                    value={newBatchInput}
-                    onChange={(e) => setNewBatchInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddBatch();
-                      }
-                    }}
-                    disabled={batches.length >= totalProductQty}
-                    className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500 disabled:bg-slate-50 disabled:text-slate-400"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddBatch}
-                    disabled={!newBatchInput.trim() || batches.length >= totalProductQty}
-                    className="px-4 py-2 bg-[#369ACF] hover:bg-[#2b82b0] disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer disabled:cursor-not-allowed shadow-2xs"
-                  >
-                    <i className="fa-solid fa-plus text-[10px]"></i>
-                    <span>Add Batch</span>
-                  </button>
-                </div>
-
-                {batches.length > 0 ? (
-                  <div className="flex flex-wrap gap-2 p-3 bg-slate-50/70 border border-slate-200 rounded-xl">
-                    {batches.map((batch, idx) => (
-                      <span
-                        key={idx}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-mono font-bold text-slate-800 shadow-2xs group"
-                      >
-                        <i className="fa-solid fa-tag text-[9px] text-[#369ACF]"></i>
-                        <span>{batch}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveBatch(idx)}
-                          className="text-slate-400 hover:text-rose-500 transition cursor-pointer ml-0.5"
-                          title="Remove batch"
-                        >
-                          <i className="fa-solid fa-xmark text-[11px]"></i>
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-[11px] text-slate-400 italic">
-                    No batch numbers added yet. You can add up to {totalProductQty} batch {totalProductQty === 1 ? 'number' : 'numbers'} for this work order.
-                  </p>
-                )}
-              </div>
             </div>
           </div>
 
@@ -718,6 +627,7 @@ export default function CreateWorkOrder() {
                     <th className="px-6 py-3.5 w-32 text-right">Quantity *</th>
                     <th className="px-6 py-3.5 w-32 text-right">Prod Qty</th>
                     <th className="px-6 py-3.5">Exp Deliv.</th>
+                    <th className="px-6 py-3.5">Batch No(s)</th>
                     <th className="px-6 py-3.5 text-center">Action</th>
                   </tr>
                 </thead>
@@ -748,6 +658,23 @@ export default function CreateWorkOrder() {
 
                         <td className="px-6 py-4 text-xs font-mono">
                           {item.exp_delivery_date ? formatDate(item.exp_delivery_date) : <span className="text-slate-400 italic">Not Set</span>}
+                        </td>
+                        <td className="px-6 py-4 font-mono text-xs">
+                          {item.batches && item.batches.length > 0 ? (
+                            <div className="flex flex-wrap gap-1 max-w-[200px]">
+                              {item.batches.map((b, bIdx) => (
+                                <span key={bIdx} className="bg-slate-100 text-slate-800 border border-slate-200 px-1.5 py-0.5 rounded text-[11px] font-bold">
+                                  {b}
+                                </span>
+                              ))}
+                            </div>
+                          ) : item.batch_no ? (
+                            <span className="bg-slate-100 text-slate-800 border border-slate-200 px-1.5 py-0.5 rounded text-[11px] font-bold">
+                              {item.batch_no}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 italic">Not Set</span>
+                          )}
                         </td>
                         <td className="px-6 py-4 text-center">
                           <div className="flex items-center justify-center gap-2">
@@ -957,6 +884,91 @@ export default function CreateWorkOrder() {
                             onChange={(e) => handleModalItemChange(idx, "remarks", e.target.value)}
                             className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500"
                           />
+                        </div>
+
+                        {/* Item Batch Numbers */}
+                        <div className="md:col-span-2 lg:col-span-3 pt-3 border-t border-slate-100 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                              <i className="fa-solid fa-tags text-[#369ACF]"></i>
+                              Batch Numbers for this Item
+                            </label>
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                              (item.batches?.length || 0) > (Number(item.production_quantity || item.quantity) || 1)
+                                ? 'bg-rose-50 text-rose-600 border border-rose-200'
+                                : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                            }`}>
+                              {item.batches?.length || 0} / {Number(item.production_quantity || item.quantity) || 1} Max Batches
+                            </span>
+                          </div>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              id={`item-batch-input-${idx}`}
+                              placeholder="Enter batch number and click Add (e.g. BATCH-001)"
+                              className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg text-slate-800 text-xs focus:outline-none focus:border-indigo-500"
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  const val = e.target.value.trim();
+                                  if (!val) return;
+                                  const curr = item.batches || [];
+                                  if (curr.includes(val)) return toast.error(`Batch "${val}" already added.`);
+                                  const max = Number(item.production_quantity || item.quantity) || 1;
+                                  if (curr.length >= max) return toast.error(`Maximum batch count reached (${max}).`);
+                                  const nextBatches = [...curr, val];
+                                  handleModalItemChange(idx, "batches", nextBatches);
+                                  handleModalItemChange(idx, "batch_no", nextBatches.join(", "));
+                                  e.target.value = "";
+                                }
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const input = document.getElementById(`item-batch-input-${idx}`);
+                                if (!input) return;
+                                const val = input.value.trim();
+                                if (!val) return;
+                                const curr = item.batches || [];
+                                if (curr.includes(val)) return toast.error(`Batch "${val}" already added.`);
+                                const max = Number(item.production_quantity || item.quantity) || 1;
+                                if (curr.length >= max) return toast.error(`Maximum batch count reached (${max}).`);
+                                const nextBatches = [...curr, val];
+                                handleModalItemChange(idx, "batches", nextBatches);
+                                handleModalItemChange(idx, "batch_no", nextBatches.join(", "));
+                                input.value = "";
+                              }}
+                              className="px-3 py-1.5 bg-[#369ACF] hover:bg-[#2b82b0] text-white rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer"
+                            >
+                              <i className="fa-solid fa-plus text-[10px]"></i> Add
+                            </button>
+                          </div>
+                          {item.batches && item.batches.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5 p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                              {item.batches.map((b, bIdx) => (
+                                <span
+                                  key={bIdx}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-white border border-slate-200 rounded text-xs font-mono font-bold text-slate-800"
+                                >
+                                  <span>{b}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const nextBatches = (item.batches || []).filter((_, i) => i !== bIdx);
+                                      handleModalItemChange(idx, "batches", nextBatches);
+                                      handleModalItemChange(idx, "batch_no", nextBatches.join(", "));
+                                    }}
+                                    className="text-slate-400 hover:text-rose-500 cursor-pointer"
+                                  >
+                                    <i className="fa-solid fa-xmark text-[10px]"></i>
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-[11px] text-slate-400 italic">No batches set for this item.</p>
+                          )}
                         </div>
                       </div>
 

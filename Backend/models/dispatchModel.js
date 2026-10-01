@@ -298,10 +298,11 @@ const getWorkOrdersForDispatch = async (tab = 'ongoing') => {
         LEFT JOIN units u ON m.unit_id = u.id
         LEFT JOIN customer_master c ON wo.customer_id = c.id
         LEFT JOIN (
-            SELECT work_order_id, GROUP_CONCAT(batch_no ORDER BY id SEPARATOR ', ') AS batches
+            SELECT work_order_item_id, GROUP_CONCAT(batch_no ORDER BY id SEPARATOR ', ') AS batches
             FROM work_order_batches
-            GROUP BY work_order_id
-        ) wob ON wo.id = wob.work_order_id
+            WHERE work_order_item_id IS NOT NULL
+            GROUP BY work_order_item_id
+        ) wob ON woi.id = wob.work_order_item_id
         LEFT JOIN (
             SELECT 
                 work_order_item_id,

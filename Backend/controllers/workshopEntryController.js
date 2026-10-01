@@ -161,7 +161,15 @@ const addWorkshopProductionLogController = async (req, res) => {
             work_order_item_id: Number(work_order_item_id),
             bom_process_id: Number(bom_process_id),
             quantity: quantity ? Number(quantity) : undefined,
-            items: Array.isArray(items) ? items : undefined,
+            items: Array.isArray(items)
+                ? items.map(it => ({
+                    operator_id: it.operator_id,
+                    machine_id: it.machine_id,
+                    quantity: it.quantity,
+                    batch_no: it.batch_no ? String(it.batch_no).trim() : null,
+                    remarks: it.remarks
+                }))
+                : undefined,
             log_date,
             remarks,
             added_by: addedBy,
@@ -184,13 +192,15 @@ const addWorkshopProductionLogController = async (req, res) => {
                 items: items || [],
                 from_process: result.from_process_name,
                 to_process: result.to_process_name,
+                batches: result.batches || [],
                 added_by: addedBy
             }
         );
 
+        const batchMsg = result.batches && result.batches.length > 0 ? ` (Batches: ${result.batches.join(', ')})` : '';
         res.status(201).json({
             success: true,
-            message: `Successfully moved ${result.quantity} units from ${result.from_process_name} to ${result.to_process_name}`,
+            message: `Successfully moved ${result.quantity} units from ${result.from_process_name} to ${result.to_process_name}${batchMsg}`,
             data: result
         });
     } catch (error) {

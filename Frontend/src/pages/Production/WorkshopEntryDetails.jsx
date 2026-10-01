@@ -464,6 +464,19 @@ export default function WorkshopEntryDetails() {
     return stageStats.filter((s) => s.stageNumber < revertFromStage.stageNumber);
   }, [revertFromStage, stageStats]);
 
+  // Available batch options for finished goods conversion
+  const availableBatchOptions = useMemo(() => {
+    const list = Array.isArray(entryData?.work_order_batches) && entryData.work_order_batches.length > 0
+      ? [...entryData.work_order_batches]
+      : entryData?.batch_no
+        ? String(entryData.batch_no).split(",").map((s) => s.trim()).filter(Boolean)
+        : [];
+    if (list.length === 0 && entryData?.work_order_no) {
+      list.push(`WO-${String(entryData.work_order_no).padStart(4, "0")}`);
+    }
+    return list;
+  }, [entryData]);
+
   // Sync selectedLogForDetails if productionLogs updates
   useEffect(() => {
     if (selectedLogForDetails) {
@@ -477,10 +490,35 @@ export default function WorkshopEntryDetails() {
   }, [productionLogs]);
 
   const handleAddMoveItem = () => {
+    const isLast = Boolean(selectedStage?.isLastStage || selectedStage?.nextStageName === "Finished Goods" || !selectedStage?.nextProc);
+    let nextBatch = "";
+    if (isLast && availableBatchOptions.length > 0) {
+      const usedBatches = moveItems.map((it) => it.batch_no);
+      const unused = availableBatchOptions.find((b) => !usedBatches.includes(b));
+      nextBatch = unused || moveItems[moveItems.length - 1]?.batch_no || availableBatchOptions[0];
+    }
+
     setMoveItems((prev) => [
       ...prev,
-      { operator_id: "", machine_id: "", quantity: "", remarks: "" },
+      {
+        operator_id: "",
+        machine_id: "",
+        quantity: "",
+        remarks: "",
+        batch_no: nextBatch,
+      },
     ]);
+  };
+
+  const handleApplyBatchToAllRows = (batchName) => {
+    if (!batchName) return;
+    setMoveItems((prev) =>
+      prev.map((it) => ({
+        ...it,
+        batch_no: batchName,
+      }))
+    );
+    toast.success(`Applied batch '${batchName}' to all rows.`);
   };
 
   const handleRemoveMoveItem = (index) => {
@@ -502,30 +540,20 @@ export default function WorkshopEntryDetails() {
 
   const handleOpenMoveModal = (stage) => {
     setSelectedStage(stage);
+    const isLast = Boolean(stage.isLastStage || stage.nextStageName === "Finished Goods" || !stage.nextProc);
+    const initialBatch = isLast && availableBatchOptions.length > 0 ? availableBatchOptions[0] : "";
+
     setMoveItems([
-      { operator_id: "", machine_id: "", quantity: "", remarks: "" },
+      {
+        operator_id: "",
+        machine_id: "",
+        quantity: "",
+        remarks: "",
+        batch_no: initialBatch,
+      },
     ]);
     setMoveDate(new Date().toISOString().split("T")[0]);
     setMoveRemarks("");
-
-    const isLast = Boolean(stage.isLastStage || stage.nextStageName === "Finished Goods" || !stage.nextProc);
-    if (isLast) {
-      const batches = entryData?.work_order_batches || [];
-      if (batches.length > 0) {
-        setSelectedBatch(batches[0]);
-        setIsCustomBatch(false);
-        setCustomBatchInput("");
-      } else {
-        const defaultBatch = entryData?.batch_no || (entryData?.work_order_no ? `WO-${String(entryData.work_order_no).padStart(4, "0")}` : "BATCH-001");
-        setSelectedBatch(defaultBatch);
-        setCustomBatchInput(defaultBatch);
-        setIsCustomBatch(true);
-      }
-    } else {
-      setSelectedBatch("");
-      setCustomBatchInput("");
-      setIsCustomBatch(false);
-    }
     setMoveModalOpen(true);
   };
 
@@ -543,6 +571,8 @@ export default function WorkshopEntryDetails() {
       return toast.error("Please add at least one operator allocation row.");
     }
 
+    const isMovingToFG = Boolean(selectedStage.isLastStage || selectedStage.nextStageName === "Finished Goods");
+
     for (let i = 0; i < moveItems.length; i++) {
       const row = moveItems[i];
       if (!row.operator_id) {
@@ -551,6 +581,12 @@ export default function WorkshopEntryDetails() {
       const q = parseFloat(row.quantity);
       if (isNaN(q) || q <= 0) {
         return toast.error(`Row #${i + 1}: Quantity must be greater than 0.`);
+      }
+      if (isMovingToFG) {
+        const rowBatch = row.batch_no?.trim();
+        if (!rowBatch) {
+          return toast.error(`Row #${i + 1}: Please select a batch number.`);
+        }
       }
     }
 
@@ -564,18 +600,6 @@ export default function WorkshopEntryDetails() {
       );
     }
 
-    const isMovingToFG = Boolean(selectedStage.isLastStage || selectedStage.nextStageName === "Finished Goods");
-    let finalBatch = "";
-    if (isMovingToFG) {
-      finalBatch = (isCustomBatch ? customBatchInput : selectedBatch)?.trim();
-      if (!finalBatch) {
-        finalBatch = entryData?.batch_no || (entryData?.work_order_no ? `WO-${String(entryData.work_order_no).padStart(4, "0")}` : "BATCH-001");
-      }
-      if (!finalBatch) {
-        return toast.error("Please enter a Batch Number for Finished Goods.");
-      }
-    }
-
     try {
       setMovingProduction(true);
       const res = await addProductionLog({
@@ -586,11 +610,11 @@ export default function WorkshopEntryDetails() {
           operator_id: Number(item.operator_id),
           machine_id: item.machine_id ? Number(item.machine_id) : null,
           quantity: parseFloat(item.quantity),
+          batch_no: isMovingToFG ? item.batch_no?.trim() : undefined,
           remarks: item.remarks ? item.remarks.trim() : null,
         })),
         log_date: moveDate,
         remarks: moveRemarks.trim(),
-        batch_no: isMovingToFG ? finalBatch : undefined,
       });
 
       toast.success(res.data?.message || "Quantity moved successfully!");
@@ -1651,7 +1675,7 @@ export default function WorkshopEntryDetails() {
             {/* Move Products Modal */}
             {moveModalOpen && selectedStage && (
               <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-                <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[92vh] flex flex-col border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-auto">
+                <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[92vh] flex flex-col border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-auto">
                   {/* Modal Header */}
                   <div className="px-5 sm:px-6 py-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70 flex-shrink-0">
                     <div>
@@ -1712,6 +1736,46 @@ export default function WorkshopEntryDetails() {
 
                       {/* Operator & Machine Breakdown Table */}
                       <div className="space-y-2">
+                        {/* Finished Goods Multi-Batch Banner & Quick Apply Bar */}
+                        {Boolean(selectedStage?.isLastStage || selectedStage?.nextStageName === "Finished Goods") && (
+                          <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-50/80 via-white to-emerald-50/50 border border-emerald-200 flex flex-wrap items-center justify-between gap-2.5">
+                            <div className="flex items-center gap-2">
+                              <span className="w-6 h-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-xs shadow-2xs">
+                                <i className="fa-solid fa-tag text-[10px]"></i>
+                              </span>
+                              <div>
+                                <div className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                                  <span>Finished Goods Conversion</span>
+                                  <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.2 rounded-full">
+                                    Multi-Batch Dropdown
+                                  </span>
+                                </div>
+                                <div className="text-[11px] text-slate-500">
+                                  Select the target batch for each operator row below to save multiple batches at once.
+                                </div>
+                              </div>
+                            </div>
+                            {availableBatchOptions.length > 0 && moveItems.length > 1 && (
+                              <div className="flex items-center gap-1.5 text-xs">
+                                <span className="text-[10px] font-bold text-slate-500">Apply to all:</span>
+                                <select
+                                  onChange={(e) => {
+                                    if (e.target.value) handleApplyBatchToAllRows(e.target.value);
+                                    e.target.value = "";
+                                  }}
+                                  defaultValue=""
+                                  className="px-2 py-1 text-[11px] font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer shadow-2xs"
+                                >
+                                  <option value="" disabled>Choose batch...</option>
+                                  {availableBatchOptions.map((b, i) => (
+                                    <option key={i} value={b}>{b}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         <div className="flex items-center justify-between">
                           <div>
                             <label className="block font-bold text-slate-800 text-[12px] flex items-center gap-1.5">
@@ -1720,7 +1784,8 @@ export default function WorkshopEntryDetails() {
                               <span className="text-rose-500">*</span>
                             </label>
                             <span className="text-[11px] text-slate-500">
-                              Specify quantities completed by each operator and machine
+                              Specify quantities completed by each operator, machine
+                              {Boolean(selectedStage?.isLastStage || selectedStage?.nextStageName === "Finished Goods") ? " and batch" : ""}
                             </span>
                           </div>
                           <button
@@ -1739,90 +1804,117 @@ export default function WorkshopEntryDetails() {
                             <thead>
                               <tr className="bg-slate-50 border-b border-slate-200 font-bold text-slate-600 uppercase tracking-wider text-[10px]">
                                 <th className="py-2 px-2.5 w-8 text-center">#</th>
-                                <th className="py-2 px-2.5 min-w-[170px]">Operator <span className="text-rose-500">*</span></th>
-                                <th className="py-2 px-2.5 min-w-[170px]">Machine (Optional)</th>
-                                <th className="py-2 px-2.5 w-32 text-right">Quantity (Nos) <span className="text-rose-500">*</span></th>
-                                <th className="py-2 px-2.5 min-w-[150px]">Operator Remark</th>
+                                <th className="py-2 px-2.5 min-w-[150px]">Operator <span className="text-rose-500">*</span></th>
+                                <th className="py-2 px-2.5 min-w-[150px]">Machine (Optional)</th>
+                                {Boolean(selectedStage?.isLastStage || selectedStage?.nextStageName === "Finished Goods") && (
+                                  <th className="py-2 px-2.5 min-w-[160px]">
+                                    Batch No <span className="text-rose-500">*</span>
+                                  </th>
+                                )}
+                                <th className="py-2 px-2.5 w-28 text-right">Quantity (Nos) <span className="text-rose-500">*</span></th>
+                                <th className="py-2 px-2.5 min-w-[130px]">Operator Remark</th>
                                 <th className="py-2 px-2.5 w-10 text-center"></th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 bg-white">
-                              {moveItems.map((item, idx) => (
-                                <tr key={idx} className="hover:bg-slate-50/50 transition">
-                                  <td className="py-2 px-2.5 text-center font-bold text-slate-400 text-[11px]">
-                                    {idx + 1}
-                                  </td>
-                                  <td className="py-2 px-2.5">
-                                    <select
-                                      value={item.operator_id}
-                                      onChange={(e) => handleMoveItemChange(idx, "operator_id", e.target.value)}
-                                      required
-                                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 bg-white"
-                                    >
-                                      <option value="">-- Select Operator * --</option>
-                                      {operatorsList.map((op) => (
-                                        <option key={op.id} value={op.id}>
-                                          {op.operator_code ? `[${op.operator_code}] ` : ""}{op.operator_name}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </td>
-                                  <td className="py-2 px-2.5">
-                                    <select
-                                      value={item.machine_id}
-                                      onChange={(e) => handleMoveItemChange(idx, "machine_id", e.target.value)}
-                                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 bg-white"
-                                    >
-                                      <option value="">-- Manual / No Machine --</option>
-                                      {machinesList.map((mc) => (
-                                        <option key={mc.id} value={mc.id}>
-                                          {mc.machine_number ? `[${mc.machine_number}] ` : ""}{mc.name}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </td>
-                                  <td className="py-2 px-2.5">
-                                    <input
-                                      type="number"
-                                      step="any"
-                                      min="0.0001"
-                                      value={item.quantity}
-                                      onChange={(e) => handleMoveItemChange(idx, "quantity", e.target.value)}
-                                      placeholder="0"
-                                      required
-                                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 text-right bg-white"
-                                    />
-                                  </td>
-                                  <td className="py-2 px-2.5">
-                                    <input
-                                      type="text"
-                                      value={item.remarks}
-                                      onChange={(e) => handleMoveItemChange(idx, "remarks", e.target.value)}
-                                      placeholder="e.g. Shift 1, notes..."
-                                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 bg-white"
-                                    />
-                                  </td>
-                                  <td className="py-2 px-2.5 text-center">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleRemoveMoveItem(idx)}
-                                      disabled={moveItems.length <= 1}
-                                      title={moveItems.length <= 1 ? "At least one row required" : "Remove row"}
-                                      className="w-7 h-7 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 flex items-center justify-center transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed mx-auto"
-                                    >
-                                      <i className="fa-regular fa-trash-can text-xs"></i>
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
+                              {moveItems.map((item, idx) => {
+                                const isMovingToFG = Boolean(selectedStage?.isLastStage || selectedStage?.nextStageName === "Finished Goods");
+                                return (
+                                  <tr key={idx} className="hover:bg-slate-50/50 transition">
+                                    <td className="py-2 px-2.5 text-center font-bold text-slate-400 text-[11px]">
+                                      {idx + 1}
+                                    </td>
+                                    <td className="py-2 px-2.5">
+                                      <select
+                                        value={item.operator_id}
+                                        onChange={(e) => handleMoveItemChange(idx, "operator_id", e.target.value)}
+                                        required
+                                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 bg-white"
+                                      >
+                                        <option value="">-- Select Operator * --</option>
+                                        {operatorsList.map((op) => (
+                                          <option key={op.id} value={op.id}>
+                                            {op.operator_code ? `[${op.operator_code}] ` : ""}{op.operator_name}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </td>
+                                    <td className="py-2.5 px-2.5">
+                                      <select
+                                        value={item.machine_id}
+                                        onChange={(e) => handleMoveItemChange(idx, "machine_id", e.target.value)}
+                                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 bg-white"
+                                      >
+                                        <option value="">-- Manual / No Machine --</option>
+                                        {machinesList.map((mc) => (
+                                          <option key={mc.id} value={mc.id}>
+                                            {mc.machine_number ? `[${mc.machine_number}] ` : ""}{mc.name}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </td>
+                                    {isMovingToFG && (
+                                      <td className="py-2.5 px-2.5">
+                                        <select
+                                          value={item.batch_no || ""}
+                                          onChange={(e) => handleMoveItemChange(idx, "batch_no", e.target.value)}
+                                          required
+                                          className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 bg-white"
+                                        >
+                                          <option value="">-- Select Batch * --</option>
+                                          {availableBatchOptions.map((bName, bIdx) => (
+                                            <option key={bIdx} value={bName}>
+                                              {bName}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </td>
+                                    )}
+                                    <td className="py-2.5 px-2.5">
+                                      <input
+                                        type="number"
+                                        step="any"
+                                        min="0.0001"
+                                        value={item.quantity}
+                                        onChange={(e) => handleMoveItemChange(idx, "quantity", e.target.value)}
+                                        placeholder="0"
+                                        required
+                                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 text-right bg-white"
+                                      />
+                                    </td>
+                                    <td className="py-2.5 px-2.5">
+                                      <input
+                                        type="text"
+                                        value={item.remarks}
+                                        onChange={(e) => handleMoveItemChange(idx, "remarks", e.target.value)}
+                                        placeholder="e.g. Shift 1, notes..."
+                                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 bg-white"
+                                      />
+                                    </td>
+                                    <td className="py-2.5 px-2.5 text-center">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveMoveItem(idx)}
+                                        disabled={moveItems.length <= 1}
+                                        title={moveItems.length <= 1 ? "At least one row required" : "Remove row"}
+                                        className="w-7 h-7 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 flex items-center justify-center transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed mx-auto"
+                                      >
+                                        <i className="fa-regular fa-trash-can text-xs"></i>
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
                             </tbody>
                             <tfoot className="bg-slate-50 border-t border-slate-200">
                               <tr>
-                                <td colSpan="3" className="py-2 px-3 text-right font-bold text-slate-600 text-[11px]">
+                                <td
+                                  colSpan={Boolean(selectedStage?.isLastStage || selectedStage?.nextStageName === "Finished Goods") ? 4 : 3}
+                                  className="py-2 px-3 text-right font-bold text-slate-600 text-[11px]"
+                                >
                                   Total Allocated:
                                 </td>
-                                <td className={`py-2 px-3 text-right font-black text-xs ${totalMoveQuantity > selectedStage.availableQty ? "text-rose-600" : "text-indigo-700"
-                                  }`}>
+                                <td className={`py-2 px-3 text-right font-black text-xs ${totalMoveQuantity > selectedStage.availableQty ? "text-rose-600" : "text-indigo-700"}`}>
                                   {totalMoveQuantity.toLocaleString()} Nos
                                 </td>
                                 <td colSpan="2" className="py-2 px-3 text-[11px]">
@@ -1865,104 +1957,6 @@ export default function WorkshopEntryDetails() {
                           </div>
                         )}
                       </div>
-
-                      {/* Finished Goods Batch Number Selection (Only for final process stage) */}
-                      {Boolean(selectedStage?.isLastStage || selectedStage?.nextStageName === "Finished Goods") && (
-                        <div className="p-3.5 rounded-xl bg-gradient-to-r from-emerald-50/70 via-white to-emerald-50/50 border border-emerald-200 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <label className="block font-bold text-emerald-950 text-[12px] flex items-center gap-1.5">
-                              <i className="fa-solid fa-tag text-emerald-600 text-xs"></i>
-                              <span>Finished Goods Batch Number</span>
-                              <span className="text-rose-500">*</span>
-                            </label>
-                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full">
-                              Required for Stock Entry
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-slate-500">
-                            Select which batch this completed production belongs to. The Stock Status and Stock Book will be updated under this batch number.
-                          </p>
-
-                          {entryData?.work_order_batches && entryData.work_order_batches.length > 0 ? (
-                            <div className="space-y-2 pt-1">
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                {entryData.work_order_batches.map((batchName, bIdx) => (
-                                  <label
-                                    key={bIdx}
-                                    onClick={() => {
-                                      setSelectedBatch(batchName);
-                                      setIsCustomBatch(false);
-                                    }}
-                                    className={`flex items-center gap-2.5 p-2.5 rounded-xl border transition cursor-pointer text-xs ${
-                                      !isCustomBatch && selectedBatch === batchName
-                                        ? "border-emerald-500 bg-emerald-50 text-emerald-900 font-bold shadow-xs"
-                                        : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
-                                    }`}
-                                  >
-                                    <input
-                                      type="radio"
-                                      name="fg_batch_selection"
-                                      checked={!isCustomBatch && selectedBatch === batchName}
-                                      onChange={() => {
-                                        setSelectedBatch(batchName);
-                                        setIsCustomBatch(false);
-                                      }}
-                                      className="text-emerald-600 focus:ring-emerald-500"
-                                    />
-                                    <span className="font-mono text-xs">{batchName}</span>
-                                  </label>
-                                ))}
-
-                                <label
-                                  onClick={() => setIsCustomBatch(true)}
-                                  className={`flex items-center gap-2.5 p-2.5 rounded-xl border transition cursor-pointer text-xs ${
-                                    isCustomBatch
-                                      ? "border-emerald-500 bg-emerald-50 text-emerald-900 font-bold shadow-xs"
-                                      : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
-                                  }`}
-                                >
-                                  <input
-                                    type="radio"
-                                    name="fg_batch_selection"
-                                    checked={isCustomBatch}
-                                    onChange={() => setIsCustomBatch(true)}
-                                    className="text-emerald-600 focus:ring-emerald-500"
-                                  />
-                                  <span>Custom / Other Batch</span>
-                                </label>
-                              </div>
-
-                              {isCustomBatch && (
-                                <div className="pt-1.5">
-                                  <input
-                                    type="text"
-                                    placeholder="Enter custom batch number (e.g. BATCH-001)"
-                                    value={customBatchInput}
-                                    onChange={(e) => setCustomBatchInput(e.target.value)}
-                                    required={isCustomBatch}
-                                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 bg-white"
-                                  />
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="pt-1">
-                              <input
-                                type="text"
-                                placeholder="Enter batch number for this production (e.g. BATCH-001)"
-                                value={customBatchInput || selectedBatch}
-                                onChange={(e) => {
-                                  setCustomBatchInput(e.target.value);
-                                  setSelectedBatch(e.target.value);
-                                  setIsCustomBatch(true);
-                                }}
-                                required
-                                className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 bg-white"
-                              />
-                            </div>
-                          )}
-                        </div>
-                      )}
 
                       {/* Date & Overall Remarks */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
@@ -2007,7 +2001,9 @@ export default function WorkshopEntryDetails() {
                           movingProduction ||
                           totalMoveQuantity <= 0 ||
                           totalMoveQuantity > selectedStage.availableQty ||
-                          moveItems.some(it => !it.operator_id || !it.quantity || parseFloat(it.quantity) <= 0)
+                          moveItems.some(it => !it.operator_id || !it.quantity || parseFloat(it.quantity) <= 0) ||
+                          (Boolean(selectedStage?.isLastStage || selectedStage?.nextStageName === "Finished Goods") &&
+                            moveItems.some(it => !it.batch_no?.trim()))
                         }
                         className={`px-5 py-2 text-white rounded-xl font-bold shadow-xs transition flex items-center gap-2 cursor-pointer disabled:opacity-50 ${
                           Boolean(selectedStage?.isLastStage || selectedStage?.nextStageName === "Finished Goods")
@@ -2395,103 +2391,124 @@ export default function WorkshopEntryDetails() {
                         </div>
                       ) : (
                         <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-2xs">
-                          <table className="w-full text-left border-collapse bg-white text-xs">
-                            <thead>
-                              <tr className="bg-slate-50/90 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-                                <th className="py-2.5 px-3 w-10 text-center">#</th>
-                                <th className="py-2.5 px-3">Operator</th>
-                                <th className="py-2.5 px-3">Machine</th>
-                                <th className="py-2.5 px-3 text-right">Quantity (Nos)</th>
-                                <th className="py-2.5 px-3 text-right w-20">Share</th>
-                                <th className="py-2.5 px-3 min-w-[150px]">Operator Remarks</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                              {selectedLogForDetails.items.map((item, itmIdx) => {
-                                const itemQty = Number(item.quantity) || 0;
-                                const totalQty = Number(selectedLogForDetails.quantity) || 0;
-                                const pct = totalQty > 0 ? ((itemQty / totalQty) * 100).toFixed(1) : "0";
+                          {(() => {
+                            const hasLogBatches = Boolean(selectedLogForDetails.items?.some(it => it.batch_no) || selectedLogForDetails.batch_no);
+                            return (
+                              <table className="w-full text-left border-collapse bg-white text-xs">
+                                <thead>
+                                  <tr className="bg-slate-50/90 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                                    <th className="py-2.5 px-3 w-10 text-center">#</th>
+                                    <th className="py-2.5 px-3">Operator</th>
+                                    <th className="py-2.5 px-3">Machine</th>
+                                    {hasLogBatches && (
+                                      <th className="py-2.5 px-3">Batch</th>
+                                    )}
+                                    <th className="py-2.5 px-3 text-right">Quantity (Nos)</th>
+                                    <th className="py-2.5 px-3 text-right w-20">Share</th>
+                                    <th className="py-2.5 px-3 min-w-[150px]">Operator Remarks</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                  {selectedLogForDetails.items.map((item, itmIdx) => {
+                                    const itemQty = Number(item.quantity) || 0;
+                                    const totalQty = Number(selectedLogForDetails.quantity) || 0;
+                                    const pct = totalQty > 0 ? ((itemQty / totalQty) * 100).toFixed(1) : "0";
+                                    const itemBatch = item.batch_no || selectedLogForDetails.batch_no;
 
-                                return (
-                                  <tr key={item.id || itmIdx} className="hover:bg-slate-50/60 transition">
-                                    <td className="py-2.5 px-3 text-center font-bold text-slate-400">
-                                      {itmIdx + 1}
-                                    </td>
-                                    <td className="py-2.5 px-3">
-                                      <div className="flex items-center gap-2">
-                                        <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0 text-[10px]">
-                                          <i className="fa-solid fa-user"></i>
-                                        </span>
-                                        <div className="min-w-0">
-                                          <span className="font-bold text-slate-800 text-xs block truncate">
-                                            {item.operator_name || "—"}
-                                          </span>
-                                          {item.operator_code && (
-                                            <span className="text-[10px] font-mono text-slate-400">
-                                              [{item.operator_code}]
+                                    return (
+                                      <tr key={item.id || itmIdx} className="hover:bg-slate-50/60 transition">
+                                        <td className="py-2.5 px-3 text-center font-bold text-slate-400">
+                                          {itmIdx + 1}
+                                        </td>
+                                        <td className="py-2.5 px-3">
+                                          <div className="flex items-center gap-2">
+                                            <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0 text-[10px]">
+                                              <i className="fa-solid fa-user"></i>
+                                            </span>
+                                            <div className="min-w-0">
+                                              <span className="font-bold text-slate-800 text-xs block truncate">
+                                                {item.operator_name || "—"}
+                                              </span>
+                                              {item.operator_code && (
+                                                <span className="text-[10px] font-mono text-slate-400">
+                                                  [{item.operator_code}]
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </td>
+                                        <td className="py-2.5 px-3">
+                                          {item.machine_name || item.machine_number ? (
+                                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold shadow-2xs">
+                                              <i className="fa-solid fa-gears text-indigo-500 text-[10px] shrink-0"></i>
+                                              <span>
+                                                {item.machine_number ? (
+                                                  <strong className="text-slate-900 font-bold mr-1">
+                                                    [{item.machine_number}]
+                                                  </strong>
+                                                ) : null}
+                                                {item.machine_name || ""}
+                                              </span>
+                                            </span>
+                                          ) : (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-400 text-[10px] italic">
+                                              <i className="fa-solid fa-hand text-slate-400 text-[9px]"></i>
+                                              Manual (No Machine)
                                             </span>
                                           )}
-                                        </div>
-                                      </div>
-                                    </td>
-                                    <td className="py-2.5 px-3">
-                                      {item.machine_name || item.machine_number ? (
-                                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold shadow-2xs">
-                                          <i className="fa-solid fa-gears text-indigo-500 text-[10px] shrink-0"></i>
-                                          <span>
-                                            {item.machine_number ? (
-                                              <strong className="text-slate-900 font-bold mr-1">
-                                                [{item.machine_number}]
-                                              </strong>
-                                            ) : null}
-                                            {item.machine_name || ""}
-                                          </span>
-                                        </span>
-                                      ) : (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-400 text-[10px] italic">
-                                          <i className="fa-solid fa-hand text-slate-400 text-[9px]"></i>
-                                          Manual (No Machine)
-                                        </span>
-                                      )}
+                                        </td>
+                                        {hasLogBatches && (
+                                          <td className="py-2.5 px-3">
+                                            {itemBatch ? (
+                                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                                <i className="fa-solid fa-tag text-[8px]"></i>
+                                                {itemBatch}
+                                              </span>
+                                            ) : (
+                                              <span className="text-slate-400 text-xs italic">—</span>
+                                            )}
+                                          </td>
+                                        )}
+                                        <td className="py-2.5 px-3 text-right font-black text-indigo-700 text-xs">
+                                          {itemQty.toLocaleString()}
+                                        </td>
+                                        <td className="py-2.5 px-3 text-right font-medium text-slate-500 text-[11px]">
+                                          {pct}%
+                                        </td>
+                                        <td className="py-2.5 px-3 text-slate-600">
+                                          {item.remarks && item.remarks.trim() ? (
+                                            <span className="inline-flex items-center gap-1 text-[11px] text-slate-700 italic bg-amber-50/70 border border-amber-200/60 px-2 py-0.5 rounded-md">
+                                              <i className="fa-regular fa-comment-dots text-amber-500 text-[10px] shrink-0"></i>
+                                              <span>{item.remarks}</span>
+                                            </span>
+                                          ) : (
+                                            <span className="text-slate-400 text-xs italic">—</span>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                                <tfoot>
+                                  <tr className="bg-slate-50/80 border-t border-slate-200 font-bold text-slate-700 text-xs">
+                                    <td colSpan={hasLogBatches ? 4 : 3} className="py-2.5 px-3 text-right uppercase tracking-wider text-[11px] text-slate-500">
+                                      Total Allocated:
                                     </td>
                                     <td className="py-2.5 px-3 text-right font-black text-indigo-700 text-xs">
-                                      {itemQty.toLocaleString()}
+                                      {selectedLogForDetails.items
+                                        .reduce((sum, it) => sum + (Number(it.quantity) || 0), 0)
+                                        .toLocaleString()}{" "}
+                                      <span className="text-[10px] text-indigo-500">Nos</span>
                                     </td>
-                                    <td className="py-2.5 px-3 text-right font-medium text-slate-500 text-[11px]">
-                                      {pct}%
+                                    <td className="py-2.5 px-3 text-right font-bold text-slate-600 text-[11px]">
+                                      100%
                                     </td>
-                                    <td className="py-2.5 px-3 text-slate-600">
-                                      {item.remarks && item.remarks.trim() ? (
-                                        <span className="inline-flex items-center gap-1 text-[11px] text-slate-700 italic bg-amber-50/70 border border-amber-200/60 px-2 py-0.5 rounded-md">
-                                          <i className="fa-regular fa-comment-dots text-amber-500 text-[10px] shrink-0"></i>
-                                          <span>{item.remarks}</span>
-                                        </span>
-                                      ) : (
-                                        <span className="text-slate-400 text-xs italic">—</span>
-                                      )}
-                                    </td>
+                                    <td className="py-2.5 px-3"></td>
                                   </tr>
-                                );
-                              })}
-                            </tbody>
-                            <tfoot>
-                              <tr className="bg-slate-50/80 border-t border-slate-200 font-bold text-slate-700 text-xs">
-                                <td colSpan={3} className="py-2.5 px-3 text-right uppercase tracking-wider text-[11px] text-slate-500">
-                                  Total Allocated:
-                                </td>
-                                <td className="py-2.5 px-3 text-right font-black text-indigo-700 text-xs">
-                                  {selectedLogForDetails.items
-                                    .reduce((sum, it) => sum + (Number(it.quantity) || 0), 0)
-                                    .toLocaleString()}{" "}
-                                  <span className="text-[10px] text-indigo-500">Nos</span>
-                                </td>
-                                <td className="py-2.5 px-3 text-right font-bold text-slate-600 text-[11px]">
-                                  100%
-                                </td>
-                                <td className="py-2.5 px-3"></td>
-                              </tr>
-                            </tfoot>
-                          </table>
+                                </tfoot>
+                              </table>
+                            );
+                          })()}
                         </div>
                       )}
                     </div>
