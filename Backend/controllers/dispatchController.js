@@ -151,6 +151,9 @@ const createWorkOrderDispatch = async (req, res) => {
             remarks,
             internal_batch_number,
             batches,
+            excess_batches,
+            dispatch_excess,
+            excess_reason,
             challan_no,
             challan_date,
             dispatch_no
@@ -166,8 +169,9 @@ const createWorkOrderDispatch = async (req, res) => {
         }
 
         const hasBatches = Array.isArray(batches) && batches.some(b => parseFloat(b.quantity) > 0);
+        const hasExcessBatches = Array.isArray(excess_batches) && excess_batches.some(b => parseFloat(b.quantity) > 0);
         const qty = parseFloat(quantity);
-        if (!hasBatches && (isNaN(qty) || qty <= 0)) {
+        if (!hasBatches && !hasExcessBatches && (isNaN(qty) || qty <= 0)) {
             return res.status(400).json({
                 success: false,
                 message: 'Dispatch quantity must be greater than zero'
@@ -183,15 +187,25 @@ const createWorkOrderDispatch = async (req, res) => {
             remarks,
             internal_batch_number,
             batches,
+            excess_batches,
+            dispatch_excess,
+            excess_reason,
             challan_no,
             challan_date,
             dispatch_no
         }, addedBy);
 
         const totalQty = result.total_quantity || result.quantity;
+        const excessQty = result.excess_quantity_dispatched || 0;
+        let message = `Work Order WO-${String(result.work_order_no).padStart(4, '0')} finished goods (${totalQty} ${result.unit}) dispatched successfully!`;
+        if (excessQty > 0) {
+            const regularQty = Math.max(0, totalQty - excessQty);
+            message = `Work Order WO-${String(result.work_order_no).padStart(4, '0')} finished goods dispatched successfully! (${regularQty} ${result.unit} order fulfillment + ${excessQty} ${result.unit} excess buffer)`;
+        }
+
         return res.status(201).json({
             success: true,
-            message: `Work Order WO-${String(result.work_order_no).padStart(4, '0')} finished goods (${totalQty} ${result.unit}) dispatched successfully!`,
+            message,
             data: result
         });
     } catch (error) {

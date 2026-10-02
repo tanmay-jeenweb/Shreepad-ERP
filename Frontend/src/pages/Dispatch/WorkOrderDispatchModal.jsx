@@ -14,6 +14,11 @@ export default function WorkOrderDispatchModal({ item, isOpen, onClose, onSucces
   const [customers, setCustomers] = useState([]);
   const [loadingCustomers, setLoadingCustomers] = useState(false);
   const [allocations, setAllocations] = useState({});
+
+  // Excess Dispatch States
+  const [dispatchExcess, setDispatchExcess] = useState(false);
+  const [excessAllocations, setExcessAllocations] = useState({});
+
   const [submitting, setSubmitting] = useState(false);
   const [dismissFulfillmentNotice, setDismissFulfillmentNotice] = useState(false);
   const [dismissStockWarning, setDismissStockWarning] = useState(false);
@@ -35,9 +40,17 @@ export default function WorkOrderDispatchModal({ item, isOpen, onClose, onSucces
     return parseFloat(item?.dispatched_quantity ?? 0);
   }, [item]);
 
+  const orderDispatchedQty = useMemo(() => {
+    return parseFloat(item?.order_dispatched_quantity ?? item?.dispatched_quantity ?? 0);
+  }, [item]);
+
+  const alreadyExcessQty = useMemo(() => {
+    return parseFloat(item?.excess_dispatched_quantity ?? 0);
+  }, [item]);
+
   const remainingBalance = useMemo(() => {
-    return Math.max(0, orderQty - dispatchedQty);
-  }, [orderQty, dispatchedQty]);
+    return Math.max(0, orderQty - orderDispatchedQty);
+  }, [orderQty, orderDispatchedQty]);
 
   // Filter batches with available stock > 0
   const validBatches = useMemo(() => {
@@ -76,8 +89,10 @@ export default function WorkOrderDispatchModal({ item, isOpen, onClose, onSucces
       setRemarks("");
       setDismissFulfillmentNotice(false);
       setDismissStockWarning(false);
+      setDispatchExcess(false);
+      setExcessAllocations({});
 
-      // Smart auto-allocation:
+      // Smart auto-allocation for regular order fulfillment:
       // Fill from WO production batches first, then warehouse stock batches, capped at remainingBalance
       const initialAllocations = {};
       let pendingToAllocate = remainingBalance;
@@ -97,7 +112,7 @@ export default function WorkOrderDispatchModal({ item, isOpen, onClose, onSucces
     }
   }, [item, isOpen, validBatches, remainingBalance]);
 
-  // Handle single batch allocation change
+  // Handle single batch allocation change for regular order fulfillment
   const handleAllocationChange = (batchNo, val) => {
     setAllocations(prev => ({
       ...prev,
@@ -105,13 +120,13 @@ export default function WorkOrderDispatchModal({ item, isOpen, onClose, onSucces
     }));
   };
 
-  // Quick fill maximum possible for a specific batch
+  // Quick fill maximum possible for a specific batch (order fulfillment)
   const handleMaxBatch = (batchNo) => {
     const batch = validBatches.find(b => b.batch_no === batchNo);
     if (!batch) return;
     const avail = parseFloat(batch.available_quantity || 0);
 
-    // Calculate how much is allocated across OTHER batches
+    // Calculate how much is allocated across other regular batches
     const otherTotal = Object.entries(allocations).reduce((sum, [bNo, q]) => {
       if (bNo === batchNo) return sum;
       const num = parseFloat(q || 0);
@@ -147,7 +162,7 @@ export default function WorkOrderDispatchModal({ item, isOpen, onClose, onSucces
     toast.success("Allocated available batches up to order balance!");
   };
 
-  // Clear all batch allocations
+  // Clear all regular batch allocations
   const handleClearAllocations = () => {
     const cleared = {};
     for (const b of validBatches) {
@@ -156,26 +171,82 @@ export default function WorkOrderDispatchModal({ item, isOpen, onClose, onSucces
     setAllocations(cleared);
   };
 
-  // Compute total selected for dispatch across all batches
-  const totalSelectedQty = useMemo(() => {
+  // Handle excess batch allocation change
+  const handleExcessAllocationChange = (batchNo, val) => {
+    setExcessAllocations(prev => ({
+      ...prev,
+      [batchNo]: val
+    }));
+  };
+
+  // Quick fill maximum unallocated available stock for a batch in the excess section
+  const handleMaxExcessBatch = (batchNo) => {
+    const batch = validBatches.find(b => b.batch_no === batchNo);
+    if (!batch) return;
+    const avail = parseFloat(batch.available_quantity || 0);
+    const orderAlloc = parseFloat(allocations[batchNo] || 0) || 0;
+    const remainingForExcess = Math.max(0, avail - orderAlloc);
+
+    setExcessAllocations(prev => ({
+      ...prev,
+      [batchNo]: remainingForExcess > 0 ? String(remainingForExcess) : ""
+    }));
+  };
+
+  // Clear all excess allocations
+  const handleClearExcessAllocations = () => {
+    const cleared = {};
+    for (const b of validBatches) {
+      cleared[b.batch_no] = "";
+    }
+    setExcessAllocations(cleared);
+  };
+
+  // Compute total selected for standard order fulfillment
+  const orderSelectedQty = useMemo(() => {
     return Object.values(allocations).reduce((sum, val) => {
       const num = parseFloat(val || 0);
       return sum + (isNaN(num) ? 0 : num);
     }, 0);
   }, [allocations]);
 
-  const balanceAfterDispatch = Math.max(0, remainingBalance - totalSelectedQty);
-  const isOverRemaining = totalSelectedQty > remainingBalance;
+  // Compute total selected for excess buffer
+  const excessSelectedQty = useMemo(() => {
+    if (!dispatchExcess) return 0;
+    return Object.values(excessAllocations).reduce((sum, val) => {
+      const num = parseFloat(val || 0);
+      return sum + (isNaN(num) ? 0 : num);
+    }, 0);
+  }, [dispatchExcess, excessAllocations]);
 
-  // Check if any individual batch exceeds its available limit
-  const hasExceededBatch = useMemo(() => {
+  // Total physical quantity to dispatch
+  const totalSelectedQty = useMemo(() => {
+    return orderSelectedQty + excessSelectedQty;
+  }, [orderSelectedQty, excessSelectedQty]);
+
+  const balanceAfterDispatch = Math.max(0, remainingBalance - orderSelectedQty);
+  const isOrderOverRemaining = orderSelectedQty > remainingBalance;
+
+  // Check if any individual batch exceeds its available limit when summing order + excess allocation
+  const batchStockExceededMap = useMemo(() => {
+    const map = {};
     for (const b of validBatches) {
-      const val = parseFloat(allocations[b.batch_no] || 0);
+      const orderVal = parseFloat(allocations[b.batch_no] || 0) || 0;
+      const excessVal = dispatchExcess ? (parseFloat(excessAllocations[b.batch_no] || 0) || 0) : 0;
+      const totalBatchAlloc = orderVal + excessVal;
       const avail = parseFloat(b.available_quantity || 0);
-      if (!isNaN(val) && val > avail) return true;
+      if (totalBatchAlloc > avail) {
+        map[b.batch_no] = {
+          totalAlloc: totalBatchAlloc,
+          available: avail,
+          excessOver: totalBatchAlloc - avail
+        };
+      }
     }
-    return false;
-  }, [allocations, validBatches]);
+    return map;
+  }, [allocations, excessAllocations, dispatchExcess, validBatches]);
+
+  const hasExceededBatch = Object.keys(batchStockExceededMap).length > 0;
 
   if (!isOpen || !item) return null;
 
@@ -188,16 +259,22 @@ export default function WorkOrderDispatchModal({ item, isOpen, onClose, onSucces
     }
 
     if (hasExceededBatch) {
-      toast.error("One or more batches exceed their available stock limit.");
+      const firstExceeded = Object.entries(batchStockExceededMap)[0];
+      toast.error(`Batch '${firstExceeded[0]}' total allocation (${firstExceeded[1].totalAlloc}) exceeds available stock (${firstExceeded[1].available} ${item.unit}).`);
       return;
     }
 
-    if (isOverRemaining) {
-      toast.error(`Total dispatch (${totalSelectedQty} ${item.unit}) cannot exceed remaining order balance (${remainingBalance} ${item.unit}).`);
+    if (isOrderOverRemaining) {
+      toast.error(`Order fulfillment (${orderSelectedQty} ${item.unit}) exceeds remaining order balance (${remainingBalance} ${item.unit}). To dispatch extra units, use the 'Dispatch Excess' section.`);
       return;
     }
 
-    // Build batch payload array
+    if (dispatchExcess && excessSelectedQty <= 0 && orderSelectedQty <= 0) {
+      toast.error("Please enter excess quantity or disable the excess toggle.");
+      return;
+    }
+
+    // Build standard batch payload
     const batchesPayload = [];
     for (const b of validBatches) {
       const qtyVal = parseFloat(allocations[b.batch_no] || 0);
@@ -205,12 +282,30 @@ export default function WorkOrderDispatchModal({ item, isOpen, onClose, onSucces
         batchesPayload.push({
           internal_batch_number: b.batch_no,
           quantity: qtyVal,
-          stock_status_id: b.stock_status_id || null
+          stock_status_id: b.stock_status_id || null,
+          is_excess: false
         });
       }
     }
 
-    if (batchesPayload.length === 0) {
+    // Build excess batch payload
+    const excessBatchesPayload = [];
+    if (dispatchExcess) {
+      for (const b of validBatches) {
+        const excessVal = parseFloat(excessAllocations[b.batch_no] || 0);
+        if (!isNaN(excessVal) && excessVal > 0) {
+          excessBatchesPayload.push({
+            internal_batch_number: b.batch_no,
+            quantity: excessVal,
+            stock_status_id: b.stock_status_id || null,
+            is_excess: true,
+            excess_quantity: excessVal
+          });
+        }
+      }
+    }
+
+    if (batchesPayload.length === 0 && excessBatchesPayload.length === 0) {
       toast.error("No valid batches selected for dispatch.");
       return;
     }
@@ -221,6 +316,8 @@ export default function WorkOrderDispatchModal({ item, isOpen, onClose, onSucces
         work_order_item_id: item.work_order_item_id,
         quantity: totalSelectedQty,
         batches: batchesPayload,
+        excess_batches: excessBatchesPayload,
+        dispatch_excess: dispatchExcess,
         dispatch_date: dispatchDate,
         party_name: partyName.trim() || null,
         vehicle_no: vehicleNo.trim() || null,
@@ -265,6 +362,12 @@ export default function WorkOrderDispatchModal({ item, isOpen, onClose, onSucces
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-bold font-mono bg-indigo-50 text-indigo-700 border border-indigo-200">
                   WO-{String(item.work_order_no).padStart(4, "0")}
                 </span>
+                {alreadyExcessQty > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                    <i className="fa-solid fa-boxes-packing text-[9px]"></i>
+                    Prev Excess: {alreadyExcessQty} {item.unit}
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
                 {item.material_name} {item.material_code ? `(${item.material_code})` : ""}
@@ -317,7 +420,9 @@ export default function WorkOrderDispatchModal({ item, isOpen, onClose, onSucces
               <span className="font-extrabold text-amber-800 text-sm sm:text-base">
                 {dispatchedQty % 1 === 0 ? dispatchedQty : dispatchedQty.toFixed(2)}
               </span>
-              <span className="text-[10px] text-amber-600 block font-medium">{item.unit}</span>
+              <span className="text-[10px] text-amber-600 block font-medium">
+                {alreadyExcessQty > 0 ? `(${orderDispatchedQty} + ${alreadyExcessQty} ex)` : item.unit}
+              </span>
             </div>
 
             {/* 5. Remaining Balance */}
@@ -371,22 +476,22 @@ export default function WorkOrderDispatchModal({ item, isOpen, onClose, onSucces
         </div>
 
         {/* Scrollable Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto flex-1">
+        <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto flex-1">
           
-          {/* Batch Allocation Table Section */}
-          <div className="space-y-2.5">
+          {/* SECTION 1: Standard Order Fulfillment Batches */}
+          <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div>
                 <label className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                  <i className="fa-solid fa-layer-group text-[#369ACF]"></i>
-                  Available Batches for Dispatch
+                  <span className="flex items-center justify-center w-5 h-5 rounded-full bg-[#369ACF] text-white text-[10px] font-bold">1</span>
+                  Work Order Fulfillment Batches
                 </label>
                 <span className="text-[11px] text-slate-400">
-                  {woBatchesCount} WO Production Batch(es) • {stockBatchesCount} Warehouse Stock Batch(es)
+                  Allocates available finished goods to fulfill the order balance ({remainingBalance} {item.unit} remaining)
                 </span>
               </div>
 
-              {validBatches.length > 1 && (
+              {validBatches.length > 0 && (
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -395,7 +500,7 @@ export default function WorkOrderDispatchModal({ item, isOpen, onClose, onSucces
                     title="Auto-fill batches up to remaining order balance"
                   >
                     <i className="fa-solid fa-wand-magic-sparkles text-[10px]"></i>
-                    Auto-Allocate
+                    Auto-Allocate Order
                   </button>
                   <button
                     type="button"
@@ -489,7 +594,7 @@ export default function WorkOrderDispatchModal({ item, isOpen, onClose, onSucces
                           type="button"
                           onClick={() => handleMaxBatch(b.batch_no)}
                           className="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-bold rounded-lg border border-slate-200 transition-colors cursor-pointer shrink-0"
-                          title="Allocate maximum available for this batch"
+                          title="Allocate maximum available for this batch towards order"
                         >
                           Max
                         </button>
@@ -504,55 +609,246 @@ export default function WorkOrderDispatchModal({ item, isOpen, onClose, onSucces
                 No finished goods currently available to dispatch. Complete production logs or add stock in Stock Status first.
               </div>
             )}
+          </div>
 
-            {/* Total Allocation Tally Bar */}
-            <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-              <div className="flex items-center gap-3">
-                <div>
-                  <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Total Selected</span>
-                  <span className={`font-extrabold text-base ${
-                    isOverRemaining || hasExceededBatch ? "text-rose-600" : totalSelectedQty > 0 ? "text-[#369ACF]" : "text-slate-600"
-                  }`}>
-                    {totalSelectedQty % 1 === 0 ? totalSelectedQty : totalSelectedQty.toFixed(2)} {item.unit}
+          {/* INTERACTIVE TOGGLE: Do you want to dispatch excess? */}
+          <div className="p-4 bg-gradient-to-r from-amber-50/70 via-orange-50/50 to-amber-50/30 rounded-2xl border border-amber-200/90 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-3">
+              <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-amber-500/10 text-amber-700 border border-amber-500/30 shrink-0">
+                <i className="fa-solid fa-boxes-packing text-lg"></i>
+              </span>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-xs sm:text-sm font-bold text-slate-900">Do you want to dispatch excess?</h4>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 uppercase tracking-wider">
+                    Transit Buffer / Defect Allowance
                   </span>
                 </div>
-                <span className="text-slate-300 text-lg">/</span>
-                <div>
-                  <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Remaining Order</span>
-                  <span className="font-bold text-slate-800 text-sm">
-                    {remainingBalance % 1 === 0 ? remainingBalance : remainingBalance.toFixed(2)} {item.unit}
-                  </span>
-                </div>
-              </div>
-
-              <div className="text-right">
-                <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Balance After Dispatch</span>
-                <span className={`font-bold text-sm ${
-                  balanceAfterDispatch === 0 && totalSelectedQty > 0 ? "text-emerald-600 font-extrabold" : "text-slate-700"
-                }`}>
-                  {balanceAfterDispatch === 0 && totalSelectedQty > 0 ? (
-                    <span className="inline-flex items-center gap-1 text-emerald-600">
-                      <i className="fa-solid fa-circle-check text-xs"></i>
-                      Order Fully Fulfilled!
-                    </span>
-                  ) : (
-                    `${balanceAfterDispatch.toFixed(2)} ${item.unit} pending`
-                  )}
-                </span>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Enable to select and dispatch additional finished parts from Stock Status as transit breakage or QA buffer.
+                </p>
               </div>
             </div>
 
-            {isOverRemaining && (
+            <div className="flex items-center gap-3 self-end sm:self-center">
+              <span className={`text-xs font-bold ${dispatchExcess ? "text-amber-800" : "text-slate-400"}`}>
+                {dispatchExcess ? "Excess Enabled" : "Excess Disabled"}
+              </span>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={dispatchExcess}
+                  onChange={(e) => {
+                    setDispatchExcess(e.target.checked);
+                    if (!e.target.checked) setExcessAllocations({});
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-12 h-6.5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+              </label>
+            </div>
+          </div>
+
+          {/* SECTION 2: Stock Status Excess Selection (Visible only when toggle is ON) */}
+          {dispatchExcess && (
+            <div className="p-4.5 bg-amber-50/40 rounded-2xl border-2 border-amber-300/80 space-y-4 animate-in fade-in zoom-in-98 duration-200">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-amber-200 pb-3">
+                <div>
+                  <label className="text-xs font-bold text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="flex items-center justify-center w-5 h-5 rounded-full bg-amber-600 text-white text-[10px] font-bold">2</span>
+                    Stock Status: Available Batches for Excess Dispatch
+                  </label>
+                  <span className="text-[11px] text-amber-700">
+                    Allocate extra quantity directly from warehouse stock status for this product
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleClearExcessAllocations}
+                    className="text-[11px] font-semibold text-amber-800 hover:text-amber-950 px-2.5 py-1 rounded-lg hover:bg-amber-100 border border-amber-300 transition-colors cursor-pointer"
+                  >
+                    Clear Excess
+                  </button>
+                </div>
+              </div>
+
+              {/* Excess Batches Table */}
+              <div className="border border-amber-200 rounded-2xl overflow-hidden shadow-2xs divide-y divide-amber-100 bg-white">
+                {validBatches.map((b) => {
+                  const isWoBatch = b.source_type === "wo_production";
+                  const totalAvail = parseFloat(b.available_quantity || 0);
+                  const orderAlloc = parseFloat(allocations[b.batch_no] || 0) || 0;
+                  const unallocatedAvail = Math.max(0, totalAvail - orderAlloc);
+                  const excessAlloc = parseFloat(excessAllocations[b.batch_no] || 0);
+                  const isBatchOver = (orderAlloc + (isNaN(excessAlloc) ? 0 : excessAlloc)) > totalAvail;
+
+                  return (
+                    <div
+                      key={`excess-${b.batch_no}`}
+                      className={`p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors ${
+                        excessAlloc > 0 ? "bg-amber-50/60" : "hover:bg-amber-50/30"
+                      }`}
+                    >
+                      {/* Left: Batch info & unallocated availability */}
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono font-bold text-slate-900 text-xs sm:text-sm bg-slate-100 px-2.5 py-0.5 rounded-md border border-slate-200">
+                            {b.batch_no}
+                          </span>
+
+                          {isWoBatch ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                              <i className="fa-solid fa-industry text-[9px]"></i>
+                              WO Production
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              <i className="fa-solid fa-warehouse text-[9px]"></i>
+                              Warehouse Stock
+                            </span>
+                          )}
+
+                          {b.location && (
+                            <span className="text-[11px] text-slate-400">
+                              • {b.location}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="text-xs text-slate-500 flex items-center gap-2 flex-wrap">
+                          <span>
+                            Batch Stock: <strong className="text-slate-700">{totalAvail % 1 === 0 ? totalAvail : totalAvail.toFixed(2)} {item.unit}</strong>
+                          </span>
+                          {orderAlloc > 0 && (
+                            <>
+                              <span className="text-slate-300">•</span>
+                              <span>
+                                Dispatched for Order (in Step 1): <strong className="text-blue-700">{orderAlloc % 1 === 0 ? orderAlloc : orderAlloc.toFixed(2)} {item.unit}</strong>
+                              </span>
+                            </>
+                          )}
+                          <span className="text-slate-300">•</span>
+                          <span>
+                            Remaining for Excess: <strong className="text-emerald-700 font-bold">{unallocatedAvail % 1 === 0 ? unallocatedAvail : unallocatedAvail.toFixed(2)} {item.unit}</strong>
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Right: Excess input and max button */}
+                      <div className="flex items-center gap-2 sm:self-center shrink-0">
+                        <div className="relative w-36">
+                          <input
+                            type="number"
+                            step="0.0001"
+                            min="0"
+                            max={unallocatedAvail}
+                            placeholder="0.00"
+                            value={excessAllocations[b.batch_no] ?? ""}
+                            onChange={(e) => handleExcessAllocationChange(b.batch_no, e.target.value)}
+                            className={`w-full px-3 py-1.5 border rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 pr-10 text-right ${
+                              isBatchOver
+                                ? "border-rose-400 bg-rose-50 text-rose-700 focus:ring-rose-200"
+                                : excessAlloc > 0
+                                ? "border-amber-500 bg-white ring-1 ring-amber-500/20"
+                                : "border-slate-300 bg-white"
+                            }`}
+                          />
+                          <span className="absolute right-2.5 top-1.5 text-[10px] font-bold text-slate-400 pointer-events-none">
+                            {item.unit}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleMaxExcessBatch(b.batch_no)}
+                          disabled={unallocatedAvail <= 0}
+                          className="px-2 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 text-[11px] font-bold rounded-lg border border-amber-300 transition-colors cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                          title="Allocate maximum unallocated stock for excess"
+                        >
+                          Max
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* DYNAMIC LIVE TALLY BAR */}
+          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
+              
+              <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Remaining Order</span>
+                <span className="font-extrabold text-slate-800 text-sm sm:text-base">
+                  {remainingBalance % 1 === 0 ? remainingBalance : remainingBalance.toFixed(2)}
+                </span>
+                <span className="text-[10px] text-slate-400 block font-medium">{item.unit}</span>
+              </div>
+
+              <div className="bg-white p-2.5 rounded-xl border border-blue-200 shadow-2xs">
+                <span className="text-[10px] text-blue-600 font-bold uppercase tracking-wider block">Order Fulfillment</span>
+                <span className={`font-extrabold text-sm sm:text-base ${isOrderOverRemaining ? "text-rose-600" : "text-blue-700"}`}>
+                  {orderSelectedQty % 1 === 0 ? orderSelectedQty : orderSelectedQty.toFixed(2)}
+                </span>
+                <span className="text-[10px] text-blue-500 block font-medium">{item.unit}</span>
+              </div>
+
+              <div className="bg-white p-2.5 rounded-xl border border-amber-200 shadow-2xs">
+                <span className="text-[10px] text-amber-700 font-bold uppercase tracking-wider block">Excess Buffer</span>
+                <span className="font-extrabold text-amber-800 text-sm sm:text-base">
+                  {excessSelectedQty > 0 ? `+${excessSelectedQty % 1 === 0 ? excessSelectedQty : excessSelectedQty.toFixed(2)}` : "0"}
+                </span>
+                <span className="text-[10px] text-amber-600 block font-medium">
+                  {dispatchExcess && excessSelectedQty > 0 ? "Buffer Qty" : item.unit}
+                </span>
+              </div>
+
+              <div className="bg-gradient-to-br from-[#369ACF] to-[#20698f] text-white p-2.5 rounded-xl shadow-xs">
+                <span className="text-[10px] text-blue-100 font-bold uppercase tracking-wider block">Total Dispatched</span>
+                <span className="font-extrabold text-white text-sm sm:text-base">
+                  {totalSelectedQty % 1 === 0 ? totalSelectedQty : totalSelectedQty.toFixed(2)}
+                </span>
+                <span className="text-[10px] text-blue-100 block font-medium">Physical {item.unit}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-200/80">
+              <span className="text-slate-600">
+                {balanceAfterDispatch === 0 && orderSelectedQty > 0 ? (
+                  <span className="inline-flex items-center gap-1 font-bold text-emerald-600">
+                    <i className="fa-solid fa-circle-check"></i>
+                    Work Order will be marked fully completed upon dispatch!
+                  </span>
+                ) : (
+                  <span>
+                    Pending balance after this dispatch: <strong>{balanceAfterDispatch.toFixed(2)} {item.unit}</strong>
+                  </span>
+                )}
+              </span>
+
+              {excessSelectedQty > 0 && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-100/90 px-2.5 py-1 rounded-lg border border-amber-300">
+                  <i className="fa-solid fa-boxes-packing text-xs"></i>
+                  +{excessSelectedQty} {item.unit} excess buffer
+                </span>
+              )}
+            </div>
+
+            {isOrderOverRemaining && (
               <p className="text-xs text-rose-600 font-bold flex items-center gap-1">
                 <i className="fa-solid fa-circle-xmark"></i>
-                Total selected ({totalSelectedQty} {item.unit}) exceeds remaining order balance ({remainingBalance} {item.unit})!
+                Order fulfillment ({orderSelectedQty} {item.unit}) exceeds remaining order balance ({remainingBalance} {item.unit}). Please move extra pieces to the 'Dispatch Excess' section below.
               </p>
             )}
 
             {hasExceededBatch && (
               <p className="text-xs text-rose-600 font-bold flex items-center gap-1">
                 <i className="fa-solid fa-circle-xmark"></i>
-                One of the batch quantities exceeds its available stock.
+                Total allocated (order + excess) exceeds available physical inventory for one or more batches.
               </p>
             )}
           </div>
@@ -640,8 +936,15 @@ export default function WorkOrderDispatchModal({ item, isOpen, onClose, onSucces
           {/* Modal Actions Footer */}
           <div className="pt-4 flex items-center justify-between border-t border-slate-100">
             <span className="text-xs text-slate-500">
-              {validBatches.length > 0 ? (
-                <span>Dispatching <strong className="text-slate-800">{totalSelectedQty} {item.unit}</strong> against Work Order</span>
+              {totalSelectedQty > 0 ? (
+                <span>
+                  Dispatching <strong className="text-slate-800">{totalSelectedQty} {item.unit}</strong>{" "}
+                  {excessSelectedQty > 0 ? (
+                    <span className="text-amber-700">({orderSelectedQty} Order + {excessSelectedQty} Excess Buffer)</span>
+                  ) : (
+                    <span>against Work Order</span>
+                  )}
+                </span>
               ) : null}
             </span>
 
@@ -655,11 +958,15 @@ export default function WorkOrderDispatchModal({ item, isOpen, onClose, onSucces
               </button>
               <button
                 type="submit"
-                disabled={submitting || totalSelectedQty <= 0 || isOverRemaining || hasExceededBatch}
+                disabled={submitting || totalSelectedQty <= 0 || isOrderOverRemaining || hasExceededBatch}
                 className="bg-[#369ACF] hover:bg-[#2884b2] text-white px-6 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm hover:shadow disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer"
               >
                 <i className={`fa-solid ${submitting ? "fa-spinner fa-spin" : "fa-check"}`}></i>
-                {submitting ? "Processing Dispatch..." : `Confirm & Dispatch (${totalSelectedQty} ${item.unit})`}
+                {submitting
+                  ? "Processing Dispatch..."
+                  : excessSelectedQty > 0
+                  ? `Confirm & Dispatch (${orderSelectedQty} + ${excessSelectedQty} Excess)`
+                  : `Confirm & Dispatch (${totalSelectedQty} ${item.unit})`}
               </button>
             </div>
           </div>

@@ -10,6 +10,9 @@ const createDispatchTable = async () => {
             material_id            INT NOT NULL,
             internal_batch_number  VARCHAR(100) NOT NULL,
             quantity               DECIMAL(15,4) NOT NULL,
+            excess_quantity        DECIMAL(15,4) NOT NULL DEFAULT 0.0000,
+            is_excess              TINYINT(1) NOT NULL DEFAULT 0,
+            excess_reason          VARCHAR(255) DEFAULT NULL,
             party_name             VARCHAR(255) DEFAULT NULL,
             vehicle_no             VARCHAR(100) DEFAULT NULL,
             remarks                TEXT DEFAULT NULL,
@@ -80,6 +83,23 @@ const ensureDispatchColumns = async () => {
                 ALTER TABLE dispatches 
                 ADD COLUMN challan_no VARCHAR(100) DEFAULT NULL, 
                 ADD COLUMN challan_date DATE DEFAULT NULL
+            `);
+        }
+
+        const [excessCols] = await db.execute(`
+            SELECT COLUMN_NAME 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+              AND TABLE_NAME = 'dispatches' 
+              AND COLUMN_NAME = 'excess_quantity'
+        `);
+        if (excessCols.length === 0) {
+            console.log("Adding excess_quantity, is_excess, and excess_reason to dispatches table...");
+            await db.execute(`
+                ALTER TABLE dispatches 
+                ADD COLUMN excess_quantity DECIMAL(15,4) NOT NULL DEFAULT 0.0000, 
+                ADD COLUMN is_excess TINYINT(1) NOT NULL DEFAULT 0, 
+                ADD COLUMN excess_reason VARCHAR(255) DEFAULT NULL
             `);
         }
     } catch (err) {
@@ -320,7 +340,9 @@ const getWorkOrdersForDispatch = async (tab = 'ongoing') => {
             COALESCE(woi.quantity, woi.production_quantity, 0) AS target_quantity,
             COALESCE(fg_agg.completed_quantity, 0) AS completed_quantity,
             COALESCE(dsp_agg.dispatched_quantity, 0) AS dispatched_quantity,
-            GREATEST(0, COALESCE(woi.quantity, woi.production_quantity, 0) - COALESCE(dsp_agg.dispatched_quantity, 0)) AS remaining_order_quantity
+            COALESCE(dsp_agg.order_dispatched_quantity, 0) AS order_dispatched_quantity,
+            COALESCE(dsp_agg.excess_dispatched_quantity, 0) AS excess_dispatched_quantity,
+            GREATEST(0, COALESCE(woi.quantity, woi.production_quantity, 0) - COALESCE(dsp_agg.order_dispatched_quantity, 0)) AS remaining_order_quantity
         FROM work_order_items woi
         JOIN work_orders wo ON woi.work_order_id = wo.id
         JOIN materials m ON woi.material_id = m.id
@@ -348,7 +370,9 @@ const getWorkOrdersForDispatch = async (tab = 'ongoing') => {
         LEFT JOIN (
             SELECT 
                 COALESCE(d.work_order_item_id, ss.work_order_item_id) AS work_order_item_id,
-                SUM(d.quantity) AS dispatched_quantity
+                SUM(d.quantity) AS dispatched_quantity,
+                SUM(CASE WHEN COALESCE(d.is_excess, 0) = 1 THEN d.quantity ELSE COALESCE(d.excess_quantity, 0) END) AS excess_dispatched_quantity,
+                SUM(CASE WHEN COALESCE(d.is_excess, 0) = 1 THEN 0 ELSE GREATEST(0, d.quantity - COALESCE(d.excess_quantity, 0)) END) AS order_dispatched_quantity
             FROM dispatches d
             LEFT JOIN stock_status ss ON d.stock_status_id = ss.id
             GROUP BY COALESCE(d.work_order_item_id, ss.work_order_item_id)
@@ -363,7 +387,7 @@ const getWorkOrdersForDispatch = async (tab = 'ongoing') => {
     if (tab === 'completed') {
         query += `
           AND (
-            (COALESCE(dsp_agg.dispatched_quantity, 0) >= COALESCE(woi.quantity, woi.production_quantity, 0) AND COALESCE(woi.quantity, woi.production_quantity, 0) > 0)
+            (COALESCE(dsp_agg.order_dispatched_quantity, 0) >= COALESCE(woi.quantity, woi.production_quantity, 0) AND COALESCE(woi.quantity, woi.production_quantity, 0) > 0)
             OR wo.status = 'Completed'
           )
         `;
@@ -371,7 +395,7 @@ const getWorkOrdersForDispatch = async (tab = 'ongoing') => {
         // Ongoing: order dispatch is pending
         query += `
           AND (
-            COALESCE(dsp_agg.dispatched_quantity, 0) < COALESCE(woi.quantity, woi.production_quantity, 0)
+            COALESCE(dsp_agg.order_dispatched_quantity, 0) < COALESCE(woi.quantity, woi.production_quantity, 0)
             OR COALESCE(woi.quantity, woi.production_quantity, 0) = 0
           )
           AND wo.status = 'Started'
@@ -511,11 +535,15 @@ const getWorkOrdersForDispatch = async (tab = 'ongoing') => {
         const orderQty = parseFloat(row.order_quantity || 0);
         const completedQty = parseFloat(row.completed_quantity || 0);
         const dispatchedQty = parseFloat(row.dispatched_quantity || 0);
-        const remainingOrder = Math.max(0, orderQty - dispatchedQty);
+        const orderDispatchedQty = parseFloat(row.order_dispatched_quantity || 0);
+        const excessDispatchedQty = parseFloat(row.excess_dispatched_quantity || 0);
+        const remainingOrder = Math.max(0, orderQty - orderDispatchedQty);
 
         row.total_available_stock = totalAvailableStock;
         row.available_to_dispatch = totalAvailableStock;
         row.remaining_order_quantity = remainingOrder;
+        row.order_dispatched_quantity = orderDispatchedQty;
+        row.excess_dispatched_quantity = excessDispatchedQty;
         row.production_difference = Math.max(0, orderQty - completedQty);
         row.needs_stock_fulfillment = orderQty > completedQty;
 
@@ -572,7 +600,7 @@ const createWorkOrderDispatch = async (data, addedBy) => {
             throw new Error(`Cannot dispatch: Work Order WO-${String(woItem.work_order_no).padStart(4, '0')} has not been started yet.`);
         }
 
-        // 2. Normalize batches list (support multi-batch allocation array or single batch input)
+        // 2. Normalize batches list (support standard batches and excess_batches array)
         let batchList = [];
         if (Array.isArray(data.batches) && data.batches.length > 0) {
             batchList = data.batches
@@ -580,14 +608,35 @@ const createWorkOrderDispatch = async (data, addedBy) => {
                 .map(b => ({
                     internal_batch_number: String(b.internal_batch_number || b.batch_no).trim(),
                     quantity: parseFloat(b.quantity),
-                    stock_status_id: b.stock_status_id || null
+                    stock_status_id: b.stock_status_id || null,
+                    is_excess: b.is_excess ? 1 : 0,
+                    excess_quantity: b.is_excess ? parseFloat(b.quantity) : (parseFloat(b.excess_quantity) || 0),
+                    excess_reason: b.excess_reason || data.excess_reason || null
                 }));
         } else if (data.internal_batch_number && parseFloat(data.quantity) > 0) {
             batchList = [{
                 internal_batch_number: String(data.internal_batch_number).trim(),
                 quantity: parseFloat(data.quantity),
-                stock_status_id: data.stock_status_id || null
+                stock_status_id: data.stock_status_id || null,
+                is_excess: data.is_excess ? 1 : 0,
+                excess_quantity: data.is_excess ? parseFloat(data.quantity) : (parseFloat(data.excess_quantity) || 0),
+                excess_reason: data.excess_reason || null
             }];
+        }
+
+        // Also normalize excess_batches if passed separately from the excess section
+        if (Array.isArray(data.excess_batches) && data.excess_batches.length > 0) {
+            const excessList = data.excess_batches
+                .filter(b => parseFloat(b.quantity) > 0)
+                .map(b => ({
+                    internal_batch_number: String(b.internal_batch_number || b.batch_no).trim(),
+                    quantity: parseFloat(b.quantity),
+                    stock_status_id: b.stock_status_id || null,
+                    is_excess: 1,
+                    excess_quantity: parseFloat(b.quantity),
+                    excess_reason: b.excess_reason || data.excess_reason || 'Transit Buffer'
+                }));
+            batchList = batchList.concat(excessList);
         }
 
         if (batchList.length === 0) {
@@ -601,12 +650,20 @@ const createWorkOrderDispatch = async (data, addedBy) => {
 
         const createdDispatches = [];
         let totalDispatchedInRequest = 0;
+        let totalExcessInRequest = 0;
 
         // 3. Process each batch allocation
         for (const item of batchList) {
             const batchNo = item.internal_batch_number;
             const batchQty = item.quantity;
+            const isExcess = item.is_excess ? 1 : 0;
+            const excessQty = isExcess ? batchQty : (parseFloat(item.excess_quantity) || 0);
+            const excessReason = item.excess_reason || (isExcess ? (data.excess_reason || 'Transit Buffer') : null);
+
             totalDispatchedInRequest += batchQty;
+            if (isExcess || excessQty > 0) {
+                totalExcessInRequest += (excessQty > 0 ? excessQty : batchQty);
+            }
 
             // Check if batch exists in stock_status
             const [statusRows] = await connection.execute(`
@@ -685,7 +742,7 @@ const createWorkOrderDispatch = async (data, addedBy) => {
             // Generate unique dispatch number for this line
             const dispatchNo = await generateDispatchNo(connection);
 
-            // Insert into dispatches
+            // Insert into dispatches with excess metadata
             const [insertRes] = await connection.execute(`
                 INSERT INTO dispatches (
                     dispatch_no,
@@ -701,8 +758,11 @@ const createWorkOrderDispatch = async (data, addedBy) => {
                     work_order_item_id,
                     challan_no,
                     challan_date,
-                    added_by
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    added_by,
+                    excess_quantity,
+                    is_excess,
+                    excess_reason
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `, [
                 dispatchNo,
                 dispatchDate,
@@ -717,7 +777,10 @@ const createWorkOrderDispatch = async (data, addedBy) => {
                 workOrderItemId,
                 data.challan_no || null,
                 data.challan_date || null,
-                addedBy
+                addedBy,
+                excessQty,
+                isExcess,
+                excessReason
             ]);
 
             // Deduct remaining_kg in stock_status
@@ -731,6 +794,9 @@ const createWorkOrderDispatch = async (data, addedBy) => {
                 dispatch_no: dispatchNo,
                 batch_no: batchNo,
                 quantity: batchQty,
+                is_excess: isExcess,
+                excess_quantity: excessQty,
+                excess_reason: excessReason,
                 challan_no: data.challan_no || null,
                 challan_date: data.challan_date || null,
                 available_after: availableQty - batchQty
@@ -740,21 +806,26 @@ const createWorkOrderDispatch = async (data, addedBy) => {
         // 4. Calculate total dispatched against the Order Quantity (woi.quantity)
         const orderQty = parseFloat(woItem.order_quantity) || 0;
         const [totalDispRows] = await connection.execute(`
-            SELECT COALESCE(SUM(quantity), 0) AS total_disp
+            SELECT 
+                COALESCE(SUM(CASE WHEN COALESCE(is_excess, 0) = 1 THEN 0 ELSE GREATEST(0, quantity - COALESCE(excess_quantity, 0)) END), 0) AS total_order_disp,
+                COALESCE(SUM(quantity), 0) AS total_disp,
+                COALESCE(SUM(CASE WHEN COALESCE(is_excess, 0) = 1 THEN quantity ELSE COALESCE(excess_quantity, 0) END), 0) AS total_excess_disp
             FROM dispatches
             WHERE work_order_item_id = ?
         `, [workOrderItemId]);
+        const newOrderDispatched = parseFloat(totalDispRows[0]?.total_order_disp || 0);
         const newTotalDispatched = parseFloat(totalDispRows[0]?.total_disp || 0);
 
         // If order_quantity is fully fulfilled, check if the entire work order is complete
-        if (orderQty > 0 && newTotalDispatched >= orderQty) {
+        if (orderQty > 0 && newOrderDispatched >= orderQty) {
             const [otherItems] = await connection.execute(`
                 SELECT woi.id, COALESCE(woi.quantity, woi.production_quantity, 0) AS target_qty,
-                       COALESCE(d_sub.total_disp, 0) AS total_disp
+                       COALESCE(d_sub.total_order_disp, 0) AS total_order_disp
                 FROM work_order_items woi
                 JOIN materials m ON woi.material_id = m.id
                 LEFT JOIN (
-                    SELECT work_order_item_id, SUM(quantity) AS total_disp
+                    SELECT work_order_item_id, 
+                           SUM(CASE WHEN COALESCE(is_excess, 0) = 1 THEN 0 ELSE GREATEST(0, quantity - COALESCE(excess_quantity, 0)) END) AS total_order_disp
                     FROM dispatches
                     WHERE work_order_item_id IS NOT NULL
                     GROUP BY work_order_item_id
@@ -765,7 +836,7 @@ const createWorkOrderDispatch = async (data, addedBy) => {
                   AND LOWER(COALESCE(m.material_group, '')) NOT LIKE '%raw%'
             `, [woItem.work_order_id, workOrderItemId]);
 
-            const allOthersDone = otherItems.every(it => parseFloat(it.total_disp) >= parseFloat(it.target_qty));
+            const allOthersDone = otherItems.every(it => parseFloat(it.total_order_disp) >= parseFloat(it.target_qty));
             if (allOthersDone) {
                 await connection.execute(`
                     UPDATE work_orders SET status = 'Completed', updated_at = CURRENT_TIMESTAMP WHERE id = ?
@@ -774,6 +845,8 @@ const createWorkOrderDispatch = async (data, addedBy) => {
         }
 
         await connection.commit();
+
+        const orderQtyInRequest = Math.max(0, totalDispatchedInRequest - totalExcessInRequest);
 
         return {
             work_order_id: woItem.work_order_id,
@@ -786,11 +859,14 @@ const createWorkOrderDispatch = async (data, addedBy) => {
             dispatch_date: dispatchDate,
             quantity: totalDispatchedInRequest,
             total_quantity: totalDispatchedInRequest,
+            order_quantity_dispatched: orderQtyInRequest,
+            excess_quantity_dispatched: totalExcessInRequest,
             dispatches_created: createdDispatches,
             order_quantity: orderQty,
             dispatched_quantity: newTotalDispatched,
-            remaining_order_quantity: Math.max(0, orderQty - newTotalDispatched),
-            available_after_dispatch: Math.max(0, orderQty - newTotalDispatched)
+            order_dispatched_quantity: newOrderDispatched,
+            remaining_order_quantity: Math.max(0, orderQty - newOrderDispatched),
+            available_after_dispatch: Math.max(0, orderQty - newOrderDispatched)
         };
     } catch (error) {
         await connection.rollback();
@@ -816,6 +892,9 @@ const getAllDispatches = async (filters = {}) => {
             COALESCE(u.unit_name, 'Nos') AS unit,
             d.internal_batch_number,
             d.quantity,
+            d.excess_quantity,
+            d.is_excess,
+            d.excess_reason,
             d.party_name,
             d.vehicle_no,
             d.remarks,

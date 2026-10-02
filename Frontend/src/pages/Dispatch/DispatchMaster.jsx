@@ -186,13 +186,26 @@ export default function DispatchMaster() {
         {
             key: "dispatched_quantity",
             label: "Dispatched",
-            minWidth: "110px",
+            minWidth: "125px",
             render: (row) => {
                 const disp = parseFloat(row.dispatched_quantity || 0);
+                const orderDisp = parseFloat(row.order_dispatched_quantity ?? disp);
+                const excessDisp = parseFloat(row.excess_dispatched_quantity || 0);
                 return (
-                    <span className="font-semibold text-amber-700 text-xs">
-                        {disp % 1 === 0 ? disp : disp.toFixed(2)} {row.unit}
-                    </span>
+                    <div className="space-y-0.5">
+                        <span className="font-semibold text-amber-700 text-xs block">
+                            {disp % 1 === 0 ? disp : disp.toFixed(2)} {row.unit}
+                        </span>
+                        {excessDisp > 0 && (
+                            <span 
+                                className="inline-flex items-center gap-1 font-bold text-[10px] text-amber-850 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded shadow-2xs"
+                                title={`Order Fulfillment: ${orderDisp % 1 === 0 ? orderDisp : orderDisp.toFixed(2)} ${row.unit} | Excess Buffer: ${excessDisp % 1 === 0 ? excessDisp : excessDisp.toFixed(2)} ${row.unit}`}
+                            >
+                                <i className="fa-solid fa-boxes-packing text-[9px] text-amber-700"></i>
+                                +{excessDisp % 1 === 0 ? excessDisp : excessDisp.toFixed(2)} Excess
+                            </span>
+                        )}
+                    </div>
                 );
             },
         },
@@ -202,8 +215,8 @@ export default function DispatchMaster() {
             minWidth: "135px",
             render: (row) => {
                 const order = parseFloat(row.order_quantity || row.target_quantity || 0);
-                const disp = parseFloat(row.dispatched_quantity || 0);
-                const rem = parseFloat(row.remaining_order_quantity ?? Math.max(0, order - disp));
+                const orderDisp = parseFloat(row.order_dispatched_quantity ?? row.dispatched_quantity ?? 0);
+                const rem = parseFloat(row.remaining_order_quantity ?? Math.max(0, order - orderDisp));
                 if (rem > 0) {
                     return (
                         <span className="inline-flex items-center gap-1 font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg text-xs">
@@ -381,13 +394,26 @@ export default function DispatchMaster() {
         {
             key: "quantity",
             label: "Dispatched Qty",
-            minWidth: "140px",
+            minWidth: "150px",
             render: (row) => {
                 const qty = parseFloat(row.quantity || 0);
+                const isExcess = Boolean(row.is_excess || parseFloat(row.excess_quantity || 0) > 0);
+                const excessQty = parseFloat(row.excess_quantity || (row.is_excess ? row.quantity : 0));
                 return (
-                    <span className="font-extrabold text-amber-700 bg-amber-50 border border-amber-200/80 px-2.5 py-1 rounded-md text-sm inline-block">
-                        {qty % 1 === 0 ? qty : qty.toFixed(2)} {row.unit}
-                    </span>
+                    <div className="space-y-0.5">
+                        <span className="font-extrabold text-amber-700 bg-amber-50 border border-amber-200/80 px-2.5 py-1 rounded-md text-xs inline-block">
+                            {qty % 1 === 0 ? qty : qty.toFixed(2)} {row.unit}
+                        </span>
+                        {isExcess && (
+                            <span 
+                                className="inline-flex items-center gap-1 font-bold text-[10px] text-amber-900 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded block w-fit"
+                                title={`Excess Buffer: ${excessQty} ${row.unit}`}
+                            >
+                                <i className="fa-solid fa-boxes-packing text-[9px] text-amber-700"></i>
+                                +{excessQty % 1 === 0 ? excessQty : excessQty.toFixed(2)} Excess
+                            </span>
+                        )}
+                    </div>
                 );
             },
         },
@@ -645,6 +671,18 @@ export default function DispatchMaster() {
                                     </span>
                                 </div>
                             </div>
+
+                            {(viewItem.is_excess || parseFloat(viewItem.excess_quantity || 0) > 0) && (
+                                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 flex items-center justify-between">
+                                    <span className="font-bold flex items-center gap-1.5 text-amber-800">
+                                        <i className="fa-solid fa-boxes-packing text-amber-600"></i>
+                                        Excess Buffer Dispatched:
+                                    </span>
+                                    <span className="font-extrabold text-amber-900 text-sm">
+                                        {parseFloat(viewItem.excess_quantity || viewItem.quantity)} {viewItem.unit}
+                                    </span>
+                                </div>
+                            )}
 
                             <div>
                                 <span className="text-xs text-slate-400 block uppercase tracking-wider font-semibold">Vehicle / Transporter</span>
