@@ -2,12 +2,17 @@ import React, { useState, useEffect, useMemo } from "react";
 import DateInput from "../../components/DateInput";
 import toast from "react-hot-toast";
 import { createWorkOrderDispatch } from "../../api/dispatchApi";
+import { getAllCustomers } from "../../api/customerApi";
 
 export default function WorkOrderDispatchModal({ item, isOpen, onClose, onSuccess }) {
   const [dispatchDate, setDispatchDate] = useState(new Date().toISOString().split("T")[0]);
   const [partyName, setPartyName] = useState("");
   const [vehicleNo, setVehicleNo] = useState("");
   const [remarks, setRemarks] = useState("");
+  const [challanNo, setChallanNo] = useState("");
+  const [challanDate, setChallanDate] = useState(new Date().toISOString().split("T")[0]);
+  const [customers, setCustomers] = useState([]);
+  const [loadingCustomers, setLoadingCustomers] = useState(false);
   const [allocations, setAllocations] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [dismissFulfillmentNotice, setDismissFulfillmentNotice] = useState(false);
@@ -44,11 +49,29 @@ export default function WorkOrderDispatchModal({ item, isOpen, onClose, onSucces
     return validBatches.reduce((sum, b) => sum + parseFloat(b.available_quantity || 0), 0);
   }, [validBatches]);
 
+  // Load customers for dropdown
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      setLoadingCustomers(true);
+      try {
+        const res = await getAllCustomers();
+        setCustomers(res.data?.data || []);
+      } catch (err) {
+        console.error("Failed to load customers:", err);
+      } finally {
+        setLoadingCustomers(false);
+      }
+    };
+    fetchCustomers();
+  }, []);
+
   // Reset & initialize allocations when modal opens or item changes
   useEffect(() => {
     if (item && isOpen) {
       setPartyName(item.customer_name || "");
       setDispatchDate(new Date().toISOString().split("T")[0]);
+      setChallanNo("");
+      setChallanDate(new Date().toISOString().split("T")[0]);
       setVehicleNo("");
       setRemarks("");
       setDismissFulfillmentNotice(false);
@@ -201,7 +224,9 @@ export default function WorkOrderDispatchModal({ item, isOpen, onClose, onSucces
         dispatch_date: dispatchDate,
         party_name: partyName.trim() || null,
         vehicle_no: vehicleNo.trim() || null,
-        remarks: remarks.trim() || null
+        remarks: remarks.trim() || null,
+        challan_no: challanNo.trim() || null,
+        challan_date: challanDate || null
       };
 
       const res = await createWorkOrderDispatch(payload);
@@ -547,12 +572,42 @@ export default function WorkOrderDispatchModal({ item, isOpen, onClose, onSucces
 
             <div className="space-y-0.5">
               <label className={labelCls}>Customer / Consignee</label>
-              <input
-                type="text"
+              <select
                 value={partyName}
                 onChange={(e) => setPartyName(e.target.value)}
-                placeholder="Customer or recipient name"
                 className={inputCls}
+              >
+                <option value="">{loadingCustomers ? "Loading customers..." : "-- Select Customer --"}</option>
+                {customers.map((c) => (
+                  <option key={c.id} value={c.customer_name}>
+                    {c.customer_name} {c.customer_code ? `(${c.customer_code})` : ""}
+                  </option>
+                ))}
+                {partyName && !customers.some(c => c.customer_name === partyName) && (
+                  <option value={partyName}>{partyName}</option>
+                )}
+              </select>
+            </div>
+          </div>
+
+          {/* Challan Details */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-0.5">
+              <label className={labelCls}>Challan Number</label>
+              <input
+                type="text"
+                value={challanNo}
+                onChange={(e) => setChallanNo(e.target.value)}
+                placeholder="Enter challan number (e.g. CH-2026-001)"
+                className={inputCls}
+              />
+            </div>
+
+            <div className="space-y-0.5">
+              <label className={labelCls}>Challan Date</label>
+              <DateInput
+                value={challanDate}
+                onChange={(e) => setChallanDate(e.target.value)}
               />
             </div>
           </div>

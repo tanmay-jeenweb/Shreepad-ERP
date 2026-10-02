@@ -318,6 +318,21 @@ export default function DispatchMaster() {
             ),
         },
         {
+            key: "challan_no",
+            label: "Challan #",
+            minWidth: "130px",
+            render: (row) => (
+                row.challan_no ? (
+                    <div>
+                        <span className="font-semibold text-slate-800 text-xs block font-mono">{row.challan_no}</span>
+                        {row.challan_date && (
+                            <span className="text-[11px] text-slate-400 block">{formatDate(row.challan_date)}</span>
+                        )}
+                    </div>
+                ) : <span className="text-slate-400 text-xs">—</span>
+            ),
+        },
+        {
             key: "work_order_no",
             label: "Source",
             minWidth: "130px",
@@ -634,6 +649,17 @@ export default function DispatchMaster() {
                             <div>
                                 <span className="text-xs text-slate-400 block uppercase tracking-wider font-semibold">Vehicle / Transporter</span>
                                 <span className="font-semibold text-slate-800">{viewItem.vehicle_no || "—"}</span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4 pt-1 pb-1">
+                                <div>
+                                    <span className="text-xs text-slate-400 block uppercase tracking-wider font-semibold">Challan Number</span>
+                                    <span className="font-mono font-bold text-slate-800">{viewItem.challan_no || "—"}</span>
+                                </div>
+                                <div>
+                                    <span className="text-xs text-slate-400 block uppercase tracking-wider font-semibold">Challan Date</span>
+                                    <span className="font-semibold text-slate-800">{formatDate(viewItem.challan_date)}</span>
+                                </div>
                             </div>
 
                             <div>

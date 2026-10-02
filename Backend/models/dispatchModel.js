@@ -13,6 +13,8 @@ const createDispatchTable = async () => {
             party_name             VARCHAR(255) DEFAULT NULL,
             vehicle_no             VARCHAR(100) DEFAULT NULL,
             remarks                TEXT DEFAULT NULL,
+            challan_no             VARCHAR(100) DEFAULT NULL,
+            challan_date           DATE DEFAULT NULL,
             added_by               INT NOT NULL,
             created_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -63,6 +65,22 @@ const ensureDispatchColumns = async () => {
             } catch (fkErr) {
                 console.warn("Notice adding fk_dispatches_wo_item:", fkErr.message);
             }
+        }
+
+        const [challanCols] = await db.execute(`
+            SELECT COLUMN_NAME 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+              AND TABLE_NAME = 'dispatches' 
+              AND COLUMN_NAME = 'challan_no'
+        `);
+        if (challanCols.length === 0) {
+            console.log("Adding challan_no and challan_date to dispatches table...");
+            await db.execute(`
+                ALTER TABLE dispatches 
+                ADD COLUMN challan_no VARCHAR(100) DEFAULT NULL, 
+                ADD COLUMN challan_date DATE DEFAULT NULL
+            `);
         }
     } catch (err) {
         console.error("Error ensuring columns for dispatches:", err);
@@ -228,8 +246,10 @@ const createDispatch = async (data, addedBy) => {
                 party_name,
                 vehicle_no,
                 remarks,
+                challan_no,
+                challan_date,
                 added_by
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
         const [insertRes] = await connection.execute(insertQuery, [
@@ -242,6 +262,8 @@ const createDispatch = async (data, addedBy) => {
             partyName,
             data.vehicle_no || null,
             data.remarks || null,
+            data.challan_no || null,
+            data.challan_date || null,
             addedBy
         ]);
 
@@ -261,6 +283,8 @@ const createDispatch = async (data, addedBy) => {
             internal_batch_number: data.internal_batch_number,
             quantity: qty,
             party_name: partyName,
+            challan_no: data.challan_no || null,
+            challan_date: data.challan_date || null,
             available_after_dispatch: availableQty - qty
         };
     } catch (error) {
@@ -675,8 +699,10 @@ const createWorkOrderDispatch = async (data, addedBy) => {
                     remarks,
                     work_order_id,
                     work_order_item_id,
+                    challan_no,
+                    challan_date,
                     added_by
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `, [
                 dispatchNo,
                 dispatchDate,
@@ -689,6 +715,8 @@ const createWorkOrderDispatch = async (data, addedBy) => {
                 remarks,
                 woItem.work_order_id,
                 workOrderItemId,
+                data.challan_no || null,
+                data.challan_date || null,
                 addedBy
             ]);
 
@@ -703,6 +731,8 @@ const createWorkOrderDispatch = async (data, addedBy) => {
                 dispatch_no: dispatchNo,
                 batch_no: batchNo,
                 quantity: batchQty,
+                challan_no: data.challan_no || null,
+                challan_date: data.challan_date || null,
                 available_after: availableQty - batchQty
             });
         }
@@ -789,6 +819,8 @@ const getAllDispatches = async (filters = {}) => {
             d.party_name,
             d.vehicle_no,
             d.remarks,
+            d.challan_no,
+            d.challan_date,
             d.added_by,
             d.created_at,
             usr.name AS added_by_name
@@ -819,8 +851,8 @@ const getAllDispatches = async (filters = {}) => {
 
     if (filters.search && filters.search.trim() !== '') {
         const searchTerm = `%${filters.search.trim()}%`;
-        query += ` AND (d.dispatch_no LIKE ? OR d.internal_batch_number LIKE ? OR m.material_name LIKE ? OR d.party_name LIKE ? OR CAST(wo.work_order_no AS CHAR) LIKE ?)`;
-        params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
+        query += ` AND (d.dispatch_no LIKE ? OR d.internal_batch_number LIKE ? OR m.material_name LIKE ? OR d.party_name LIKE ? OR d.challan_no LIKE ? OR CAST(wo.work_order_no AS CHAR) LIKE ?)`;
+        params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
     }
 
     query += ` ORDER BY d.dispatch_date DESC, d.id DESC`;

@@ -4,6 +4,7 @@ import Navbar from "../../components/Navbar";
 import DateInput from "../../components/DateInput";
 import toast from "react-hot-toast";
 import { getAvailableStockBatches, createDispatch } from "../../api/dispatchApi";
+import { getAllCustomers } from "../../api/customerApi";
 
 export default function CreateDispatch() {
     const navigate = useNavigate();
@@ -21,6 +22,10 @@ export default function CreateDispatch() {
     const [partyName, setPartyName] = useState("");
     const [vehicleNo, setVehicleNo] = useState("");
     const [remarks, setRemarks] = useState("");
+    const [challanNo, setChallanNo] = useState("");
+    const [challanDate, setChallanDate] = useState(new Date().toISOString().split("T")[0]);
+    const [customers, setCustomers] = useState([]);
+    const [loadingCustomers, setLoadingCustomers] = useState(false);
     const [submitting, setSubmitting] = useState(false);
 
     // Searchable dropdown states
@@ -61,7 +66,21 @@ export default function CreateDispatch() {
                 setLoadingBatches(false);
             }
         };
+
+        const fetchCustomers = async () => {
+            setLoadingCustomers(true);
+            try {
+                const res = await getAllCustomers();
+                setCustomers(res.data?.data || []);
+            } catch (err) {
+                console.error("Failed to load customers:", err);
+            } finally {
+                setLoadingCustomers(false);
+            }
+        };
+
         fetchBatches();
+        fetchCustomers();
     }, []);
 
     const handleBatchSelect = (batchNumber) => {
@@ -124,7 +143,9 @@ export default function CreateDispatch() {
                 dispatch_date: dispatchDate,
                 party_name: partyName.trim() || null,
                 vehicle_no: vehicleNo.trim() || null,
-                remarks: remarks.trim() || null
+                remarks: remarks.trim() || null,
+                challan_no: challanNo.trim() || null,
+                challan_date: challanDate || null
             };
 
             const res = await createDispatch(payload);
@@ -409,16 +430,24 @@ export default function CreateDispatch() {
 
                         {/* Additional Logistics Details */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                            {/* Party / Customer */}
+                            {/* Party / Customer Dropdown */}
                             <div className="space-y-1">
                                 <label className={labelCls}>Customer / Consignee / Party</label>
-                                <input
-                                    type="text"
+                                <select
                                     value={partyName}
                                     onChange={(e) => setPartyName(e.target.value)}
-                                    placeholder="Enter customer or recipient party name"
                                     className={inputCls}
-                                />
+                                >
+                                    <option value="">{loadingCustomers ? "Loading customers..." : "-- Select Customer --"}</option>
+                                    {customers.map((c) => (
+                                        <option key={c.id} value={c.customer_name}>
+                                            {c.customer_name} {c.customer_code ? `(${c.customer_code})` : ""}
+                                        </option>
+                                    ))}
+                                    {partyName && !customers.some(c => c.customer_name === partyName) && (
+                                        <option value={partyName}>{partyName}</option>
+                                    )}
+                                </select>
                             </div>
 
                             {/* Vehicle / Transporter */}
@@ -430,6 +459,30 @@ export default function CreateDispatch() {
                                     onChange={(e) => setVehicleNo(e.target.value)}
                                     placeholder="e.g. MH-12-AB-1234 or Blue Dart"
                                     className={inputCls}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Challan Details */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                            {/* Challan Number */}
+                            <div className="space-y-1">
+                                <label className={labelCls}>Challan Number</label>
+                                <input
+                                    type="text"
+                                    value={challanNo}
+                                    onChange={(e) => setChallanNo(e.target.value)}
+                                    placeholder="Enter challan number (e.g. CH-2026-001)"
+                                    className={inputCls}
+                                />
+                            </div>
+
+                            {/* Challan Date */}
+                            <div className="space-y-1">
+                                <label className={labelCls}>Challan Date</label>
+                                <DateInput
+                                    value={challanDate}
+                                    onChange={(e) => setChallanDate(e.target.value)}
                                 />
                             </div>
                         </div>

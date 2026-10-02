@@ -11,6 +11,8 @@ const createDispatch = async (req, res) => {
             party_name,
             vehicle_no,
             remarks,
+            challan_no,
+            challan_date,
             dispatch_no
         } = req.body;
 
@@ -40,6 +42,8 @@ const createDispatch = async (req, res) => {
             party_name,
             vehicle_no,
             remarks,
+            challan_no,
+            challan_date,
             dispatch_no
         }, addedBy);
 
@@ -147,6 +151,8 @@ const createWorkOrderDispatch = async (req, res) => {
             remarks,
             internal_batch_number,
             batches,
+            challan_no,
+            challan_date,
             dispatch_no
         } = req.body;
 
@@ -177,6 +183,8 @@ const createWorkOrderDispatch = async (req, res) => {
             remarks,
             internal_batch_number,
             batches,
+            challan_no,
+            challan_date,
             dispatch_no
         }, addedBy);
 
