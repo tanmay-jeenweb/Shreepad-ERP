@@ -675,7 +675,8 @@ export default function CreateWorkOrder() {
                         <td className="px-6 py-4 text-right">
                           <input
                             type="number"
-                            step="0.001"
+                            step="1"
+                            min="1"
                             value={item.quantity}
                             onChange={(e) => handleQtyChange(idx, e.target.value)}
                             required
@@ -886,7 +887,8 @@ export default function CreateWorkOrder() {
                           </label>
                           <input
                             type="number"
-                            step="0.001"
+                            step="1"
+                            min="1"
                             value={item.quantity}
                             onChange={(e) => handleModalItemChange(idx, "quantity", e.target.value)}
                             required
@@ -900,7 +902,8 @@ export default function CreateWorkOrder() {
                           </label>
                           <input
                             type="number"
-                            step="0.001"
+                            step="1"
+                            min="1"
                             value={item.production_quantity}
                             onChange={(e) => handleModalItemChange(idx, "production_quantity", e.target.value)}
                             required

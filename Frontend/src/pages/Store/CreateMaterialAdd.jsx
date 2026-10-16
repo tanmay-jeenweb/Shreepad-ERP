@@ -502,8 +502,8 @@ export default function CreateMaterialAdd() {
                                                 <label className={itemLabelCls}>Total Qty <span className="text-rose-500">*</span></label>
                                                 <input
                                                     type="number"
-                                                    step="0.001"
-                                                    min="0.001"
+                                                    step="1"
+                                                    min="1"
                                                     required
                                                     value={item.quantity}
                                                     onChange={(e) => handleItemChange(idx, "quantity", e.target.value)}

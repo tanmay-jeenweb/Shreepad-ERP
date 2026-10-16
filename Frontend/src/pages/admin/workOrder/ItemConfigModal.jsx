@@ -403,7 +403,8 @@ export default function ItemConfigModal({
                 </label>
                 <input
                   type="number"
-                  step="0.001"
+                  step="1"
+                  min="1"
                   value={formData.quantity}
                   onChange={(e) => handleFieldChange("quantity", e.target.value)}
                   disabled={disabled}
@@ -418,7 +419,8 @@ export default function ItemConfigModal({
                 </label>
                 <input
                   type="number"
-                  step="0.001"
+                  step="1"
+                  min="1"
                   value={formData.production_quantity}
                   onChange={(e) => handleFieldChange("production_quantity", e.target.value)}
                   disabled={disabled}

@@ -626,12 +626,12 @@ export default function MaterialIssueReturn() {
                           <td className="py-2.5 px-3 text-right">
                             <input
                               type="number"
-                              step="0.001"
+                              step="1"
                               min="0"
                               max={row.available_qty || undefined}
                               value={row.qty}
                               onChange={(e) => handleQtyChange(idx, e.target.value)}
-                              placeholder="0.000"
+                              placeholder="0"
                               className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 font-bold text-right focus:border-indigo-500 outline-none"
                             />
                           </td>
@@ -789,11 +789,11 @@ export default function MaterialIssueReturn() {
                     </label>
                     <input
                       type="number"
-                      step="0.001"
-                      min="0.001"
+                      step="1"
+                      min="1"
                       value={returnQuantity}
                       onChange={(e) => setReturnQuantity(e.target.value)}
-                      placeholder="e.g. 15.500"
+                      placeholder="e.g. 15"
                       required
                       className="w-full bg-[#f8fafc] border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 font-bold focus:bg-white focus:border-indigo-500 outline-none"
                     />
