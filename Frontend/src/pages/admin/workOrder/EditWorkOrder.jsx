@@ -312,9 +312,7 @@ export default function EditWorkOrder() {
           ...rm,
           productionAmount: req,
           calculatedMinSupply: calcMin,
-          minSupplyNeeded: (rm.minSupplyNeeded !== undefined && rm.minSupplyNeeded !== "" && !isNaN(Number(rm.minSupplyNeeded)))
-            ? rm.minSupplyNeeded
-            : calcMin
+          minSupplyNeeded: calcMin
         };
       });
     }
@@ -406,9 +404,7 @@ export default function EditWorkOrder() {
               ...rm,
               productionAmount: req,
               calculatedMinSupply: calcMin,
-              minSupplyNeeded: (rm.minSupplyNeeded !== undefined && rm.minSupplyNeeded !== "" && !isNaN(Number(rm.minSupplyNeeded)))
-                ? rm.minSupplyNeeded
-                : calcMin
+              minSupplyNeeded: calcMin
             };
           });
         }
@@ -490,7 +486,7 @@ export default function EditWorkOrder() {
             ...rm,
             productionAmount: req,
             calculatedMinSupply: calcMin,
-            minSupplyNeeded: (rm.minSupplyNeeded !== undefined && rm.minSupplyNeeded !== "" && !isNaN(Number(rm.minSupplyNeeded)))
+            minSupplyNeeded: (rm.minSupplyNeeded !== undefined && rm.minSupplyNeeded !== "" && !isNaN(Number(rm.minSupplyNeeded)) && Number(rm.productionAmount) === req && Number(rm.minSupplyNeeded) <= req)
               ? rm.minSupplyNeeded
               : calcMin
           };

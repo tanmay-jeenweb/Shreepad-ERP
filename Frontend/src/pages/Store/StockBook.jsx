@@ -40,7 +40,21 @@ export default function StockBook() {
     const [issueHistory, setIssueHistory] = useState([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
 
+    const hasActiveFilters = Boolean(
+        filters.material_type ||
+        filters.material_id ||
+        filters.vendor_id ||
+        filters.location_id ||
+        filters.start_date ||
+        filters.end_date
+    );
+
     const fetchRecords = async () => {
+        if (!hasActiveFilters) {
+            setRecords([]);
+            setLoading(false);
+            return;
+        }
         setLoading(true);
         try {
             const activeFilters = {};
@@ -84,7 +98,12 @@ export default function StockBook() {
     }, []);
 
     useEffect(() => {
-        fetchRecords();
+        if (hasActiveFilters) {
+            fetchRecords();
+        } else {
+            setRecords([]);
+            setLoading(false);
+        }
     }, [filters]);
 
     // Filter materials dynamically based on selected material type / group
@@ -360,7 +379,7 @@ export default function StockBook() {
                     </div>
 
                     {/* Reset Button */}
-                    {(filters.material_type || filters.material_id || filters.vendor_id || filters.location_id || filters.start_date || filters.end_date) && (
+                    {hasActiveFilters && (
                         <div className="mt-4 flex justify-end">
                             <button
                                 onClick={() => setFilters({
@@ -380,16 +399,30 @@ export default function StockBook() {
                     )}
                 </div>
 
-                {/* Table */}
+                {/* Table or Empty Filter Prompt */}
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                    <DataTable
-                        tableId="stock_book_table"
-                        title="Stock Book Records"
-                        data={records}
-                        columns={columns}
-                        loading={loading}
-                        searchPlaceholder="Search particular, batch number, vendor, invoice..."
-                    />
+                    {!hasActiveFilters ? (
+                        <div className="p-12 sm:p-16 flex flex-col items-center justify-center text-center">
+                            <div className="w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 mb-4 shadow-xs">
+                                <i className="fa-solid fa-filter text-2xl"></i>
+                            </div>
+                            <h3 className="text-base font-bold text-slate-800 mb-1">
+                                No Filters Selected
+                            </h3>
+                            <p className="text-sm text-slate-500 max-w-md">
+                                Please select at least one filter above (Material Group, Material, Vendor, Location, or Date Range) to view stock records.
+                            </p>
+                        </div>
+                    ) : (
+                        <DataTable
+                            tableId="stock_book_table"
+                            title="Stock Book Records"
+                            data={records}
+                            columns={columns}
+                            loading={loading}
+                            searchPlaceholder="Search particular, batch number, vendor, invoice..."
+                        />
+                    )}
                 </div>
             </main>
 
