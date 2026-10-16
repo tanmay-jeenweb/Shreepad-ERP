@@ -296,6 +296,46 @@ const ensureWorkOrderStatusColumns = async () => {
             }
         }
 
+        const [rowsStopReason] = await db.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'work_orders' AND COLUMN_NAME = 'stop_reason'");
+        if (rowsStopReason.length === 0) {
+            await db.execute("ALTER TABLE work_orders ADD COLUMN stop_reason TEXT DEFAULT NULL");
+            console.log('Added column stop_reason to work_orders');
+        }
+
+        const [rowsStoppedAt] = await db.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'work_orders' AND COLUMN_NAME = 'stopped_at'");
+        if (rowsStoppedAt.length === 0) {
+            await db.execute("ALTER TABLE work_orders ADD COLUMN stopped_at DATETIME DEFAULT NULL");
+            console.log('Added column stopped_at to work_orders');
+        }
+
+        const [rowsStoppedBy] = await db.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'work_orders' AND COLUMN_NAME = 'stopped_by'");
+        if (rowsStoppedBy.length === 0) {
+            await db.execute("ALTER TABLE work_orders ADD COLUMN stopped_by INT DEFAULT NULL");
+            console.log('Added column stopped_by to work_orders');
+            try {
+                await db.execute("ALTER TABLE work_orders ADD CONSTRAINT fk_work_orders_stopped_by FOREIGN KEY (stopped_by) REFERENCES users(id) ON DELETE SET NULL");
+            } catch (fkErr) {
+                console.warn('Foreign key notice for stopped_by:', fkErr.message);
+            }
+        }
+
+        const [rowsRestartedAt] = await db.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'work_orders' AND COLUMN_NAME = 'restarted_at'");
+        if (rowsRestartedAt.length === 0) {
+            await db.execute("ALTER TABLE work_orders ADD COLUMN restarted_at DATETIME DEFAULT NULL");
+            console.log('Added column restarted_at to work_orders');
+        }
+
+        const [rowsRestartedBy] = await db.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'work_orders' AND COLUMN_NAME = 'restarted_by'");
+        if (rowsRestartedBy.length === 0) {
+            await db.execute("ALTER TABLE work_orders ADD COLUMN restarted_by INT DEFAULT NULL");
+            console.log('Added column restarted_by to work_orders');
+            try {
+                await db.execute("ALTER TABLE work_orders ADD CONSTRAINT fk_work_orders_restarted_by FOREIGN KEY (restarted_by) REFERENCES users(id) ON DELETE SET NULL");
+            } catch (fkErr) {
+                console.warn('Foreign key notice for restarted_by:', fkErr.message);
+            }
+        }
+
         // Migration: Mark existing work orders with active RM issues or production logs as 'Started'
         try {
             await db.execute(`
@@ -318,6 +358,18 @@ const ensureWorkOrderStatusColumns = async () => {
             console.log('Migrated active work orders with workshop logs to Started status');
         } catch (migErr) {
             console.warn('Notice during work order status migration:', migErr.message);
+        }
+
+        // Migration: Update any existing 'Stopped' work orders to 'Completed'
+        try {
+            await db.execute(`
+                UPDATE work_orders
+                SET status = 'Completed'
+                WHERE status = 'Stopped'
+            `);
+            console.log("Migrated any 'Stopped' work orders to 'Completed'");
+        } catch (migErr) {
+            console.warn("Notice during Stopped to Completed migration:", migErr.message);
         }
     } catch (err) {
         console.error('Error ensuring work order status columns:', err.message || err);
@@ -531,6 +583,20 @@ const getAllWorkOrders = async (includeHeld = false) => {
             wo.started_at,
             wo.started_by,
             starter.name AS started_by_name,
+            wo.stop_reason,
+            wo.stop_reason AS completion_remark,
+            wo.stopped_at,
+            wo.stopped_at AS completed_at,
+            wo.stopped_by,
+            wo.stopped_by AS completed_by,
+            stopper.name AS stopped_by_name,
+            stopper.name AS completed_by_name,
+            wo.restarted_at,
+            wo.restarted_at AS reopened_at,
+            wo.restarted_by,
+            wo.restarted_by AS reopened_by,
+            restarter.name AS restarted_by_name,
+            restarter.name AS reopened_by_name,
             mac.name AS machine_name,
             mac.machine_number,
             COALESCE(u.name, 'Unknown') AS added_by_name,
@@ -546,6 +612,8 @@ const getAllWorkOrders = async (includeHeld = false) => {
         LEFT JOIN machines mac ON woi.machine_id = mac.id
         LEFT JOIN users u ON wo.added_by = u.id
         LEFT JOIN users starter ON wo.started_by = starter.id
+        LEFT JOIN users stopper ON wo.stopped_by = stopper.id
+        LEFT JOIN users restarter ON wo.restarted_by = restarter.id
         LEFT JOIN inspection_masters insp ON wo.inspection_id = insp.id
         LEFT JOIN (
             SELECT 
@@ -587,11 +655,19 @@ const getWorkOrderById = async (id) => {
             c.customer_code,
             COALESCE(u.name, 'Unknown') AS added_by_name,
             starter.name AS started_by_name,
+            stopper.name AS stopped_by_name,
+            stopper.name AS completed_by_name,
+            wo.stopped_at AS completed_at,
+            wo.stop_reason AS completion_remark,
+            restarter.name AS restarted_by_name,
+            restarter.name AS reopened_by_name,
             insp.name AS inspection_name
         FROM work_orders wo
         LEFT JOIN customer_master c ON wo.customer_id = c.id
         LEFT JOIN users u ON wo.added_by = u.id
         LEFT JOIN users starter ON wo.started_by = starter.id
+        LEFT JOIN users stopper ON wo.stopped_by = stopper.id
+        LEFT JOIN users restarter ON wo.restarted_by = restarter.id
         LEFT JOIN inspection_masters insp ON wo.inspection_id = insp.id
         WHERE wo.id = ?
     `;
@@ -646,6 +722,39 @@ const startWorkOrder = async (workOrderId, userId) => {
     `;
     const [result] = await db.execute(query, [userId || null, workOrderId]);
     return result.affectedRows > 0;
+};
+
+const completeWorkOrder = async (workOrderId, userId, completionReason) => {
+    const query = `
+        UPDATE work_orders
+        SET status = 'Completed',
+            stopped_at = CURRENT_TIMESTAMP,
+            stopped_by = ?,
+            stop_reason = ?
+        WHERE id = ? AND status = 'Started'
+    `;
+    const [result] = await db.execute(query, [userId || null, completionReason || 'Completed', workOrderId]);
+    return result.affectedRows > 0;
+};
+
+const stopWorkOrder = async (workOrderId, userId, stopReason) => {
+    return completeWorkOrder(workOrderId, userId, stopReason);
+};
+
+const reopenWorkOrder = async (workOrderId, userId) => {
+    const query = `
+        UPDATE work_orders
+        SET status = 'Started',
+            restarted_at = CURRENT_TIMESTAMP,
+            restarted_by = ?
+        WHERE id = ? AND (status = 'Completed' OR status = 'Stopped')
+    `;
+    const [result] = await db.execute(query, [userId || null, workOrderId]);
+    return result.affectedRows > 0;
+};
+
+const restartWorkOrder = async (workOrderId, userId) => {
+    return reopenWorkOrder(workOrderId, userId);
 };
 
 const deleteWorkOrder = async (id) => {
@@ -1006,6 +1115,10 @@ module.exports = {
     getAllWorkOrders,
     getWorkOrderById,
     startWorkOrder,
+    stopWorkOrder,
+    completeWorkOrder,
+    restartWorkOrder,
+    reopenWorkOrder,
     deleteWorkOrder,
     getMaterialStock,
     updateWorkOrderItemDelay,

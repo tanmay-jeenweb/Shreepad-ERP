@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import Navbar from "../../../components/Navbar";
-import { getAllWorkOrders, deleteWorkOrder, startWorkOrder } from "../../../api/workOrderApi";
+import { getAllWorkOrders, deleteWorkOrder, startWorkOrder, completeWorkOrder, reopenWorkOrder } from "../../../api/workOrderApi";
 import DataTable from "../../../components/DataTable";
 import toast from "react-hot-toast";
 import { usePermission } from "../../../context/PermissionContext";
@@ -13,6 +13,12 @@ export default function WorkOrderMaster() {
   const [items, setItems] = useState([]);
   const [error, setError] = useState("");
   const [startingId, setStartingId] = useState(null);
+  const [reopeningId, setReopeningId] = useState(null);
+  
+  // Complete modal state
+  const [completingRow, setCompletingRow] = useState(null);
+  const [completionRemark, setCompletionRemark] = useState("");
+  const [completingLoading, setCompletingLoading] = useState(false);
   
   // View modal state
   const [viewWorkOrderId, setViewWorkOrderId] = useState(null);
@@ -52,6 +58,46 @@ export default function WorkOrderMaster() {
       toast.error(err?.response?.data?.message || "Failed to start work order");
     } finally {
       setStartingId(null);
+    }
+  };
+
+  const handleConfirmComplete = async (e) => {
+    e.preventDefault();
+    if (!completingRow) return;
+
+    const woNumber = `WO-${String(completingRow.work_order_no).padStart(4, '0')}`;
+    setCompletingLoading(true);
+    try {
+      await completeWorkOrder(completingRow.work_order_id, {
+        completion_reason: completionRemark.trim() || "Completed"
+      });
+      toast.success(`Work Order ${woNumber} marked as Completed.`);
+      setCompletingRow(null);
+      setCompletionRemark("");
+      await loadData();
+    } catch (err) {
+      console.error("Failed to complete work order:", err);
+      toast.error(err?.response?.data?.message || "Failed to complete work order");
+    } finally {
+      setCompletingLoading(false);
+    }
+  };
+
+  const handleReopenWorkOrder = async (row) => {
+    const woNumber = `WO-${String(row.work_order_no).padStart(4, '0')}`;
+    if (!window.confirm(`Are you sure you want to REOPEN Work Order ${woNumber}?\n\nIt will return to Started status, re-enabling workshop entries and dispatches.`)) {
+      return;
+    }
+    setReopeningId(row.work_order_id);
+    try {
+      await reopenWorkOrder(row.work_order_id);
+      toast.success(`Work Order ${woNumber} reopened successfully! It is active again.`);
+      await loadData();
+    } catch (err) {
+      console.error("Failed to reopen work order:", err);
+      toast.error(err?.response?.data?.message || "Failed to reopen work order");
+    } finally {
+      setReopeningId(null);
     }
   };
 
@@ -153,10 +199,13 @@ export default function WorkOrderMaster() {
               </span>
             );
           }
-          if (status === "Completed") {
+          if (status === "Completed" || status === "Stopped") {
             return (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                <i className="fa-solid fa-check text-[10px]"></i>
+              <span 
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-help"
+                title={row.stop_reason ? `Remark: ${row.stop_reason}` : "Work Order is Completed"}
+              >
+                <i className="fa-solid fa-circle-check text-[11px] text-emerald-600"></i>
                 Completed
               </span>
             );
@@ -178,7 +227,7 @@ export default function WorkOrderMaster() {
       key: "actions",
       label: "Actions",
       sortable: false,
-      minWidth: "180px",
+      minWidth: "210px",
       render: (row) => (
         <div className="flex items-center gap-2">
           {/* Start Work Order Button (for Draft / unstarted work orders) */}
@@ -196,6 +245,40 @@ export default function WorkOrderMaster() {
                 <i className="fa-solid fa-play text-[10px]"></i>
               )}
               <span>Start</span>
+            </button>
+          )}
+
+          {/* Complete Work Order Button (for Started work orders) */}
+          {canUpdate && row.work_order_status === "Started" && (
+            <button
+              type="button"
+              onClick={() => {
+                setCompletingRow(row);
+                setCompletionRemark("");
+              }}
+              className="flex h-8 items-center gap-1.5 px-2.5 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-400 cursor-pointer font-bold text-xs transition-all shadow-2xs active:scale-95"
+              title="Complete Work Order (Close floor production and mark as completed)"
+            >
+              <i className="fa-solid fa-circle-check text-[10px]"></i>
+              <span>Complete</span>
+            </button>
+          )}
+
+          {/* Reopen Work Order Button (for Completed work orders) */}
+          {canUpdate && (row.work_order_status === "Completed" || row.work_order_status === "Stopped") && (
+            <button
+              type="button"
+              onClick={() => handleReopenWorkOrder(row)}
+              disabled={reopeningId === row.work_order_id}
+              className="flex h-8 items-center gap-1.5 px-2.5 rounded-lg border border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100 hover:border-sky-400 cursor-pointer font-bold text-xs transition-all shadow-2xs active:scale-95 disabled:opacity-50"
+              title="Reopen Work Order (Resume floor production and dispatch)"
+            >
+              {reopeningId === row.work_order_id ? (
+                <div className="w-3.5 h-3.5 border-2 border-sky-600 border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <i className="fa-solid fa-rotate-right text-[10px]"></i>
+              )}
+              <span>Reopen</span>
             </button>
           )}
 
@@ -253,7 +336,7 @@ export default function WorkOrderMaster() {
     });
 
     return cols;
-  }, [hasPermission, navigate, startingId]);
+  }, [hasPermission, navigate, startingId, reopeningId]);
 
   const canWrite = hasPermission("work_order", "write");
 
@@ -294,6 +377,83 @@ export default function WorkOrderMaster() {
           workOrderId={viewWorkOrderId}
           onClose={() => setViewWorkOrderId(null)}
         />
+      )}
+
+      {/* Complete Work Order Modal */}
+      {completingRow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden">
+            <div className="p-5 sm:p-6">
+              <div className="flex items-start gap-3.5 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center shrink-0 text-emerald-600">
+                  <i className="fa-solid fa-circle-check text-lg"></i>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">
+                    Complete Work Order WO-{String(completingRow.work_order_no).padStart(4, '0')}
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Mark this work order as completed. Floor production entries and material issuing will be closed.
+                  </p>
+                </div>
+              </div>
+
+              <form onSubmit={handleConfirmComplete}>
+                <div className="mb-4">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Completion Remarks / Notes <span className="text-slate-400 font-normal lowercase">(optional)</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={completionRemark}
+                    onChange={(e) => setCompletionRemark(e.target.value)}
+                    placeholder="Enter notes (e.g. Production completed successfully, short closed by customer request)..."
+                    className="w-full text-sm rounded-xl border border-slate-300 px-3.5 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all resize-none"
+                    autoFocus
+                  />
+                </div>
+
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 text-xs flex items-start gap-2.5 mb-5">
+                  <i className="fa-solid fa-circle-info text-emerald-600 mt-0.5 shrink-0"></i>
+                  <span>
+                    This order will be marked as <strong>Completed</strong>. You can <strong>Reopen</strong> it at any time to resume production if required.
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCompletingRow(null);
+                      setCompletionRemark("");
+                    }}
+                    disabled={completingLoading}
+                    className="px-4 py-2 text-xs font-bold rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 cursor-pointer transition-all disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={completingLoading}
+                    className="px-4 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer transition-all shadow-xs active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {completingLoading ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>Completing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <i className="fa-solid fa-circle-check text-xs"></i>
+                        <span>Confirm Complete</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

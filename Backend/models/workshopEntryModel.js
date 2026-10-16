@@ -264,6 +264,13 @@ const getWorkshopEntryByWorkOrderItemId = async (workOrderItemId) => {
             wo.work_order_no,
             wo.work_order_date,
             COALESCE(wo.status, 'Draft') AS work_order_status,
+            wo.stop_reason,
+            wo.stopped_at,
+            wo.stopped_at AS completed_at,
+            wo.stopped_by,
+            stopper.name AS stopped_by_name,
+            stopper.name AS completed_by_name,
+            wo.stop_reason AS completion_remark,
             m.id AS material_id,
             m.material_name,
             m.material_code,
@@ -274,6 +281,7 @@ const getWorkshopEntryByWorkOrderItemId = async (workOrderItemId) => {
         JOIN work_orders wo ON woi.work_order_id = wo.id
         JOIN materials m ON woi.material_id = m.id
         LEFT JOIN customer_master c ON wo.customer_id = c.id
+        LEFT JOIN users stopper ON wo.stopped_by = stopper.id
         LEFT JOIN bill_of_materials bom ON m.id = bom.material_id
         WHERE woi.id = ?
         LIMIT 1
@@ -598,6 +606,10 @@ const issueWorkshopRawMaterials = async ({
             throw new Error('Work Order item not found');
         }
 
+        if (woRows[0].status === 'Completed' || woRows[0].status === 'Stopped') {
+            throw new Error(`Cannot issue raw materials: Work Order WO-${String(woRows[0].work_order_no).padStart(4, '0')} is COMPLETED.`);
+        }
+
         if (woRows[0].status !== 'Started') {
             throw new Error('Cannot issue raw materials: Work Order has not been started yet. Please start it in the Work Order master.');
         }
@@ -726,7 +738,7 @@ const addWorkshopProductionLog = async ({
         // 1. Get work order item details, material_id, batch_no & work order info
         const [woiRows] = await connection.execute(`
             SELECT woi.id, woi.work_order_id, woi.production_quantity, woi.quantity, woi.material_id, woi.batch_no,
-                   m.material_name, m.material_type, wo.work_order_no, c.customer_name
+                   m.material_name, m.material_type, wo.work_order_no, COALESCE(wo.status, 'Draft') AS work_order_status, c.customer_name
             FROM work_order_items woi
             JOIN work_orders wo ON woi.work_order_id = wo.id
             JOIN materials m ON woi.material_id = m.id
@@ -736,6 +748,14 @@ const addWorkshopProductionLog = async ({
 
         if (woiRows.length === 0) {
             throw new Error('Work Order item not found');
+        }
+
+        if (woiRows[0].work_order_status === 'Completed' || woiRows[0].work_order_status === 'Stopped') {
+            throw new Error(`Cannot record production: Work Order WO-${String(woiRows[0].work_order_no).padStart(4, '0')} is COMPLETED.`);
+        }
+
+        if (woiRows[0].work_order_status !== 'Started') {
+            throw new Error(`Cannot record production: Work Order WO-${String(woiRows[0].work_order_no).padStart(4, '0')} has not been started yet.`);
         }
 
         const targetQty = Number(woiRows[0].production_quantity || woiRows[0].quantity) || 0;
@@ -973,7 +993,7 @@ const revertWorkshopProductionLog = async ({
         // 1. Get work order item details & target quantity
         const [woiRows] = await connection.execute(`
             SELECT woi.id, woi.work_order_id, woi.production_quantity, woi.quantity, woi.material_id, woi.batch_no,
-                   m.material_name, m.material_type, wo.work_order_no, c.customer_name
+                   m.material_name, m.material_type, wo.work_order_no, COALESCE(wo.status, 'Draft') AS work_order_status, c.customer_name
             FROM work_order_items woi
             JOIN work_orders wo ON woi.work_order_id = wo.id
             JOIN materials m ON woi.material_id = m.id
@@ -983,6 +1003,14 @@ const revertWorkshopProductionLog = async ({
 
         if (woiRows.length === 0) {
             throw new Error('Work Order item not found');
+        }
+
+        if (woiRows[0].work_order_status === 'Completed' || woiRows[0].work_order_status === 'Stopped') {
+            throw new Error(`Cannot revert production: Work Order WO-${String(woiRows[0].work_order_no).padStart(4, '0')} is COMPLETED.`);
+        }
+
+        if (woiRows[0].work_order_status !== 'Started') {
+            throw new Error(`Cannot revert production: Work Order WO-${String(woiRows[0].work_order_no).padStart(4, '0')} has not been started yet.`);
         }
 
         const targetQty = Number(woiRows[0].production_quantity || woiRows[0].quantity) || 0;

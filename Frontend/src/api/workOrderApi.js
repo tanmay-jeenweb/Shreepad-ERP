@@ -45,3 +45,16 @@ export const updateWorkOrder = async (id, data) => {
 export const startWorkOrder = async (id) => {
     return await apiClient.put(`/work-orders/start/${id}`);
 };
+
+export const completeWorkOrder = async (id, data) => {
+    return await apiClient.put(`/work-orders/complete/${id}`, data);
+};
+
+export const stopWorkOrder = completeWorkOrder;
+
+export const reopenWorkOrder = async (id) => {
+    return await apiClient.put(`/work-orders/reopen/${id}`);
+};
+
+export const restartWorkOrder = reopenWorkOrder;
+

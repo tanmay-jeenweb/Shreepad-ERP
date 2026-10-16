@@ -401,16 +401,29 @@ export default function MaterialIssueReturn() {
             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
               entryData?.work_order_status === 'Started'
                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                : (entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped')
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                 : 'bg-amber-50 text-amber-700 border border-amber-200'
             }`}>
               {entryData?.work_order_status === 'Started' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>}
-              {entryData?.work_order_status || 'Draft'}
+              {(entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped') && <i className="fa-solid fa-circle-check text-[11px] text-emerald-600"></i>}
+              {entryData?.work_order_status === 'Stopped' ? 'Completed' : (entryData?.work_order_status || 'Draft')}
             </span>
           </div>
         </div>
 
-        {/* Unstarted Notice Banner */}
-        {entryData?.work_order_status !== 'Started' && (
+        {/* Completed / Unstarted Notice Banner */}
+        {entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped' ? (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center gap-3 text-emerald-900 shadow-2xs">
+            <i className="fa-solid fa-circle-check text-emerald-600 text-xl shrink-0"></i>
+            <div>
+              <p className="text-sm font-bold">This Work Order is Completed.</p>
+              <p className="text-xs text-emerald-700 mt-0.5">
+                Raw material issuing and returns are closed for this order. If work needs to resume, an authorized user can Reopen this work order in the Work Order Master.
+              </p>
+            </div>
+          </div>
+        ) : entryData?.work_order_status !== 'Started' && (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3 text-amber-900 shadow-2xs">
             <i className="fa-solid fa-triangle-exclamation text-amber-600 text-xl shrink-0"></i>
             <div>

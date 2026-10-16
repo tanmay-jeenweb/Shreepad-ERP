@@ -25,6 +25,18 @@ export default function DispatchMaster() {
     const [dispatchingWoItem, setDispatchingWoItem] = useState(null);
     const [viewItem, setViewItem] = useState(null);
 
+    // Banner visibility states (resets on every page refresh)
+    const [showOngoingBanner, setShowOngoingBanner] = useState(true);
+    const [showCompletedBanner, setShowCompletedBanner] = useState(true);
+
+    // Clean up any previously stored banner preference
+    useEffect(() => {
+        try {
+            localStorage.removeItem("hide_dispatch_ongoing_banner");
+            localStorage.removeItem("hide_dispatch_completed_banner");
+        } catch (e) {}
+    }, []);
+
     // Load work orders based on tab
     const fetchWorkOrders = async () => {
         setLoadingWo(true);
@@ -536,17 +548,30 @@ export default function DispatchMaster() {
                 {/* Tab Content 1: Ongoing Work Orders */}
                 {activeTab === "ongoing" && (
                     <div className="space-y-4">
-                        <div className="bg-amber-50/80 border border-amber-200/80 rounded-2xl p-4 flex items-center justify-between text-xs text-amber-900">
-                            <div className="flex items-center gap-2.5">
-                                <i className="fa-solid fa-circle-info text-amber-600 text-sm"></i>
-                                <span>
-                                    Displaying started work orders in active fulfillment. Finished goods can be dispatched from work order production batches and available warehouse inventory.
-                                </span>
+                        {showOngoingBanner && (
+                            <div className="bg-amber-50/80 border border-amber-200/80 rounded-2xl p-4 flex items-center justify-between text-xs text-amber-900 transition-all">
+                                <div className="flex items-center gap-2.5 pr-3">
+                                    <i className="fa-solid fa-circle-info text-amber-600 text-sm shrink-0"></i>
+                                    <span>
+                                        Displaying started work orders in active fulfillment. Finished goods can be dispatched from work order production batches and available warehouse inventory.
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-3 shrink-0">
+                                    <span className="font-bold">
+                                        {ongoingWorkOrders.filter(w => (parseFloat(w.available_to_dispatch || w.total_available_stock || 0) > 0) && parseFloat(w.remaining_order_quantity || 0) > 0).length} Ready to Dispatch
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowOngoingBanner(false)}
+                                        className="w-6 h-6 flex items-center justify-center rounded-lg text-amber-700 hover:text-amber-950 hover:bg-amber-100/80 transition-colors cursor-pointer"
+                                        title="Dismiss banner"
+                                        aria-label="Dismiss banner"
+                                    >
+                                        <i className="fa-solid fa-xmark text-sm"></i>
+                                    </button>
+                                </div>
                             </div>
-                            <span className="font-bold shrink-0">
-                                {ongoingWorkOrders.filter(w => (parseFloat(w.available_to_dispatch || w.total_available_stock || 0) > 0) && parseFloat(w.remaining_order_quantity || 0) > 0).length} Ready to Dispatch
-                            </span>
-                        </div>
+                        )}
 
                         <DataTable
                             tableId="dispatch_ongoing_wo"
@@ -564,12 +589,25 @@ export default function DispatchMaster() {
                 {/* Tab Content 2: Completed Work Orders */}
                 {activeTab === "completed" && (
                     <div className="space-y-4">
-                        <div className="bg-emerald-50/80 border border-emerald-200/80 rounded-2xl p-4 flex items-center gap-2.5 text-xs text-emerald-900">
-                            <i className="fa-solid fa-circle-check text-emerald-600 text-sm"></i>
-                            <span>
-                                Work Orders where target quantities have been fully completed and dispatched.
-                            </span>
-                        </div>
+                        {showCompletedBanner && (
+                            <div className="bg-emerald-50/80 border border-emerald-200/80 rounded-2xl p-4 flex items-center justify-between text-xs text-emerald-900 transition-all">
+                                <div className="flex items-center gap-2.5 pr-3">
+                                    <i className="fa-solid fa-circle-check text-emerald-600 text-sm shrink-0"></i>
+                                    <span>
+                                        Work Orders where target quantities have been fully completed and dispatched.
+                                    </span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowCompletedBanner(false)}
+                                    className="w-6 h-6 flex items-center justify-center rounded-lg text-emerald-700 hover:text-emerald-950 hover:bg-emerald-100/80 transition-colors cursor-pointer shrink-0"
+                                    title="Dismiss banner"
+                                    aria-label="Dismiss banner"
+                                >
+                                    <i className="fa-solid fa-xmark text-sm"></i>
+                                </button>
+                            </div>
+                        )}
 
                         <DataTable
                             tableId="dispatch_completed_wo"

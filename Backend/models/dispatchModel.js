@@ -170,6 +170,7 @@ const getAvailableStockStatusBatches = async () => {
             WHERE internal_batch_number IS NOT NULL
             GROUP BY internal_batch_number
         ) issue_agg ON ss.internal_batch_number = issue_agg.internal_batch_number
+        WHERE COALESCE(wo.status, 'Started') != 'Stopped'
         HAVING available_quantity > 0
         ORDER BY ss.material_name ASC, ss.internal_batch_number ASC
     `;
@@ -202,9 +203,14 @@ const createDispatch = async (data, addedBy) => {
                 ss.location,
                 ss.total_kg,
                 ss.remaining_kg,
+                ss.work_order_item_id,
+                wo.work_order_no,
+                COALESCE(wo.status, 'Started') AS work_order_status,
                 r.quantity AS rm_return_quantity
              FROM stock_status ss
              LEFT JOIN rm_returns r ON ss.rm_return_id = r.id
+             LEFT JOIN work_order_items woi ON ss.work_order_item_id = woi.id
+             LEFT JOIN work_orders wo ON woi.work_order_id = wo.id
              WHERE ss.internal_batch_number = ?
              FOR UPDATE`,
             [data.internal_batch_number]
@@ -215,6 +221,10 @@ const createDispatch = async (data, addedBy) => {
         }
 
         const stockRow = statusRows[0];
+
+        if (stockRow.work_order_status === 'Stopped') {
+            throw new Error(`Cannot dispatch batch '${data.internal_batch_number}': Linked Work Order WO-${String(stockRow.work_order_no).padStart(4, '0')} is currently STOPPED.`);
+        }
         const materialId = data.material_id || stockRow.material_id;
 
         // 2. Compute aggregate already issued or dispatched for this batch
@@ -596,6 +606,9 @@ const createWorkOrderDispatch = async (data, addedBy) => {
         }
 
         const woItem = woiRows[0];
+        if (woItem.work_order_status === 'Stopped') {
+            throw new Error(`Cannot dispatch: Work Order WO-${String(woItem.work_order_no).padStart(4, '0')} is currently STOPPED.`);
+        }
         if (woItem.work_order_status !== 'Started' && woItem.work_order_status !== 'Completed') {
             throw new Error(`Cannot dispatch: Work Order WO-${String(woItem.work_order_no).padStart(4, '0')} has not been started yet.`);
         }

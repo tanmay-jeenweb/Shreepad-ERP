@@ -266,6 +266,9 @@ export default function WorkshopEntryDetails() {
 
   const handleIssueSubmit = async (e) => {
     e.preventDefault();
+    if (entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped') {
+      return toast.error(`Cannot issue raw materials: Work Order is COMPLETED.`);
+    }
     if (entryData?.work_order_status !== 'Started') {
       return toast.error("Cannot issue raw materials: Work Order has not been started yet. Please start it in Work Order Master.");
     }
@@ -581,6 +584,12 @@ export default function WorkshopEntryDetails() {
 
   const handleMoveSubmit = async (e) => {
     e.preventDefault();
+    if (entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped') {
+      return toast.error(`Cannot record production: Work Order is COMPLETED.`);
+    }
+    if (entryData?.work_order_status !== 'Started') {
+      return toast.error("Cannot record production: Work Order has not been started yet.");
+    }
     if (!selectedStage) return;
 
     if (!moveItems || moveItems.length === 0) {
@@ -694,6 +703,12 @@ export default function WorkshopEntryDetails() {
 
   const handleRevertSubmit = async (e) => {
     e.preventDefault();
+    if (entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped') {
+      return toast.error(`Cannot revert production: Work Order is COMPLETED.`);
+    }
+    if (entryData?.work_order_status !== 'Started') {
+      return toast.error("Cannot revert production: Work Order has not been started yet.");
+    }
     if (!revertFromStage) {
       return toast.error("Please select a source process stage to revert from.");
     }
@@ -844,18 +859,37 @@ export default function WorkshopEntryDetails() {
               <i className="fa-solid fa-file-lines text-[10px]"></i>
               {workOrderFormattedNo}
             </span>
-            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${entryData?.work_order_status === 'Started'
-                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                : 'bg-amber-50 text-amber-700 border border-amber-200'
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
+                entryData?.work_order_status === 'Started'
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : (entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped')
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : 'bg-amber-50 text-amber-700 border border-amber-200'
               }`}>
               {entryData?.work_order_status === 'Started' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>}
-              {entryData?.work_order_status || 'Draft'}
+              {(entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped') && <i className="fa-solid fa-circle-check text-[11px] text-emerald-600"></i>}
+              {entryData?.work_order_status === 'Stopped' ? 'Completed' : (entryData?.work_order_status || 'Draft')}
             </span>
           </div>
         </div>
 
-        {/* Unstarted Notice Banner */}
-        {entryData?.work_order_status !== 'Started' && (
+        {/* Completed / Unstarted Notice Banner */}
+        {entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped' ? (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-start gap-3.5 text-emerald-900 shadow-2xs">
+            <i className="fa-solid fa-circle-check text-emerald-600 text-xl shrink-0 mt-0.5"></i>
+            <div>
+              <p className="text-sm font-bold">This Work Order is COMPLETED.</p>
+              {entryData.stop_reason && (
+                <p className="text-xs font-semibold text-emerald-800 mt-0.5">
+                  Remarks: <span className="font-normal italic">"{entryData.stop_reason}"</span>
+                </p>
+              )}
+              <p className="text-xs text-emerald-700 mt-1">
+                Raw material issues and floor production logs are closed for this order. If work needs to resume, an authorized user can <strong>Reopen</strong> this work order in the Work Order Master.
+              </p>
+            </div>
+          </div>
+        ) : entryData?.work_order_status !== 'Started' && (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3 text-amber-900 shadow-2xs">
             <i className="fa-solid fa-triangle-exclamation text-amber-600 text-xl shrink-0"></i>
             <div>

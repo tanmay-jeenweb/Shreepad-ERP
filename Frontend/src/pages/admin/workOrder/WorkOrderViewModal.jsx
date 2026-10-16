@@ -143,12 +143,13 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
                                             workOrder.status === 'Started'
                                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                                : workOrder.status === 'Completed'
-                                                ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                                                : (workOrder.status === 'Completed' || workOrder.status === 'Stopped')
+                                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                                 : 'bg-amber-50 text-amber-700 border border-amber-200'
                                         }`}>
                                             {workOrder.status === 'Started' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>}
-                                            {workOrder.status || 'Draft'}
+                                            {(workOrder.status === 'Completed' || workOrder.status === 'Stopped') && <i className="fa-solid fa-circle-check text-[11px] text-emerald-600"></i>}
+                                            {workOrder.status === 'Stopped' ? 'Completed' : (workOrder.status || 'Draft')}
                                         </span>
                                     </div>
 
@@ -194,6 +195,28 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                         </p>
                                     </div>
                                 </div>
+
+                                {(workOrder.status === 'Completed' || workOrder.status === 'Stopped') && (
+                                    <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-3 text-emerald-900">
+                                        <i className="fa-solid fa-circle-check text-emerald-600 text-lg mt-0.5 shrink-0"></i>
+                                        <div className="space-y-1">
+                                            <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">Work Order Completed</p>
+                                            {workOrder.stop_reason && (
+                                                <p className="text-sm font-semibold text-emerald-900">
+                                                    Remarks: <span className="font-normal italic">"{workOrder.stop_reason}"</span>
+                                                </p>
+                                            )}
+                                            <div className="flex flex-wrap gap-4 text-xs text-emerald-700 pt-1">
+                                                {(workOrder.stopped_by_name || workOrder.completed_by_name) && (
+                                                    <span>Completed By: <strong className="text-emerald-900">{workOrder.stopped_by_name || workOrder.completed_by_name}</strong></span>
+                                                )}
+                                                {(workOrder.stopped_at || workOrder.completed_at) && (
+                                                    <span>Completed On: <strong className="text-emerald-900 font-mono">{formatDateTime(workOrder.stopped_at || workOrder.completed_at)}</strong></span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             {/* 2. Finished Goods Section */}

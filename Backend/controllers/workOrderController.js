@@ -303,6 +303,95 @@ const startWorkOrderController = async (req, res) => {
     }
 };
 
+const completeWorkOrderController = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const completionReason = req.body.completion_reason || req.body.stop_reason || req.body.remark || req.body.remarks || "Completed";
+        const userId = req.user.id;
+
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: "Work Order ID is required."
+            });
+        }
+
+        const workOrder = await workOrderModel.getWorkOrderById(id);
+        if (!workOrder) {
+            return res.status(404).json({
+                success: false,
+                message: "Work Order not found."
+            });
+        }
+
+        if (workOrder.status !== 'Started') {
+            return res.status(400).json({
+                success: false,
+                message: `Only Started work orders can be completed. Current status: ${workOrder.status || 'Draft'}.`
+            });
+        }
+
+        await workOrderModel.completeWorkOrder(id, userId, String(completionReason).trim());
+
+        return res.status(200).json({
+            success: true,
+            message: `Work Order WO-${String(workOrder.work_order_no).padStart(4, '0')} has been marked as Completed.`
+        });
+    } catch (error) {
+        console.error("Error in completeWorkOrderController:", error);
+        return res.status(500).json({
+            success: false,
+            message: error.message || "Internal Server Error"
+        });
+    }
+};
+
+const stopWorkOrderController = completeWorkOrderController;
+
+const reopenWorkOrderController = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user.id;
+
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: "Work Order ID is required."
+            });
+        }
+
+        const workOrder = await workOrderModel.getWorkOrderById(id);
+        if (!workOrder) {
+            return res.status(404).json({
+                success: false,
+                message: "Work Order not found."
+            });
+        }
+
+        if (workOrder.status !== 'Completed' && workOrder.status !== 'Stopped') {
+            return res.status(400).json({
+                success: false,
+                message: `Only Completed work orders can be reopened. Current status: ${workOrder.status || 'Draft'}.`
+            });
+        }
+
+        await workOrderModel.reopenWorkOrder(id, userId);
+
+        return res.status(200).json({
+            success: true,
+            message: `Work Order WO-${String(workOrder.work_order_no).padStart(4, '0')} has been reopened and is active again.`
+        });
+    } catch (error) {
+        console.error("Error in reopenWorkOrderController:", error);
+        return res.status(500).json({
+            success: false,
+            message: error.message || "Internal Server Error"
+        });
+    }
+};
+
+const restartWorkOrderController = reopenWorkOrderController;
+
 module.exports = {
     addWorkOrder,
     getAllWorkOrdersController,
@@ -314,5 +403,9 @@ module.exports = {
     updateWorkOrderItemPriorityController,
     updateWorkOrderItemRemarksController,
     updateWorkOrderController,
-    startWorkOrderController
+    startWorkOrderController,
+    stopWorkOrderController,
+    completeWorkOrderController,
+    restartWorkOrderController,
+    reopenWorkOrderController
 };
