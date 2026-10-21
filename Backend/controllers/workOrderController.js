@@ -306,7 +306,9 @@ const startWorkOrderController = async (req, res) => {
 const completeWorkOrderController = async (req, res) => {
     try {
         const { id } = req.params;
-        const completionReason = req.body.completion_reason || req.body.stop_reason || req.body.remark || req.body.remarks || "Completed";
+        const reqStatus = req.body.status;
+        const targetStatus = (reqStatus === 'Partially Completed' || reqStatus === 'Partial Complete') ? 'Partially Completed' : 'Completed';
+        const completionReason = req.body.completion_reason || req.body.stop_reason || req.body.remark || req.body.remarks || targetStatus;
         const userId = req.user.id;
 
         if (!id) {
@@ -331,11 +333,11 @@ const completeWorkOrderController = async (req, res) => {
             });
         }
 
-        await workOrderModel.completeWorkOrder(id, userId, String(completionReason).trim());
+        await workOrderModel.completeWorkOrder(id, userId, String(completionReason).trim(), targetStatus);
 
         return res.status(200).json({
             success: true,
-            message: `Work Order WO-${String(workOrder.work_order_no).padStart(4, '0')} has been marked as Completed.`
+            message: `Work Order WO-${String(workOrder.work_order_no).padStart(4, '0')} has been marked as ${targetStatus}.`
         });
     } catch (error) {
         console.error("Error in completeWorkOrderController:", error);
@@ -368,10 +370,10 @@ const reopenWorkOrderController = async (req, res) => {
             });
         }
 
-        if (workOrder.status !== 'Completed' && workOrder.status !== 'Stopped') {
+        if (workOrder.status !== 'Completed' && workOrder.status !== 'Stopped' && workOrder.status !== 'Partially Completed' && workOrder.status !== 'Partial Complete') {
             return res.status(400).json({
                 success: false,
-                message: `Only Completed work orders can be reopened. Current status: ${workOrder.status || 'Draft'}.`
+                message: `Only Completed or Partially Completed work orders can be reopened. Current status: ${workOrder.status || 'Draft'}.`
             });
         }
 

@@ -604,7 +604,8 @@ const getAllWorkOrders = async (includeHeld = false) => {
             sched.running_start_date,
             sched.running_end_date,
             we.id AS workshop_entry_id,
-            COALESCE(we.status, 'Pending') AS workshop_status
+            COALESCE(we.status, 'Pending') AS workshop_status,
+            COALESCE(wpl_fg.completed_production_qty, 0) AS produced_quantity
         FROM work_orders wo
         JOIN work_order_items woi ON woi.work_order_id = wo.id
         LEFT JOIN customer_master c ON wo.customer_id = c.id
@@ -639,6 +640,14 @@ const getAllWorkOrders = async (includeHeld = false) => {
             WHERE work_order_item_id IS NOT NULL
             GROUP BY work_order_item_id
         ) wob ON woi.id = wob.work_order_item_id
+        LEFT JOIN (
+            SELECT 
+                work_order_item_id,
+                COALESCE(SUM(CASE WHEN movement_type = 'revert' THEN -quantity ELSE quantity END), 0) AS completed_production_qty
+            FROM workshop_production_logs
+            WHERE to_bom_process_id IS NULL
+            GROUP BY work_order_item_id
+        ) wpl_fg ON woi.id = wpl_fg.work_order_item_id
         WHERE 1 = 1 ${includeHeld ? '' : 'AND COALESCE(woi.is_on_hold, 0) = 0'}
         ORDER BY wo.work_order_no DESC, wo.created_at DESC
     `;
@@ -680,10 +689,19 @@ const getWorkOrderById = async (id) => {
             woi.*,
             m.material_name,
             m.material_code,
-            mac.name AS machine_name
+            mac.name AS machine_name,
+            COALESCE(wpl_fg.completed_production_qty, 0) AS produced_quantity
         FROM work_order_items woi
         LEFT JOIN materials m ON woi.material_id = m.id
         LEFT JOIN machines mac ON woi.machine_id = mac.id
+        LEFT JOIN (
+            SELECT 
+                work_order_item_id,
+                COALESCE(SUM(CASE WHEN movement_type = 'revert' THEN -quantity ELSE quantity END), 0) AS completed_production_qty
+            FROM workshop_production_logs
+            WHERE to_bom_process_id IS NULL
+            GROUP BY work_order_item_id
+        ) wpl_fg ON woi.id = wpl_fg.work_order_item_id
         WHERE woi.work_order_id = ?
     `;
     const [items] = await db.execute(itemsQuery, [id]);
@@ -724,16 +742,17 @@ const startWorkOrder = async (workOrderId, userId) => {
     return result.affectedRows > 0;
 };
 
-const completeWorkOrder = async (workOrderId, userId, completionReason) => {
+const completeWorkOrder = async (workOrderId, userId, completionReason, status = 'Completed') => {
+    const validStatus = (status === 'Partially Completed' || status === 'Partial Complete') ? 'Partially Completed' : 'Completed';
     const query = `
         UPDATE work_orders
-        SET status = 'Completed',
+        SET status = ?,
             stopped_at = CURRENT_TIMESTAMP,
             stopped_by = ?,
             stop_reason = ?
         WHERE id = ? AND status = 'Started'
     `;
-    const [result] = await db.execute(query, [userId || null, completionReason || 'Completed', workOrderId]);
+    const [result] = await db.execute(query, [validStatus, userId || null, completionReason || validStatus, workOrderId]);
     return result.affectedRows > 0;
 };
 
@@ -747,7 +766,7 @@ const reopenWorkOrder = async (workOrderId, userId) => {
         SET status = 'Started',
             restarted_at = CURRENT_TIMESTAMP,
             restarted_by = ?
-        WHERE id = ? AND (status = 'Completed' OR status = 'Stopped')
+        WHERE id = ? AND (status = 'Completed' OR status = 'Stopped' OR status = 'Partially Completed' OR status = 'Partial Complete')
     `;
     const [result] = await db.execute(query, [userId || null, workOrderId]);
     return result.affectedRows > 0;

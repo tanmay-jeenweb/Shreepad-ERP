@@ -66,12 +66,16 @@ export default function WorkOrderMaster() {
     if (!completingRow) return;
 
     const woNumber = `WO-${String(completingRow.work_order_no).padStart(4, '0')}`;
+    const targetStatus = completingRow.isPartial ? "Partially Completed" : "Completed";
+    const defaultReason = completingRow.isPartial ? "Partially Completed" : "Completed";
+
     setCompletingLoading(true);
     try {
       await completeWorkOrder(completingRow.work_order_id, {
-        completion_reason: completionRemark.trim() || "Completed"
+        completion_reason: completionRemark.trim() || defaultReason,
+        status: targetStatus
       });
-      toast.success(`Work Order ${woNumber} marked as Completed.`);
+      toast.success(`Work Order ${woNumber} marked as ${targetStatus}.`);
       setCompletingRow(null);
       setCompletionRemark("");
       await loadData();
@@ -186,6 +190,21 @@ export default function WorkOrderMaster() {
         )
       },
       {
+        key: "produced_quantity",
+        label: "Produced Qty",
+        minWidth: "130px",
+        render: row => {
+          const produced = Number(row.produced_quantity) || 0;
+          const target = Number(row.production_quantity) || 0;
+          const isDone = target > 0 && produced >= target;
+          return (
+            <span className={`font-semibold ${isDone ? "text-emerald-700" : produced > 0 ? "text-amber-700" : "text-slate-500"}`}>
+              {produced} <span className="text-xs font-normal text-slate-400">/ {target}</span>
+            </span>
+          );
+        }
+      },
+      {
         key: "work_order_status",
         label: "Status",
         minWidth: "120px",
@@ -210,6 +229,17 @@ export default function WorkOrderMaster() {
               </span>
             );
           }
+          if (status === "Partially Completed" || status === "Partial Complete") {
+            return (
+              <span 
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 cursor-help"
+                title={row.stop_reason ? `Remark: ${row.stop_reason}` : "Work Order is Partially Completed"}
+              >
+                <i className="fa-solid fa-hourglass-half text-[10px] text-amber-600"></i>
+                Partially Completed
+              </span>
+            );
+          }
           return (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
               <i className="fa-regular fa-clock text-[10px]"></i>
@@ -228,59 +258,87 @@ export default function WorkOrderMaster() {
       label: "Actions",
       sortable: false,
       minWidth: "210px",
-      render: (row) => (
-        <div className="flex items-center gap-2">
-          {/* Start Work Order Button (for Draft / unstarted work orders) */}
-          {canUpdate && (row.work_order_status === "Draft" || !row.work_order_status) && (
-            <button
-              type="button"
-              onClick={() => handleStartWorkOrder(row)}
-              disabled={startingId === row.work_order_id}
-              className="flex h-8 items-center gap-1.5 px-2.5 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-400 cursor-pointer font-bold text-xs transition-all shadow-2xs active:scale-95 disabled:opacity-50"
-              title="Start Work Order (Releases to Workshop Entry)"
-            >
-              {startingId === row.work_order_id ? (
-                <div className="w-3.5 h-3.5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
-              ) : (
-                <i className="fa-solid fa-play text-[10px]"></i>
-              )}
-              <span>Start</span>
-            </button>
-          )}
+      render: (row) => {
+        const targetQty = Number(row.production_quantity) || 0;
+        const producedQty = Number(row.produced_quantity) || 0;
+        const isProductionCompleted = targetQty > 0 && producedQty >= targetQty;
+        const remainingQty = Math.max(0, targetQty - producedQty);
 
-          {/* Complete Work Order Button (for Started work orders) */}
-          {canUpdate && row.work_order_status === "Started" && (
-            <button
-              type="button"
-              onClick={() => {
-                setCompletingRow(row);
-                setCompletionRemark("");
-              }}
-              className="flex h-8 items-center gap-1.5 px-2.5 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-400 cursor-pointer font-bold text-xs transition-all shadow-2xs active:scale-95"
-              title="Complete Work Order (Close floor production and mark as completed)"
-            >
-              <i className="fa-solid fa-circle-check text-[10px]"></i>
-              <span>Complete</span>
-            </button>
-          )}
+        return (
+          <div className="flex items-center gap-2">
+            {/* Start Work Order Button (for Draft / unstarted work orders) */}
+            {canUpdate && (row.work_order_status === "Draft" || !row.work_order_status) && (
+              <button
+                type="button"
+                onClick={() => handleStartWorkOrder(row)}
+                disabled={startingId === row.work_order_id}
+                className="flex h-8 items-center gap-1.5 px-2.5 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-400 cursor-pointer font-bold text-xs transition-all shadow-2xs active:scale-95 disabled:opacity-50"
+                title="Start Work Order (Releases to Workshop Entry)"
+              >
+                {startingId === row.work_order_id ? (
+                  <div className="w-3.5 h-3.5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <i className="fa-solid fa-play text-[10px]"></i>
+                )}
+                <span>Start</span>
+              </button>
+            )}
 
-          {/* Reopen Work Order Button (for Completed work orders) */}
-          {canUpdate && (row.work_order_status === "Completed" || row.work_order_status === "Stopped") && (
-            <button
-              type="button"
-              onClick={() => handleReopenWorkOrder(row)}
-              disabled={reopeningId === row.work_order_id}
-              className="flex h-8 items-center gap-1.5 px-2.5 rounded-lg border border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100 hover:border-sky-400 cursor-pointer font-bold text-xs transition-all shadow-2xs active:scale-95 disabled:opacity-50"
-              title="Reopen Work Order (Resume floor production and dispatch)"
-            >
-              {reopeningId === row.work_order_id ? (
-                <div className="w-3.5 h-3.5 border-2 border-sky-600 border-t-transparent rounded-full animate-spin"></div>
+            {/* Complete / Partial Complete Work Order Button (for Started work orders) */}
+            {canUpdate && row.work_order_status === "Started" && (
+              isProductionCompleted ? (
+                /* Full Complete (Green button) when production quantity specified is completed */
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCompletingRow({ ...row, isPartial: false, targetQty, producedQty, remainingQty: 0 });
+                    setCompletionRemark("");
+                  }}
+                  className="flex h-8 items-center gap-1.5 px-2.5 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-400 cursor-pointer font-bold text-xs transition-all shadow-2xs active:scale-95"
+                  title={`Complete Work Order (Specified production quantity of ${targetQty} completed)`}
+                >
+                  <i className="fa-solid fa-circle-check text-[10px]"></i>
+                  <span>Complete</span>
+                </button>
               ) : (
-                <i className="fa-solid fa-rotate-right text-[10px]"></i>
-              )}
-              <span>Reopen</span>
-            </button>
-          )}
+                /* Partial Complete (Yellow button) when production quantity is still remaining */
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCompletingRow({ ...row, isPartial: true, targetQty, producedQty, remainingQty });
+                    setCompletionRemark("");
+                  }}
+                  className="flex h-8 items-center gap-1.5 px-2.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 hover:border-amber-400 cursor-pointer font-bold text-xs transition-all shadow-2xs active:scale-95"
+                  title={`Partial Complete (Production quantity remaining: ${remainingQty} Nos)`}
+                >
+                  <i className="fa-solid fa-hourglass-half text-[10px] text-amber-600"></i>
+                  <span>Partial Complete</span>
+                </button>
+              )
+            )}
+
+            {/* Reopen Work Order Button (for Completed, Stopped, or Partially Completed work orders) */}
+            {canUpdate && (
+              row.work_order_status === "Completed" || 
+              row.work_order_status === "Stopped" || 
+              row.work_order_status === "Partially Completed" || 
+              row.work_order_status === "Partial Complete"
+            ) && (
+              <button
+                type="button"
+                onClick={() => handleReopenWorkOrder(row)}
+                disabled={reopeningId === row.work_order_id}
+                className="flex h-8 items-center gap-1.5 px-2.5 rounded-lg border border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100 hover:border-sky-400 cursor-pointer font-bold text-xs transition-all shadow-2xs active:scale-95 disabled:opacity-50"
+                title="Reopen Work Order (Resume floor production and dispatch)"
+              >
+                {reopeningId === row.work_order_id ? (
+                  <div className="w-3.5 h-3.5 border-2 border-sky-600 border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <i className="fa-solid fa-rotate-right text-[10px]"></i>
+                )}
+                <span>Reopen</span>
+              </button>
+            )}
 
           {/* View Work Order Details */}
           <button
@@ -332,7 +390,8 @@ export default function WorkOrderMaster() {
             </button>
           )}
         </div>
-      )
+        );
+      }
     });
 
     return cols;
@@ -379,44 +438,76 @@ export default function WorkOrderMaster() {
         />
       )}
 
-      {/* Complete Work Order Modal */}
+      {/* Complete / Partial Complete Work Order Modal */}
       {completingRow && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden">
             <div className="p-5 sm:p-6">
               <div className="flex items-start gap-3.5 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center shrink-0 text-emerald-600">
-                  <i className="fa-solid fa-circle-check text-lg"></i>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                  completingRow.isPartial 
+                    ? "bg-amber-50 border border-amber-200 text-amber-600" 
+                    : "bg-emerald-50 border border-emerald-200 text-emerald-600"
+                }`}>
+                  <i className={`text-lg ${completingRow.isPartial ? "fa-solid fa-hourglass-half" : "fa-solid fa-circle-check"}`}></i>
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-slate-900">
-                    Complete Work Order WO-{String(completingRow.work_order_no).padStart(4, '0')}
+                    {completingRow.isPartial ? "Partial Complete" : "Complete"} Work Order WO-{String(completingRow.work_order_no).padStart(4, '0')}
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Mark this work order as completed. Floor production entries and material issuing will be closed.
+                    {completingRow.isPartial 
+                      ? "Production quantity is still remaining. Mark this work order as Partially Completed." 
+                      : "Mark this work order as completed. Floor production entries and material issuing will be closed."}
                   </p>
                 </div>
               </div>
 
               <form onSubmit={handleConfirmComplete}>
+                {completingRow.isPartial && (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-start gap-2.5 mb-4">
+                    <i className="fa-solid fa-triangle-exclamation text-amber-600 mt-0.5 shrink-0 text-sm"></i>
+                    <div className="space-y-1">
+                      <div className="font-semibold text-amber-950">
+                        Production Target Not Reached:
+                      </div>
+                      <div className="text-amber-800">
+                        Target: <span className="font-bold text-slate-900">{completingRow.targetQty}</span> Nos &bull; 
+                        Produced: <span className="font-bold text-emerald-700">{completingRow.producedQty}</span> Nos &bull; 
+                        Remaining: <span className="font-bold text-rose-600">{completingRow.remainingQty}</span> Nos
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="mb-4">
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Completion Remarks / Notes <span className="text-slate-400 font-normal lowercase">(optional)</span>
+                    {completingRow.isPartial ? "Reason for Partial Completion" : "Completion Remarks / Notes"} <span className="text-slate-400 font-normal lowercase">(optional)</span>
                   </label>
                   <textarea
                     rows={3}
                     value={completionRemark}
                     onChange={(e) => setCompletionRemark(e.target.value)}
-                    placeholder="Enter notes (e.g. Production completed successfully, short closed by customer request)..."
-                    className="w-full text-sm rounded-xl border border-slate-300 px-3.5 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all resize-none"
+                    placeholder={completingRow.isPartial 
+                      ? "Enter reason (e.g. Short closed by customer request, balance order cancelled, material shortage)..."
+                      : "Enter notes (e.g. Production completed successfully)..."}
+                    className={`w-full text-sm rounded-xl border border-slate-300 px-3.5 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 transition-all resize-none ${
+                      completingRow.isPartial
+                        ? "focus:ring-amber-500/20 focus:border-amber-500"
+                        : "focus:ring-emerald-500/20 focus:border-emerald-500"
+                    }`}
                     autoFocus
                   />
                 </div>
 
-                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 text-xs flex items-start gap-2.5 mb-5">
-                  <i className="fa-solid fa-circle-info text-emerald-600 mt-0.5 shrink-0"></i>
+                <div className={`p-3 rounded-xl text-xs flex items-start gap-2.5 mb-5 ${
+                  completingRow.isPartial 
+                    ? "bg-slate-50 border border-slate-200 text-slate-700" 
+                    : "bg-emerald-50 border border-emerald-200 text-emerald-900"
+                }`}>
+                  <i className={`mt-0.5 shrink-0 ${completingRow.isPartial ? "fa-solid fa-circle-info text-amber-600" : "fa-solid fa-circle-info text-emerald-600"}`}></i>
                   <span>
-                    This order will be marked as <strong>Completed</strong>. You can <strong>Reopen</strong> it at any time to resume production if required.
+                    This order will be marked as <strong>{completingRow.isPartial ? "Partially Completed" : "Completed"}</strong>. You can <strong>Reopen</strong> it at any time to resume production if required.
                   </span>
                 </div>
 
@@ -435,12 +526,21 @@ export default function WorkOrderMaster() {
                   <button
                     type="submit"
                     disabled={completingLoading}
-                    className="px-4 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer transition-all shadow-xs active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+                    className={`px-4 py-2 text-xs font-bold rounded-xl text-white cursor-pointer transition-all shadow-xs active:scale-95 disabled:opacity-50 flex items-center gap-1.5 ${
+                      completingRow.isPartial
+                        ? "bg-amber-600 hover:bg-amber-700"
+                        : "bg-emerald-600 hover:bg-emerald-700"
+                    }`}
                   >
                     {completingLoading ? (
                       <>
                         <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        <span>Completing...</span>
+                        <span>Processing...</span>
+                      </>
+                    ) : completingRow.isPartial ? (
+                      <>
+                        <i className="fa-solid fa-hourglass-half text-xs"></i>
+                        <span>Confirm Partial Complete</span>
                       </>
                     ) : (
                       <>

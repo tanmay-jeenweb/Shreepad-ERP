@@ -145,10 +145,13 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                                 : (workOrder.status === 'Completed' || workOrder.status === 'Stopped')
                                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                                : (workOrder.status === 'Partially Completed' || workOrder.status === 'Partial Complete')
+                                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
                                                 : 'bg-amber-50 text-amber-700 border border-amber-200'
                                         }`}>
                                             {workOrder.status === 'Started' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>}
                                             {(workOrder.status === 'Completed' || workOrder.status === 'Stopped') && <i className="fa-solid fa-circle-check text-[11px] text-emerald-600"></i>}
+                                            {(workOrder.status === 'Partially Completed' || workOrder.status === 'Partial Complete') && <i className="fa-solid fa-hourglass-half text-[11px] text-amber-600"></i>}
                                             {workOrder.status === 'Stopped' ? 'Completed' : (workOrder.status || 'Draft')}
                                         </span>
                                     </div>
@@ -212,6 +215,28 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                                 )}
                                                 {(workOrder.stopped_at || workOrder.completed_at) && (
                                                     <span>Completed On: <strong className="text-emerald-900 font-mono">{formatDateTime(workOrder.stopped_at || workOrder.completed_at)}</strong></span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {(workOrder.status === 'Partially Completed' || workOrder.status === 'Partial Complete') && (
+                                    <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3 text-amber-900">
+                                        <i className="fa-solid fa-hourglass-half text-amber-600 text-lg mt-0.5 shrink-0"></i>
+                                        <div className="space-y-1">
+                                            <p className="text-xs font-bold uppercase tracking-wider text-amber-700">Work Order Partially Completed</p>
+                                            {workOrder.stop_reason && (
+                                                <p className="text-sm font-semibold text-amber-950">
+                                                    Reason: <span className="font-normal italic">"{workOrder.stop_reason}"</span>
+                                                </p>
+                                            )}
+                                            <div className="flex flex-wrap gap-4 text-xs text-amber-700 pt-1">
+                                                {(workOrder.stopped_by_name || workOrder.completed_by_name) && (
+                                                    <span>Partially Completed By: <strong className="text-amber-900">{workOrder.stopped_by_name || workOrder.completed_by_name}</strong></span>
+                                                )}
+                                                {(workOrder.stopped_at || workOrder.completed_at) && (
+                                                    <span>Completed On: <strong className="text-amber-900 font-mono">{formatDateTime(workOrder.stopped_at || workOrder.completed_at)}</strong></span>
                                                 )}
                                             </div>
                                         </div>
@@ -290,7 +315,7 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                                     </td>
                                                     <td className="px-3 py-2 text-sm whitespace-nowrap text-center">
                                                         {canReadBOM ? (
-                                                            (workOrder.status === 'Started' || workOrder.status === 'Completed') ? (
+                                                            (workOrder.status === 'Started' || workOrder.status === 'Completed' || workOrder.status === 'Partially Completed' || workOrder.status === 'Partial Complete') ? (
                                                                 <div className="flex items-center justify-center gap-1.5">
                                                                     <button
                                                                         type="button"

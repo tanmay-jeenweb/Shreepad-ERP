@@ -266,8 +266,8 @@ export default function JobCardDetails() {
 
   const handleIssueSubmit = async (e) => {
     e.preventDefault();
-    if (entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped') {
-      return toast.error(`Cannot issue raw materials: Work Order is COMPLETED.`);
+    if (entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped' || entryData?.work_order_status === 'Partially Completed' || entryData?.work_order_status === 'Partial Complete') {
+      return toast.error(`Cannot issue raw materials: Work Order is ${entryData?.work_order_status === 'Partially Completed' ? 'PARTIALLY COMPLETED' : 'COMPLETED'}.`);
     }
     if (entryData?.work_order_status !== 'Started') {
       return toast.error("Cannot issue raw materials: Work Order has not been started yet. Please start it in Work Order Master.");
@@ -583,8 +583,8 @@ export default function JobCardDetails() {
 
   const handleMoveSubmit = async (e) => {
     e.preventDefault();
-    if (entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped') {
-      return toast.error(`Cannot record production: Work Order is COMPLETED.`);
+    if (entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped' || entryData?.work_order_status === 'Partially Completed' || entryData?.work_order_status === 'Partial Complete') {
+      return toast.error(`Cannot record production: Work Order is ${entryData?.work_order_status === 'Partially Completed' ? 'PARTIALLY COMPLETED' : 'COMPLETED'}.`);
     }
     if (entryData?.work_order_status !== 'Started') {
       return toast.error("Cannot record production: Work Order has not been started yet.");
@@ -702,8 +702,8 @@ export default function JobCardDetails() {
 
   const handleRevertSubmit = async (e) => {
     e.preventDefault();
-    if (entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped') {
-      return toast.error(`Cannot revert production: Work Order is COMPLETED.`);
+    if (entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped' || entryData?.work_order_status === 'Partially Completed' || entryData?.work_order_status === 'Partial Complete') {
+      return toast.error(`Cannot revert production: Work Order is ${entryData?.work_order_status === 'Partially Completed' ? 'PARTIALLY COMPLETED' : 'COMPLETED'}.`);
     }
     if (entryData?.work_order_status !== 'Started') {
       return toast.error("Cannot revert production: Work Order has not been started yet.");
@@ -863,16 +863,19 @@ export default function JobCardDetails() {
                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                   : (entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped')
                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : (entryData?.work_order_status === 'Partially Completed' || entryData?.work_order_status === 'Partial Complete')
+                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
                   : 'bg-amber-50 text-amber-700 border border-amber-200'
               }`}>
               {entryData?.work_order_status === 'Started' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>}
               {(entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped') && <i className="fa-solid fa-circle-check text-[11px] text-emerald-600"></i>}
+              {(entryData?.work_order_status === 'Partially Completed' || entryData?.work_order_status === 'Partial Complete') && <i className="fa-solid fa-hourglass-half text-[11px] text-amber-600"></i>}
               {entryData?.work_order_status === 'Stopped' ? 'Completed' : (entryData?.work_order_status || 'Draft')}
             </span>
           </div>
         </div>
 
-        {/* Completed / Unstarted Notice Banner */}
+        {/* Completed / Partially Completed / Unstarted Notice Banner */}
         {entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped' ? (
           <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-start gap-3.5 text-emerald-900 shadow-2xs">
             <i className="fa-solid fa-circle-check text-emerald-600 text-xl shrink-0 mt-0.5"></i>
@@ -885,6 +888,21 @@ export default function JobCardDetails() {
               )}
               <p className="text-xs text-emerald-700 mt-1">
                 Raw material issues and floor production logs are closed for this order. If work needs to resume, an authorized user can <strong>Reopen</strong> this work order in the Work Order Master.
+              </p>
+            </div>
+          </div>
+        ) : (entryData?.work_order_status === 'Partially Completed' || entryData?.work_order_status === 'Partial Complete') ? (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3.5 text-amber-900 shadow-2xs">
+            <i className="fa-solid fa-hourglass-half text-amber-600 text-xl shrink-0 mt-0.5"></i>
+            <div>
+              <p className="text-sm font-bold">This Work Order is PARTIALLY COMPLETED.</p>
+              {entryData.stop_reason && (
+                <p className="text-xs font-semibold text-amber-950 mt-0.5">
+                  Reason: <span className="font-normal italic">"{entryData.stop_reason}"</span>
+                </p>
+              )}
+              <p className="text-xs text-amber-800 mt-1">
+                Floor production entries are closed. If production needs to resume, an authorized user can <strong>Reopen</strong> this work order in the Work Order Master.
               </p>
             </div>
           </div>
