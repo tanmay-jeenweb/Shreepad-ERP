@@ -182,6 +182,19 @@ const createRmReturn = async (data, addedBy) => {
     try {
         await connection.beginTransaction();
 
+        // Check if work order is on hold
+        if (data.work_order_item_id) {
+            const [woRows] = await connection.execute(`
+                SELECT wo.work_order_no, wo.status
+                FROM work_order_items woi
+                JOIN work_orders wo ON woi.work_order_id = wo.id
+                WHERE woi.id = ?
+            `, [data.work_order_item_id]);
+            if (woRows.length > 0 && woRows[0].status === 'On Hold') {
+                throw new Error(`Cannot process RM return: Work Order WO-${String(woRows[0].work_order_no).padStart(4, '0')} is ON HOLD. Production is paused.`);
+            }
+        }
+
         // 1. Generate return_no
         const returnNo = await generateReturnNo(connection);
 

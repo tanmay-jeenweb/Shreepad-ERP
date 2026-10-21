@@ -143,6 +143,8 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
                                             workOrder.status === 'Started'
                                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                                : workOrder.status === 'On Hold'
+                                                ? 'bg-amber-50 text-amber-800 border border-amber-300'
                                                 : (workOrder.status === 'Completed' || workOrder.status === 'Stopped')
                                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                                 : (workOrder.status === 'Partially Completed' || workOrder.status === 'Partial Complete')
@@ -150,6 +152,7 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                                 : 'bg-amber-50 text-amber-700 border border-amber-200'
                                         }`}>
                                             {workOrder.status === 'Started' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>}
+                                            {workOrder.status === 'On Hold' && <i className="fa-solid fa-pause text-[10px] text-amber-600"></i>}
                                             {(workOrder.status === 'Completed' || workOrder.status === 'Stopped') && <i className="fa-solid fa-circle-check text-[11px] text-emerald-600"></i>}
                                             {(workOrder.status === 'Partially Completed' || workOrder.status === 'Partial Complete') && <i className="fa-solid fa-hourglass-half text-[11px] text-amber-600"></i>}
                                             {workOrder.status === 'Stopped' ? 'Completed' : (workOrder.status || 'Draft')}
@@ -198,6 +201,31 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                         </p>
                                     </div>
                                 </div>
+
+                                {workOrder.status === 'On Hold' && (
+                                    <div className="mt-4 p-4 bg-amber-50 border border-amber-300 rounded-xl flex items-start gap-3 text-amber-950">
+                                        <i className="fa-solid fa-pause text-amber-600 text-lg mt-0.5 shrink-0"></i>
+                                        <div className="space-y-1">
+                                            <p className="text-xs font-bold uppercase tracking-wider text-amber-800">Work Order On Hold</p>
+                                            {workOrder.hold_reason && (
+                                                <p className="text-sm font-semibold text-amber-950">
+                                                    Reason: <span className="font-normal italic">"{workOrder.hold_reason}"</span>
+                                                </p>
+                                            )}
+                                            <p className="text-xs text-amber-800">
+                                                Floor production movements and raw material issues are paused. Finished goods dispatch remains enabled.
+                                            </p>
+                                            <div className="flex flex-wrap gap-4 text-xs text-amber-700 pt-1">
+                                                {workOrder.held_by_name && (
+                                                    <span>Held By: <strong className="text-amber-950">{workOrder.held_by_name}</strong></span>
+                                                )}
+                                                {workOrder.held_at && (
+                                                    <span>Held On: <strong className="text-amber-950 font-mono">{formatDateTime(workOrder.held_at)}</strong></span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
 
                                 {(workOrder.status === 'Completed' || workOrder.status === 'Stopped') && (
                                     <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-3 text-emerald-900">

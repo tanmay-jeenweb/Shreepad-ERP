@@ -362,6 +362,12 @@ export default function WorkOrderDispatchModal({ item, isOpen, onClose, onSucces
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-bold font-mono bg-indigo-50 text-indigo-700 border border-indigo-200">
                   WO-{String(item.work_order_no).padStart(4, "0")}
                 </span>
+                {(item.work_order_status === "On Hold" || Boolean(item.is_on_hold)) && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs">
+                    <i className="fa-solid fa-pause text-[9px] text-amber-600"></i>
+                    On Hold
+                  </span>
+                )}
                 {alreadyExcessQty > 0 && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
                     <i className="fa-solid fa-boxes-packing text-[9px]"></i>
@@ -434,6 +440,19 @@ export default function WorkOrderDispatchModal({ item, isOpen, onClose, onSucces
               <span className="text-[10px] text-emerald-100 block font-medium">{item.unit}</span>
             </div>
           </div>
+
+          {/* On Hold Informational Notice */}
+          {(item?.work_order_status === "On Hold" || Boolean(item?.is_on_hold)) && (
+            <div className="mt-3 px-3.5 py-2.5 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-950 flex items-start gap-3 shadow-2xs">
+              <i className="fa-solid fa-pause text-amber-600 mt-0.5 shrink-0 text-sm"></i>
+              <div className="leading-relaxed">
+                <span className="font-bold text-amber-900">Work Order is On Hold:</span> Floor production is currently paused for this order. However, finished goods dispatch from existing produced stock or warehouse inventory remains fully enabled.
+                {item.hold_reason && (
+                  <span className="block mt-0.5 text-amber-850 font-medium">Hold Reason: <em>"{item.hold_reason}"</em></span>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Intelligent Fulfillment Callout */}
           {!dismissFulfillmentNotice && productionDifference > 0 && remainingBalance > 0 && (

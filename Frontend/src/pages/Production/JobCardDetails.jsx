@@ -266,6 +266,9 @@ export default function JobCardDetails() {
 
   const handleIssueSubmit = async (e) => {
     e.preventDefault();
+    if (entryData?.work_order_status === 'On Hold') {
+      return toast.error("Cannot issue raw materials: Work Order is ON HOLD. Production is paused.");
+    }
     if (entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped' || entryData?.work_order_status === 'Partially Completed' || entryData?.work_order_status === 'Partial Complete') {
       return toast.error(`Cannot issue raw materials: Work Order is ${entryData?.work_order_status === 'Partially Completed' ? 'PARTIALLY COMPLETED' : 'COMPLETED'}.`);
     }
@@ -324,6 +327,15 @@ export default function JobCardDetails() {
   // RM Return Form Handler
   const handleReturnSubmit = async (e) => {
     e.preventDefault();
+    if (entryData?.work_order_status === 'On Hold') {
+      return toast.error("Cannot return raw materials: Work Order is ON HOLD. Production is paused.");
+    }
+    if (entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped' || entryData?.work_order_status === 'Partially Completed' || entryData?.work_order_status === 'Partial Complete') {
+      return toast.error(`Cannot return raw materials: Work Order is ${entryData?.work_order_status === 'Partially Completed' ? 'PARTIALLY COMPLETED' : 'COMPLETED'}.`);
+    }
+    if (entryData?.work_order_status !== 'Started') {
+      return toast.error("Cannot return raw materials: Work Order has not been started yet.");
+    }
     if (!returnMaterialId) {
       return toast.error("Please select a Material Name to return.");
     }
@@ -583,6 +595,9 @@ export default function JobCardDetails() {
 
   const handleMoveSubmit = async (e) => {
     e.preventDefault();
+    if (entryData?.work_order_status === 'On Hold') {
+      return toast.error("Cannot record production: Work Order is ON HOLD. Production is paused.");
+    }
     if (entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped' || entryData?.work_order_status === 'Partially Completed' || entryData?.work_order_status === 'Partial Complete') {
       return toast.error(`Cannot record production: Work Order is ${entryData?.work_order_status === 'Partially Completed' ? 'PARTIALLY COMPLETED' : 'COMPLETED'}.`);
     }
@@ -702,6 +717,9 @@ export default function JobCardDetails() {
 
   const handleRevertSubmit = async (e) => {
     e.preventDefault();
+    if (entryData?.work_order_status === 'On Hold') {
+      return toast.error("Cannot revert production: Work Order is ON HOLD. Production is paused.");
+    }
     if (entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped' || entryData?.work_order_status === 'Partially Completed' || entryData?.work_order_status === 'Partial Complete') {
       return toast.error(`Cannot revert production: Work Order is ${entryData?.work_order_status === 'Partially Completed' ? 'PARTIALLY COMPLETED' : 'COMPLETED'}.`);
     }
@@ -753,6 +771,12 @@ export default function JobCardDetails() {
   };
 
   const handleDeleteLog = async (logId, qty, fromName, toName, movementType = "forward") => {
+    if (entryData?.work_order_status === 'On Hold') {
+      return toast.error("Cannot delete production movement: Work Order is ON HOLD. Production is paused.");
+    }
+    if (entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped' || entryData?.work_order_status === 'Partially Completed' || entryData?.work_order_status === 'Partial Complete') {
+      return toast.error(`Cannot delete production movement: Work Order is ${entryData?.work_order_status === 'Partially Completed' ? 'PARTIALLY COMPLETED' : 'COMPLETED'}.`);
+    }
     const isRevert = movementType === "revert";
     const confirmMsg = isRevert
       ? `Are you sure you want to cancel / reverse this revert movement of ${qty} Nos from ${fromName} back to ${toName}?`
@@ -861,6 +885,8 @@ export default function JobCardDetails() {
             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
                 entryData?.work_order_status === 'Started'
                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : entryData?.work_order_status === 'On Hold'
+                  ? 'bg-amber-50 text-amber-800 border border-amber-300'
                   : (entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped')
                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                   : (entryData?.work_order_status === 'Partially Completed' || entryData?.work_order_status === 'Partial Complete')
@@ -868,6 +894,7 @@ export default function JobCardDetails() {
                   : 'bg-amber-50 text-amber-700 border border-amber-200'
               }`}>
               {entryData?.work_order_status === 'Started' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>}
+              {entryData?.work_order_status === 'On Hold' && <i className="fa-solid fa-pause text-[10px] text-amber-600"></i>}
               {(entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped') && <i className="fa-solid fa-circle-check text-[11px] text-emerald-600"></i>}
               {(entryData?.work_order_status === 'Partially Completed' || entryData?.work_order_status === 'Partial Complete') && <i className="fa-solid fa-hourglass-half text-[11px] text-amber-600"></i>}
               {entryData?.work_order_status === 'Stopped' ? 'Completed' : (entryData?.work_order_status || 'Draft')}
@@ -875,8 +902,23 @@ export default function JobCardDetails() {
           </div>
         </div>
 
-        {/* Completed / Partially Completed / Unstarted Notice Banner */}
-        {entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped' ? (
+        {/* On Hold / Completed / Partially Completed / Unstarted Notice Banner */}
+        {entryData?.work_order_status === 'On Hold' ? (
+          <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 flex items-start gap-3.5 text-amber-950 shadow-2xs">
+            <i className="fa-solid fa-pause text-amber-600 text-xl shrink-0 mt-0.5"></i>
+            <div>
+              <p className="text-sm font-bold text-amber-900">This Work Order is ON HOLD.</p>
+              {entryData.hold_reason && (
+                <p className="text-xs font-semibold text-amber-950 mt-0.5">
+                  Hold Reason: <span className="font-normal italic">"{entryData.hold_reason}"</span>
+                </p>
+              )}
+              <p className="text-xs text-amber-800 mt-1">
+                Floor production movements and raw material issues are paused for this work order. Finished goods dispatch remains enabled. You can <strong>Resume</strong> this work order in the Work Order Master when ready.
+              </p>
+            </div>
+          </div>
+        ) : entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped' ? (
           <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-start gap-3.5 text-emerald-900 shadow-2xs">
             <i className="fa-solid fa-circle-check text-emerald-600 text-xl shrink-0 mt-0.5"></i>
             <div>
@@ -1171,8 +1213,8 @@ export default function JobCardDetails() {
                   <button
                     type="button"
                     onClick={handleIssueSubmit}
-                    disabled={issuingRm}
-                    className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs transition active:scale-95 disabled:opacity-50 cursor-pointer"
+                    disabled={issuingRm || entryData?.work_order_status !== 'Started'}
+                    className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs transition active:scale-95 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                   >
                     {issuingRm ? (
                       <>
@@ -1306,8 +1348,8 @@ export default function JobCardDetails() {
                 <div className="flex justify-end pt-2">
                   <button
                     type="submit"
-                    disabled={savingReturn}
-                    className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs transition active:scale-95 disabled:opacity-50 cursor-pointer"
+                    disabled={savingReturn || entryData?.work_order_status !== 'Started'}
+                    className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs transition active:scale-95 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                   >
                     {savingReturn ? (
                       <>
@@ -1479,7 +1521,7 @@ export default function JobCardDetails() {
                   <button
                     type="button"
                     onClick={() => handleOpenRevertModal(null)}
-                    disabled={!stageStats.some((s) => s.stageNumber > 1 && s.availableQty > 0)}
+                    disabled={entryData?.work_order_status !== 'Started' || !stageStats.some((s) => s.stageNumber > 1 && s.availableQty > 0)}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 transition shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Revert in-process WIP products back to an earlier process stage"
                   >
@@ -1566,8 +1608,8 @@ export default function JobCardDetails() {
                           <button
                             type="button"
                             onClick={() => handleOpenMoveModal(stage)}
-                            disabled={stage.availableQty <= 0}
-                            className={`w-full py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${stage.availableQty > 0
+                            disabled={entryData?.work_order_status !== 'Started' || stage.availableQty <= 0}
+                            className={`w-full py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${stage.availableQty > 0 && entryData?.work_order_status === 'Started'
                                 ? isLastStage
                                   ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
                                   : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs"
@@ -1591,8 +1633,8 @@ export default function JobCardDetails() {
                             <button
                               type="button"
                               onClick={() => handleOpenRevertModal(stage)}
-                              disabled={stage.availableQty <= 0}
-                              className={`w-full py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer border ${stage.availableQty > 0
+                              disabled={entryData?.work_order_status !== 'Started' || stage.availableQty <= 0}
+                              className={`w-full py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer border ${stage.availableQty > 0 && entryData?.work_order_status === 'Started'
                                   ? "bg-amber-50/70 hover:bg-amber-100 text-amber-800 border-amber-200/80 shadow-2xs"
                                   : "bg-slate-50 text-slate-300 border-slate-200/40 cursor-not-allowed"
                                 }`}
@@ -1770,9 +1812,9 @@ export default function JobCardDetails() {
                                     log.movement_type
                                   )
                                 }
-                                disabled={deletingLogId === log.id}
+                                disabled={deletingLogId === log.id || entryData?.work_order_status !== 'Started'}
                                 title={isRevert ? "Delete Revert Movement" : "Delete / Reverse Movement"}
-                                className="w-7 h-7 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 flex items-center justify-center transition cursor-pointer mx-auto disabled:opacity-50"
+                                className="w-7 h-7 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 flex items-center justify-center transition cursor-pointer mx-auto disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 {deletingLogId === log.id ? (
                                   <div className="w-3.5 h-3.5 border-2 border-rose-500 border-t-transparent rounded-full animate-spin"></div>

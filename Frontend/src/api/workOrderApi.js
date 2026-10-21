@@ -4,7 +4,7 @@ export const createWorkOrder = async (data) => {
     return await apiClient.post("/work-orders/add", data);
 };
 
-export const getAllWorkOrders = async (includeHeld = false) => {
+export const getAllWorkOrders = async (includeHeld = true) => {
     return await apiClient.get("/work-orders/all", {
         params: { includeHeld }
     });
@@ -44,6 +44,14 @@ export const updateWorkOrder = async (id, data) => {
 
 export const startWorkOrder = async (id) => {
     return await apiClient.put(`/work-orders/start/${id}`);
+};
+
+export const holdWorkOrder = async (id, data) => {
+    return await apiClient.put(`/work-orders/hold/${id}`, data);
+};
+
+export const resumeWorkOrder = async (id) => {
+    return await apiClient.put(`/work-orders/resume/${id}`);
 };
 
 export const completeWorkOrder = async (id, data) => {

@@ -1,10 +1,11 @@
 import { useEffect, useState, useMemo } from "react";
 import Navbar from "../../../components/Navbar";
-import { getAllWorkOrders, deleteWorkOrder, startWorkOrder, completeWorkOrder, reopenWorkOrder } from "../../../api/workOrderApi";
+import { getAllWorkOrders, deleteWorkOrder, startWorkOrder, completeWorkOrder, reopenWorkOrder, resumeWorkOrder } from "../../../api/workOrderApi";
 import DataTable from "../../../components/DataTable";
 import toast from "react-hot-toast";
 import { usePermission } from "../../../context/PermissionContext";
 import WorkOrderViewModal from "./WorkOrderViewModal";
+import HoldWorkOrderModal from "./HoldWorkOrderModal";
 import { useNavigate } from "react-router-dom";
 
 export default function WorkOrderMaster() {
@@ -14,7 +15,11 @@ export default function WorkOrderMaster() {
   const [error, setError] = useState("");
   const [startingId, setStartingId] = useState(null);
   const [reopeningId, setReopeningId] = useState(null);
+  const [resumingId, setResumingId] = useState(null);
   
+  // Hold modal state
+  const [holdingRow, setHoldingRow] = useState(null);
+
   // Complete modal state
   const [completingRow, setCompletingRow] = useState(null);
   const [completionRemark, setCompletionRemark] = useState("");
@@ -88,6 +93,24 @@ export default function WorkOrderMaster() {
     }
   };
 
+  const handleResumeWorkOrder = async (row) => {
+    const woNumber = `WO-${String(row.work_order_no).padStart(4, '0')}`;
+    if (!window.confirm(`Are you sure you want to RESUME Work Order ${woNumber}?\n\nThis will take the work order off hold and re-enable workshop entries and floor production.`)) {
+      return;
+    }
+    setResumingId(row.work_order_id);
+    try {
+      await resumeWorkOrder(row.work_order_id);
+      toast.success(`Work Order ${woNumber} resumed successfully! It is active again in Workshop Entry.`);
+      await loadData();
+    } catch (err) {
+      console.error("Failed to resume work order:", err);
+      toast.error(err?.response?.data?.message || "Failed to resume work order");
+    } finally {
+      setResumingId(null);
+    }
+  };
+
   const handleReopenWorkOrder = async (row) => {
     const woNumber = `WO-${String(row.work_order_no).padStart(4, '0')}`;
     if (!window.confirm(`Are you sure you want to REOPEN Work Order ${woNumber}?\n\nIt will return to Started status, re-enabling workshop entries and dispatches.`)) {
@@ -125,15 +148,23 @@ export default function WorkOrderMaster() {
     return fg.length > 0 ? fg : items;
   }, [items]);
 
-  // Tab 1: Ongoing Work Orders (Draft, Started, or active)
+  // Tab 1: Ongoing Work Orders (Draft, Started)
   const ongoingItems = useMemo(() => {
     return displayItems.filter(it => {
       const s = it.work_order_status || "Draft";
-      return s !== "Completed" && s !== "Stopped" && s !== "Partially Completed" && s !== "Partial Complete";
+      return s !== "Completed" && s !== "Stopped" && s !== "Partially Completed" && s !== "Partial Complete" && s !== "On Hold";
     });
   }, [displayItems]);
 
-  // Tab 2: Completed or Partially Completed Work Orders
+  // Tab 2: On Hold Work Orders
+  const onHoldItems = useMemo(() => {
+    return displayItems.filter(it => {
+      const s = it.work_order_status || "Draft";
+      return s === "On Hold";
+    });
+  }, [displayItems]);
+
+  // Tab 3: Completed or Partially Completed Work Orders
   const completedItems = useMemo(() => {
     return displayItems.filter(it => {
       const s = it.work_order_status || "Draft";
@@ -144,9 +175,10 @@ export default function WorkOrderMaster() {
   // Active tab items for DataTable
   const filteredItems = useMemo(() => {
     if (activeTab === "ongoing") return ongoingItems;
+    if (activeTab === "onHold") return onHoldItems;
     if (activeTab === "completed") return completedItems;
     return displayItems;
-  }, [activeTab, ongoingItems, completedItems, displayItems]);
+  }, [activeTab, ongoingItems, onHoldItems, completedItems, displayItems]);
 
   const columns = useMemo(() => {
     const cols = [
@@ -239,6 +271,17 @@ export default function WorkOrderMaster() {
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                 Started
+              </span>
+            );
+          }
+          if (status === "On Hold") {
+            return (
+              <span 
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-300 cursor-help"
+                title={row.hold_reason ? `Hold Reason: ${row.hold_reason}` : "Work Order is On Hold (Production paused; dispatch allowed)"}
+              >
+                <i className="fa-solid fa-pause text-[10px] text-amber-600"></i>
+                On Hold
               </span>
             );
           }
@@ -341,6 +384,37 @@ export default function WorkOrderMaster() {
               )
             )}
 
+            {/* Put on Hold Button (for Started work orders) */}
+            {canUpdate && row.work_order_status === "Started" && (
+              <button
+                type="button"
+                onClick={() => setHoldingRow(row)}
+                className="flex h-8 items-center gap-1.5 px-2.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 hover:border-amber-400 cursor-pointer font-bold text-xs transition-all shadow-2xs active:scale-95"
+                title="Put Work Order on Hold (Pauses floor production; dispatches remain enabled)"
+              >
+                <i className="fa-solid fa-pause text-[10px] text-amber-600"></i>
+                <span>Hold</span>
+              </button>
+            )}
+
+            {/* Resume Work Order Button (for On Hold work orders) */}
+            {canUpdate && row.work_order_status === "On Hold" && (
+              <button
+                type="button"
+                onClick={() => handleResumeWorkOrder(row)}
+                disabled={resumingId === row.work_order_id}
+                className="flex h-8 items-center gap-1.5 px-2.5 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-400 cursor-pointer font-bold text-xs transition-all shadow-2xs active:scale-95 disabled:opacity-50"
+                title="Resume Work Order (Re-enables workshop entries and floor production)"
+              >
+                {resumingId === row.work_order_id ? (
+                  <div className="w-3.5 h-3.5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <i className="fa-solid fa-play text-[10px]"></i>
+                )}
+                <span>Resume</span>
+              </button>
+            )}
+
             {/* Reopen Work Order Button (for Completed, Stopped, or Partially Completed work orders) */}
             {canUpdate && (
               row.work_order_status === "Completed" || 
@@ -419,7 +493,7 @@ export default function WorkOrderMaster() {
     });
 
     return cols;
-  }, [hasPermission, navigate, startingId, reopeningId]);
+  }, [hasPermission, navigate, startingId, reopeningId, resumingId]);
 
   const canWrite = hasPermission("work_order", "write");
 
@@ -454,7 +528,26 @@ export default function WorkOrderMaster() {
             </span>
           </button>
 
-          {/* Tab 2: Completed / Partially Completed Work Orders */}
+          {/* Tab 2: On Hold Work Orders */}
+          <button
+            type="button"
+            onClick={() => setActiveTab("onHold")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+              activeTab === "onHold"
+                ? "bg-white text-slate-900 shadow-xs border border-slate-200/80"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+            }`}
+          >
+            <i className={`fa-solid fa-pause ${activeTab === "onHold" ? "text-amber-600" : "text-slate-400"}`}></i>
+            <span>On Hold</span>
+            <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+              activeTab === "onHold" ? "bg-amber-600 text-white" : "bg-slate-200 text-slate-600"
+            }`}>
+              {onHoldItems.length}
+            </span>
+          </button>
+
+          {/* Tab 3: Completed / Partially Completed Work Orders */}
           <button
             type="button"
             onClick={() => setActiveTab("completed")}
@@ -498,6 +591,8 @@ export default function WorkOrderMaster() {
           title={
             activeTab === "ongoing"
               ? "Ongoing Work Orders"
+              : activeTab === "onHold"
+              ? "On Hold Work Orders"
               : activeTab === "completed"
               ? "Completed / Partially Completed Work Orders"
               : "All Work Orders"
@@ -527,6 +622,14 @@ export default function WorkOrderMaster() {
           onClose={() => setViewWorkOrderId(null)}
         />
       )}
+
+      {/* Put Work Order on Hold Modal */}
+      <HoldWorkOrderModal
+        row={holdingRow}
+        isOpen={Boolean(holdingRow)}
+        onClose={() => setHoldingRow(null)}
+        onSuccess={loadData}
+      />
 
       {/* Complete / Partial Complete Work Order Modal */}
       {completingRow && (

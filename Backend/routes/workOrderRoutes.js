@@ -15,7 +15,9 @@ const {
     stopWorkOrderController,
     completeWorkOrderController,
     restartWorkOrderController,
-    reopenWorkOrderController
+    reopenWorkOrderController,
+    holdWorkOrderController,
+    resumeWorkOrderController
 } = require("../controllers/workOrderController.js");
 
 const router = express.Router();
@@ -31,6 +33,8 @@ router.put("/item/:id/remarks", verifyToken, verifyPermission("work_order", "upd
 router.put("/update/:id", verifyToken, verifyPermission("work_order", "update"), updateWorkOrderController);
 router.put("/start/:id", verifyToken, verifyPermission("work_order", "update"), startWorkOrderController);
 router.put("/stop/:id", verifyToken, verifyPermission("work_order", "update"), stopWorkOrderController);
+router.put("/hold/:id", verifyToken, verifyPermission("work_order", "update"), holdWorkOrderController);
+router.put("/resume/:id", verifyToken, verifyPermission("work_order", "update"), resumeWorkOrderController);
 router.put("/complete/:id", verifyToken, verifyPermission("work_order", "update"), completeWorkOrderController);
 router.put("/restart/:id", verifyToken, verifyPermission("work_order", "update"), restartWorkOrderController);
 router.put("/reopen/:id", verifyToken, verifyPermission("work_order", "update"), reopenWorkOrderController);

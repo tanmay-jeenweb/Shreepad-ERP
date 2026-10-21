@@ -244,6 +244,7 @@ const getAllWorkshopEntries = async () => {
             GROUP BY work_order_item_id
         ) issue_summary ON woi.id = issue_summary.work_order_item_id
         WHERE COALESCE(woi.is_on_hold, 0) = 0 
+          AND COALESCE(wo.is_on_hold, 0) = 0
           AND COALESCE(woi.production_quantity, 0) > 0
           AND wo.status = 'Started'
         ORDER BY wo.work_order_no DESC, woi.id DESC
@@ -610,6 +611,10 @@ const issueWorkshopRawMaterials = async ({
             throw new Error(`Cannot issue raw materials: Work Order WO-${String(woRows[0].work_order_no).padStart(4, '0')} is COMPLETED.`);
         }
 
+        if (woRows[0].status === 'On Hold') {
+            throw new Error(`Cannot issue raw materials: Work Order WO-${String(woRows[0].work_order_no).padStart(4, '0')} is ON HOLD. Production is paused.`);
+        }
+
         if (woRows[0].status !== 'Started') {
             throw new Error('Cannot issue raw materials: Work Order has not been started yet. Please start it in the Work Order master.');
         }
@@ -752,6 +757,10 @@ const addWorkshopProductionLog = async ({
 
         if (woiRows[0].work_order_status === 'Completed' || woiRows[0].work_order_status === 'Stopped') {
             throw new Error(`Cannot record production: Work Order WO-${String(woiRows[0].work_order_no).padStart(4, '0')} is COMPLETED.`);
+        }
+
+        if (woiRows[0].work_order_status === 'On Hold') {
+            throw new Error(`Cannot record production: Work Order WO-${String(woiRows[0].work_order_no).padStart(4, '0')} is ON HOLD. Production is paused.`);
         }
 
         if (woiRows[0].work_order_status !== 'Started') {
@@ -1009,6 +1018,10 @@ const revertWorkshopProductionLog = async ({
             throw new Error(`Cannot revert production: Work Order WO-${String(woiRows[0].work_order_no).padStart(4, '0')} is COMPLETED.`);
         }
 
+        if (woiRows[0].work_order_status === 'On Hold') {
+            throw new Error(`Cannot revert production: Work Order WO-${String(woiRows[0].work_order_no).padStart(4, '0')} is ON HOLD. Production is paused.`);
+        }
+
         if (woiRows[0].work_order_status !== 'Started') {
             throw new Error(`Cannot revert production: Work Order WO-${String(woiRows[0].work_order_no).padStart(4, '0')} has not been started yet.`);
         }
@@ -1180,11 +1193,15 @@ const deleteWorkshopProductionLog = async (logId) => {
 
         // Get target quantity, material_id, batch_no
         const [woiRows] = await connection.execute(`
-            SELECT woi.production_quantity, woi.quantity, woi.material_id, woi.batch_no, wo.work_order_no
+            SELECT woi.production_quantity, woi.quantity, woi.material_id, woi.batch_no, wo.work_order_no, wo.status
             FROM work_order_items woi
             JOIN work_orders wo ON woi.work_order_id = wo.id
             WHERE woi.id = ?
         `, [workOrderItemId]);
+
+        if (woiRows[0]?.status === 'On Hold') {
+            throw new Error(`Cannot delete production log: Work Order WO-${String(woiRows[0].work_order_no).padStart(4, '0')} is ON HOLD.`);
+        }
 
         const targetQty = Number(woiRows[0]?.production_quantity || woiRows[0]?.quantity) || 0;
         const materialId = woiRows[0]?.material_id;

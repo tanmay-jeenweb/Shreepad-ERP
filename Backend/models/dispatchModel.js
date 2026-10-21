@@ -332,6 +332,8 @@ const getWorkOrdersForDispatch = async (tab = 'ongoing') => {
             wo.work_order_no,
             wo.work_order_date,
             COALESCE(wo.status, 'Draft') AS work_order_status,
+            COALESCE(wo.is_on_hold, 0) AS is_on_hold,
+            wo.hold_reason,
             wo.started_at,
             wo.customer_id,
             c.customer_name,
@@ -387,9 +389,8 @@ const getWorkOrdersForDispatch = async (tab = 'ongoing') => {
             LEFT JOIN stock_status ss ON d.stock_status_id = ss.id
             GROUP BY COALESCE(d.work_order_item_id, ss.work_order_item_id)
         ) dsp_agg ON woi.id = dsp_agg.work_order_item_id
-        WHERE COALESCE(woi.is_on_hold, 0) = 0
-          AND (COALESCE(woi.quantity, 0) > 0 OR COALESCE(woi.production_quantity, 0) > 0)
-          AND (wo.status = 'Started' OR wo.status = 'Completed' OR wo.status = 'Partially Completed')
+        WHERE (COALESCE(woi.quantity, 0) > 0 OR COALESCE(woi.production_quantity, 0) > 0)
+          AND (wo.status = 'Started' OR wo.status = 'On Hold' OR wo.status = 'Completed' OR wo.status = 'Partially Completed')
           AND COALESCE(woi.remarks, '') NOT LIKE 'Allocated raw material%'
           AND LOWER(COALESCE(m.material_group, '')) NOT LIKE '%raw%'
     `;
@@ -409,7 +410,7 @@ const getWorkOrdersForDispatch = async (tab = 'ongoing') => {
             COALESCE(dsp_agg.order_dispatched_quantity, 0) < COALESCE(woi.quantity, woi.production_quantity, 0)
             OR COALESCE(woi.quantity, woi.production_quantity, 0) = 0
           )
-          AND wo.status = 'Started'
+          AND (wo.status = 'Started' OR wo.status = 'On Hold')
         `;
     }
 
@@ -610,7 +611,12 @@ const createWorkOrderDispatch = async (data, addedBy) => {
         if (woItem.work_order_status === 'Stopped') {
             throw new Error(`Cannot dispatch: Work Order WO-${String(woItem.work_order_no).padStart(4, '0')} is currently STOPPED.`);
         }
-        if (woItem.work_order_status !== 'Started' && woItem.work_order_status !== 'Completed' && woItem.work_order_status !== 'Partially Completed') {
+        if (
+            woItem.work_order_status !== 'Started' &&
+            woItem.work_order_status !== 'On Hold' &&
+            woItem.work_order_status !== 'Completed' &&
+            woItem.work_order_status !== 'Partially Completed'
+        ) {
             throw new Error(`Cannot dispatch: Work Order WO-${String(woItem.work_order_no).padStart(4, '0')} has not been started yet.`);
         }
 

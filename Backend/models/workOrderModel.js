@@ -376,6 +376,58 @@ const ensureWorkOrderStatusColumns = async () => {
     }
 };
 
+const ensureWorkOrderHoldColumns = async () => {
+    try {
+        const [rowsIsOnHold] = await db.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'work_orders' AND COLUMN_NAME = 'is_on_hold'");
+        if (rowsIsOnHold.length === 0) {
+            await db.execute("ALTER TABLE work_orders ADD COLUMN is_on_hold TINYINT(1) DEFAULT 0");
+            console.log('Added column is_on_hold to work_orders');
+        }
+
+        const [rowsHoldReason] = await db.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'work_orders' AND COLUMN_NAME = 'hold_reason'");
+        if (rowsHoldReason.length === 0) {
+            await db.execute("ALTER TABLE work_orders ADD COLUMN hold_reason TEXT DEFAULT NULL");
+            console.log('Added column hold_reason to work_orders');
+        }
+
+        const [rowsHeldAt] = await db.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'work_orders' AND COLUMN_NAME = 'held_at'");
+        if (rowsHeldAt.length === 0) {
+            await db.execute("ALTER TABLE work_orders ADD COLUMN held_at DATETIME DEFAULT NULL");
+            console.log('Added column held_at to work_orders');
+        }
+
+        const [rowsHeldBy] = await db.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'work_orders' AND COLUMN_NAME = 'held_by'");
+        if (rowsHeldBy.length === 0) {
+            await db.execute("ALTER TABLE work_orders ADD COLUMN held_by INT DEFAULT NULL");
+            console.log('Added column held_by to work_orders');
+            try {
+                await db.execute("ALTER TABLE work_orders ADD CONSTRAINT fk_work_orders_held_by FOREIGN KEY (held_by) REFERENCES users(id) ON DELETE SET NULL");
+            } catch (fkErr) {
+                console.warn('Foreign key notice for held_by:', fkErr.message);
+            }
+        }
+
+        const [rowsResumedAt] = await db.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'work_orders' AND COLUMN_NAME = 'resumed_at'");
+        if (rowsResumedAt.length === 0) {
+            await db.execute("ALTER TABLE work_orders ADD COLUMN resumed_at DATETIME DEFAULT NULL");
+            console.log('Added column resumed_at to work_orders');
+        }
+
+        const [rowsResumedBy] = await db.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'work_orders' AND COLUMN_NAME = 'resumed_by'");
+        if (rowsResumedBy.length === 0) {
+            await db.execute("ALTER TABLE work_orders ADD COLUMN resumed_by INT DEFAULT NULL");
+            console.log('Added column resumed_by to work_orders');
+            try {
+                await db.execute("ALTER TABLE work_orders ADD CONSTRAINT fk_work_orders_resumed_by FOREIGN KEY (resumed_by) REFERENCES users(id) ON DELETE SET NULL");
+            } catch (fkErr) {
+                console.warn('Foreign key notice for resumed_by:', fkErr.message);
+            }
+        }
+    } catch (err) {
+        console.error('Error ensuring work order hold columns:', err.message || err);
+    }
+};
+
 const ensureWorkOrderHeaderColumns = async () => {
     try {
         const columnsToCheck = [
@@ -545,7 +597,7 @@ const createWorkOrder = async (customerId, workOrderDate, addedBy, deviceId, ite
     }
 };
 
-const getAllWorkOrders = async (includeHeld = false) => {
+const getAllWorkOrders = async (includeHeld = true) => {
     const query = `
         SELECT
             woi.material_id,
@@ -555,7 +607,7 @@ const getAllWorkOrders = async (includeHeld = false) => {
             c.customer_code,
             woi.id AS work_order_item_id,
             woi.sort_order,
-            woi.is_on_hold,
+            COALESCE(wo.is_on_hold, woi.is_on_hold, 0) AS is_on_hold,
             woi.quantity AS wo_quantity,
             woi.production_quantity,
             woi.exp_delivery_date,
@@ -597,6 +649,11 @@ const getAllWorkOrders = async (includeHeld = false) => {
             wo.restarted_by AS reopened_by,
             restarter.name AS restarted_by_name,
             restarter.name AS reopened_by_name,
+            wo.hold_reason,
+            wo.held_at,
+            held_u.name AS held_by_name,
+            wo.resumed_at,
+            resumed_u.name AS resumed_by_name,
             mac.name AS machine_name,
             mac.machine_number,
             COALESCE(u.name, 'Unknown') AS added_by_name,
@@ -615,6 +672,8 @@ const getAllWorkOrders = async (includeHeld = false) => {
         LEFT JOIN users starter ON wo.started_by = starter.id
         LEFT JOIN users stopper ON wo.stopped_by = stopper.id
         LEFT JOIN users restarter ON wo.restarted_by = restarter.id
+        LEFT JOIN users held_u ON wo.held_by = held_u.id
+        LEFT JOIN users resumed_u ON wo.resumed_by = resumed_u.id
         LEFT JOIN inspection_masters insp ON wo.inspection_id = insp.id
         LEFT JOIN (
             SELECT 
@@ -648,7 +707,7 @@ const getAllWorkOrders = async (includeHeld = false) => {
             WHERE to_bom_process_id IS NULL
             GROUP BY work_order_item_id
         ) wpl_fg ON woi.id = wpl_fg.work_order_item_id
-        WHERE 1 = 1 ${includeHeld ? '' : 'AND COALESCE(woi.is_on_hold, 0) = 0'}
+        WHERE 1 = 1 ${includeHeld ? '' : 'AND COALESCE(wo.is_on_hold, woi.is_on_hold, 0) = 0'}
         ORDER BY wo.work_order_no DESC, wo.created_at DESC
     `;
     const [results] = await db.execute(query);
@@ -670,6 +729,8 @@ const getWorkOrderById = async (id) => {
             wo.stop_reason AS completion_remark,
             restarter.name AS restarted_by_name,
             restarter.name AS reopened_by_name,
+            held_u.name AS held_by_name,
+            resumed_u.name AS resumed_by_name,
             insp.name AS inspection_name
         FROM work_orders wo
         LEFT JOIN customer_master c ON wo.customer_id = c.id
@@ -677,6 +738,8 @@ const getWorkOrderById = async (id) => {
         LEFT JOIN users starter ON wo.started_by = starter.id
         LEFT JOIN users stopper ON wo.stopped_by = stopper.id
         LEFT JOIN users restarter ON wo.restarted_by = restarter.id
+        LEFT JOIN users held_u ON wo.held_by = held_u.id
+        LEFT JOIN users resumed_u ON wo.resumed_by = resumed_u.id
         LEFT JOIN inspection_masters insp ON wo.inspection_id = insp.id
         WHERE wo.id = ?
     `;
@@ -758,6 +821,103 @@ const completeWorkOrder = async (workOrderId, userId, completionReason, status =
 
 const stopWorkOrder = async (workOrderId, userId, stopReason) => {
     return completeWorkOrder(workOrderId, userId, stopReason);
+};
+
+const holdWorkOrder = async (workOrderId, userId, holdReason = 'Work Order put on hold') => {
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        const [rows] = await connection.execute(
+            `SELECT id, work_order_no, status FROM work_orders WHERE id = ? FOR UPDATE`,
+            [workOrderId]
+        );
+
+        if (rows.length === 0) {
+            throw new Error('Work Order not found');
+        }
+
+        const wo = rows[0];
+        if (wo.status === 'Completed' || wo.status === 'Stopped' || wo.status === 'Partially Completed' || wo.status === 'Partial Complete') {
+            throw new Error(`Cannot put on hold: Work Order WO-${String(wo.work_order_no).padStart(4, '0')} is already ${wo.status}. Completed or Partially Completed work orders cannot be put on hold.`);
+        }
+
+        if (wo.status === 'On Hold') {
+            throw new Error(`Work Order WO-${String(wo.work_order_no).padStart(4, '0')} is already on hold.`);
+        }
+
+        if (wo.status !== 'Started') {
+            throw new Error(`Cannot put on hold: Work Order WO-${String(wo.work_order_no).padStart(4, '0')} has not been started yet (current status: ${wo.status}). Only Started work orders can be put on hold.`);
+        }
+
+        await connection.execute(`
+            UPDATE work_orders
+            SET status = 'On Hold',
+                is_on_hold = 1,
+                hold_reason = ?,
+                held_at = CURRENT_TIMESTAMP,
+                held_by = ?
+            WHERE id = ?
+        `, [holdReason || 'Work Order put on hold', userId || null, workOrderId]);
+
+        await connection.execute(`
+            UPDATE work_order_items
+            SET is_on_hold = 1
+            WHERE work_order_id = ?
+        `, [workOrderId]);
+
+        await connection.commit();
+        return true;
+    } catch (err) {
+        await connection.rollback();
+        throw err;
+    } finally {
+        connection.release();
+    }
+};
+
+const resumeWorkOrder = async (workOrderId, userId) => {
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        const [rows] = await connection.execute(
+            `SELECT id, work_order_no, status FROM work_orders WHERE id = ? FOR UPDATE`,
+            [workOrderId]
+        );
+
+        if (rows.length === 0) {
+            throw new Error('Work Order not found');
+        }
+
+        const wo = rows[0];
+        if (wo.status !== 'On Hold') {
+            throw new Error(`Cannot resume: Work Order WO-${String(wo.work_order_no).padStart(4, '0')} is not on hold (current status: ${wo.status}).`);
+        }
+
+        await connection.execute(`
+            UPDATE work_orders
+            SET status = 'Started',
+                is_on_hold = 0,
+                resumed_at = CURRENT_TIMESTAMP,
+                resumed_by = ?
+            WHERE id = ?
+        `, [userId || null, workOrderId]);
+
+        await connection.execute(`
+            UPDATE work_order_items
+            SET is_on_hold = 0
+            WHERE work_order_id = ?
+        `, [workOrderId]);
+
+        await connection.commit();
+        return true;
+    } catch (err) {
+        await connection.rollback();
+        throw err;
+    } finally {
+        connection.release();
+    }
 };
 
 const reopenWorkOrder = async (workOrderId, userId) => {
@@ -1145,6 +1305,9 @@ module.exports = {
     updateWorkOrderItemRemarks,
     updateWorkOrder,
     ensureWorkOrderStatusColumns,
+    ensureWorkOrderHoldColumns,
     ensureWorkOrderHeaderColumns,
-    createWorkOrderBatchesTable
+    createWorkOrderBatchesTable,
+    holdWorkOrder,
+    resumeWorkOrder
 };

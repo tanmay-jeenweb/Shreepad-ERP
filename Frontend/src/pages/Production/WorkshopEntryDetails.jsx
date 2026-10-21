@@ -324,6 +324,15 @@ export default function WorkshopEntryDetails() {
   // RM Return Form Handler
   const handleReturnSubmit = async (e) => {
     e.preventDefault();
+    if (entryData?.work_order_status === 'On Hold') {
+      return toast.error("Cannot return raw materials: Work Order is ON HOLD. Production is paused.");
+    }
+    if (entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped' || entryData?.work_order_status === 'Partially Completed' || entryData?.work_order_status === 'Partial Complete') {
+      return toast.error(`Cannot return raw materials: Work Order is ${entryData?.work_order_status === 'Partially Completed' ? 'PARTIALLY COMPLETED' : 'COMPLETED'}.`);
+    }
+    if (entryData?.work_order_status !== 'Started') {
+      return toast.error("Cannot return raw materials: Work Order has not been started yet.");
+    }
     if (!returnMaterialId) {
       return toast.error("Please select a Material Name to return.");
     }
@@ -754,6 +763,12 @@ export default function WorkshopEntryDetails() {
   };
 
   const handleDeleteLog = async (logId, qty, fromName, toName, movementType = "forward") => {
+    if (entryData?.work_order_status === 'On Hold') {
+      return toast.error("Cannot delete production movement: Work Order is ON HOLD. Production is paused.");
+    }
+    if (entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped' || entryData?.work_order_status === 'Partially Completed' || entryData?.work_order_status === 'Partial Complete') {
+      return toast.error(`Cannot delete production movement: Work Order is ${entryData?.work_order_status === 'Partially Completed' ? 'PARTIALLY COMPLETED' : 'COMPLETED'}.`);
+    }
     const isRevert = movementType === "revert";
     const confirmMsg = isRevert
       ? `Are you sure you want to cancel / reverse this revert movement of ${qty} Nos from ${fromName} back to ${toName}?`
@@ -862,6 +877,8 @@ export default function WorkshopEntryDetails() {
             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
                 entryData?.work_order_status === 'Started'
                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : entryData?.work_order_status === 'On Hold'
+                  ? 'bg-amber-50 text-amber-800 border border-amber-300'
                   : (entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped')
                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                   : (entryData?.work_order_status === 'Partially Completed' || entryData?.work_order_status === 'Partial Complete')
@@ -869,6 +886,7 @@ export default function WorkshopEntryDetails() {
                   : 'bg-amber-50 text-amber-700 border border-amber-200'
               }`}>
               {entryData?.work_order_status === 'Started' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>}
+              {entryData?.work_order_status === 'On Hold' && <i className="fa-solid fa-pause text-[10px] text-amber-600"></i>}
               {(entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped') && <i className="fa-solid fa-circle-check text-[11px] text-emerald-600"></i>}
               {(entryData?.work_order_status === 'Partially Completed' || entryData?.work_order_status === 'Partial Complete') && <i className="fa-solid fa-hourglass-half text-[11px] text-amber-600"></i>}
               {entryData?.work_order_status === 'Stopped' ? 'Completed' : (entryData?.work_order_status || 'Draft')}
@@ -876,8 +894,23 @@ export default function WorkshopEntryDetails() {
           </div>
         </div>
 
-        {/* Completed / Partially Completed / Unstarted Notice Banner */}
-        {entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped' ? (
+        {/* On Hold / Completed / Partially Completed / Unstarted Notice Banner */}
+        {entryData?.work_order_status === 'On Hold' ? (
+          <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 flex items-start gap-3.5 text-amber-950 shadow-2xs">
+            <i className="fa-solid fa-pause text-amber-600 text-xl shrink-0 mt-0.5"></i>
+            <div>
+              <p className="text-sm font-bold text-amber-900">This Work Order is ON HOLD.</p>
+              {entryData.hold_reason && (
+                <p className="text-xs font-semibold text-amber-950 mt-0.5">
+                  Hold Reason: <span className="font-normal italic">"{entryData.hold_reason}"</span>
+                </p>
+              )}
+              <p className="text-xs text-amber-800 mt-1">
+                Floor production movements and raw material issues are paused for this work order. Finished goods dispatch remains enabled. You can <strong>Resume</strong> this work order in the Work Order Master when ready.
+              </p>
+            </div>
+          </div>
+        ) : entryData?.work_order_status === 'Completed' || entryData?.work_order_status === 'Stopped' ? (
           <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-start gap-3.5 text-emerald-900 shadow-2xs">
             <i className="fa-solid fa-circle-check text-emerald-600 text-xl shrink-0 mt-0.5"></i>
             <div>

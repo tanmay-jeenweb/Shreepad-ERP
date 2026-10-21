@@ -105,10 +105,21 @@ export default function DispatchMaster() {
             label: "Work Order #",
             minWidth: "140px",
             render: (row) => (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono bg-indigo-50 text-indigo-700 border border-indigo-200">
-                    <i className="fa-solid fa-file-lines text-[11px]"></i>
-                    WO-{String(row.work_order_no).padStart(4, "0")}
-                </span>
+                <div className="flex flex-col gap-1 items-start">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono bg-indigo-50 text-indigo-700 border border-indigo-200">
+                        <i className="fa-solid fa-file-lines text-[11px]"></i>
+                        WO-{String(row.work_order_no).padStart(4, "0")}
+                    </span>
+                    {(row.work_order_status === "On Hold" || Boolean(row.is_on_hold)) && (
+                        <span 
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs" 
+                            title={row.hold_reason ? `Hold Reason: ${row.hold_reason}` : "Production Paused, Dispatch Allowed"}
+                        >
+                            <i className="fa-solid fa-pause text-[8px] text-amber-600"></i>
+                            On Hold
+                        </span>
+                    )}
+                </div>
             ),
         },
         {

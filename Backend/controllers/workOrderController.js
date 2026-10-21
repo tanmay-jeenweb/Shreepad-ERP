@@ -59,7 +59,7 @@ const addWorkOrder = async (req, res) => {
 
 const getAllWorkOrdersController = async (req, res) => {
     try {
-        const includeHeld = req.query.includeHeld === 'true';
+        const includeHeld = req.query.includeHeld !== 'false';
         const data = await workOrderModel.getAllWorkOrders(includeHeld);
         return res.status(200).json({
             success: true,
@@ -394,6 +394,99 @@ const reopenWorkOrderController = async (req, res) => {
 
 const restartWorkOrderController = reopenWorkOrderController;
 
+const holdWorkOrderController = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { hold_reason } = req.body;
+        const userId = req.user.id;
+
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: "Work Order ID is required."
+            });
+        }
+
+        const workOrder = await workOrderModel.getWorkOrderById(id);
+        if (!workOrder) {
+            return res.status(404).json({
+                success: false,
+                message: "Work Order not found."
+            });
+        }
+
+        if (workOrder.status === 'Completed' || workOrder.status === 'Stopped' || workOrder.status === 'Partially Completed' || workOrder.status === 'Partial Complete') {
+            return res.status(400).json({
+                success: false,
+                message: `Cannot put on hold: Work Order WO-${String(workOrder.work_order_no).padStart(4, '0')} is ${workOrder.status}. Completed or Partially Completed work orders cannot be put on hold.`
+            });
+        }
+
+        if (workOrder.status === 'On Hold') {
+            return res.status(400).json({
+                success: false,
+                message: `Work Order WO-${String(workOrder.work_order_no).padStart(4, '0')} is already on hold.`
+            });
+        }
+
+        const reason = (hold_reason && String(hold_reason).trim()) ? String(hold_reason).trim() : 'Work Order put on hold';
+        await workOrderModel.holdWorkOrder(id, userId, reason);
+
+        return res.status(200).json({
+            success: true,
+            message: `Work Order WO-${String(workOrder.work_order_no).padStart(4, '0')} has been put on hold. Production is paused; dispatches remain allowed.`
+        });
+    } catch (error) {
+        console.error("Error in holdWorkOrderController:", error);
+        return res.status(400).json({
+            success: false,
+            message: error.message || "Internal Server Error"
+        });
+    }
+};
+
+const resumeWorkOrderController = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user.id;
+
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: "Work Order ID is required."
+            });
+        }
+
+        const workOrder = await workOrderModel.getWorkOrderById(id);
+        if (!workOrder) {
+            return res.status(404).json({
+                success: false,
+                message: "Work Order not found."
+            });
+        }
+
+        if (workOrder.status !== 'On Hold') {
+            return res.status(400).json({
+                success: false,
+                message: `Only On Hold work orders can be resumed. Current status: ${workOrder.status || 'Draft'}.`
+            });
+        }
+
+        await workOrderModel.resumeWorkOrder(id, userId);
+
+        return res.status(200).json({
+            success: true,
+            message: `Work Order WO-${String(workOrder.work_order_no).padStart(4, '0')} has been resumed and is active again.`
+        });
+    } catch (error) {
+        console.error("Error in resumeWorkOrderController:", error);
+        return res.status(400).json({
+            success: false,
+            message: error.message || "Internal Server Error"
+        });
+    }
+};
+
 module.exports = {
     addWorkOrder,
     getAllWorkOrdersController,
@@ -409,5 +502,7 @@ module.exports = {
     stopWorkOrderController,
     completeWorkOrderController,
     restartWorkOrderController,
-    reopenWorkOrderController
+    reopenWorkOrderController,
+    holdWorkOrderController,
+    resumeWorkOrderController
 };
