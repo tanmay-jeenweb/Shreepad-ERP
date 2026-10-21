@@ -21,6 +21,7 @@ export default function WorkOrderMaster() {
   const [completingLoading, setCompletingLoading] = useState(false);
   
   // View modal state
+  const [activeTab, setActiveTab] = useState("ongoing");
   const [viewWorkOrderId, setViewWorkOrderId] = useState(null);
 
   const { hasPermission } = usePermission();
@@ -123,6 +124,29 @@ export default function WorkOrderMaster() {
     const fg = items.filter(it => Number(it.production_quantity) > 0);
     return fg.length > 0 ? fg : items;
   }, [items]);
+
+  // Tab 1: Ongoing Work Orders (Draft, Started, or active)
+  const ongoingItems = useMemo(() => {
+    return displayItems.filter(it => {
+      const s = it.work_order_status || "Draft";
+      return s !== "Completed" && s !== "Stopped" && s !== "Partially Completed" && s !== "Partial Complete";
+    });
+  }, [displayItems]);
+
+  // Tab 2: Completed or Partially Completed Work Orders
+  const completedItems = useMemo(() => {
+    return displayItems.filter(it => {
+      const s = it.work_order_status || "Draft";
+      return s === "Completed" || s === "Stopped" || s === "Partially Completed" || s === "Partial Complete";
+    });
+  }, [displayItems]);
+
+  // Active tab items for DataTable
+  const filteredItems = useMemo(() => {
+    if (activeTab === "ongoing") return ongoingItems;
+    if (activeTab === "completed") return completedItems;
+    return displayItems;
+  }, [activeTab, ongoingItems, completedItems, displayItems]);
 
   const columns = useMemo(() => {
     const cols = [
@@ -409,10 +433,76 @@ export default function WorkOrderMaster() {
           </div>
         )}
 
+        {/* Tabs Bar */}
+        <div className="flex flex-wrap items-center gap-2 mb-6 bg-slate-100/80 p-1.5 rounded-2xl w-fit border border-slate-200/60 shadow-2xs">
+          {/* Tab 1: Ongoing Work Orders */}
+          <button
+            type="button"
+            onClick={() => setActiveTab("ongoing")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+              activeTab === "ongoing"
+                ? "bg-white text-slate-900 shadow-xs border border-slate-200/80"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+            }`}
+          >
+            <i className={`fa-solid fa-play ${activeTab === "ongoing" ? "text-[#369ACF]" : "text-slate-400"}`}></i>
+            <span>Ongoing Work Orders</span>
+            <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+              activeTab === "ongoing" ? "bg-[#369ACF] text-white" : "bg-slate-200 text-slate-600"
+            }`}>
+              {ongoingItems.length}
+            </span>
+          </button>
+
+          {/* Tab 2: Completed / Partially Completed Work Orders */}
+          <button
+            type="button"
+            onClick={() => setActiveTab("completed")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+              activeTab === "completed"
+                ? "bg-white text-slate-900 shadow-xs border border-slate-200/80"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+            }`}
+          >
+            <i className={`fa-solid fa-circle-check ${activeTab === "completed" ? "text-emerald-600" : "text-slate-400"}`}></i>
+            <span>Completed / Partially Completed</span>
+            <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+              activeTab === "completed" ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-600"
+            }`}>
+              {completedItems.length}
+            </span>
+          </button>
+
+          {/* Tab 3: All Work Orders */}
+          <button
+            type="button"
+            onClick={() => setActiveTab("all")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+              activeTab === "all"
+                ? "bg-white text-slate-900 shadow-xs border border-slate-200/80"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+            }`}
+          >
+            <i className={`fa-solid fa-list ${activeTab === "all" ? "text-indigo-600" : "text-slate-400"}`}></i>
+            <span>All Work Orders</span>
+            <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+              activeTab === "all" ? "bg-indigo-600 text-white" : "bg-slate-200 text-slate-600"
+            }`}>
+              {displayItems.length}
+            </span>
+          </button>
+        </div>
+
         <DataTable
           tableId="work_order_master"
-          title="Work Orders"
-          data={displayItems}
+          title={
+            activeTab === "ongoing"
+              ? "Ongoing Work Orders"
+              : activeTab === "completed"
+              ? "Completed / Partially Completed Work Orders"
+              : "All Work Orders"
+          }
+          data={filteredItems}
           columns={columns}
           loading={loading}
           searchPlaceholder="Search materials, customers or work order number..."
