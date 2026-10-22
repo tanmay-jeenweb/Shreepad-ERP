@@ -28,6 +28,7 @@ export default function CreateWorkOrder() {
   const [purchaseOrderNumber, setPurchaseOrderNumber] = useState("");
   const [purchaseOrderDate, setPurchaseOrderDate] = useState("");
   const [projectName, setProjectName] = useState("");
+  const [majorCapex, setMajorCapex] = useState("");
   const [inspectionId, setInspectionId] = useState("");
   const [remark, setRemark] = useState("");
   const [items, setItems] = useState([]);
@@ -460,6 +461,7 @@ export default function CreateWorkOrder() {
         purchase_order_number: purchaseOrderNumber.trim() || null,
         purchase_order_date: purchaseOrderDate || null,
         project_name: projectName.trim() || null,
+        major_capex: majorCapex.trim() || null,
         inspection_id: inspectionId ? Number(inspectionId) : null,
         remark: remark.trim() || null,
         items: flattenedItems
@@ -576,13 +578,26 @@ export default function CreateWorkOrder() {
 
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                  Project Name
+                  Project
                 </label>
                 <input
                   type="text"
-                  placeholder="Enter project name"
+                  placeholder="Enter project"
                   value={projectName}
                   onChange={(e) => setProjectName(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                  Major Capex
+                </label>
+                <input
+                  type="text"
+                  placeholder="Enter major capex"
+                  value={majorCapex}
+                  onChange={(e) => setMajorCapex(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500"
                 />
               </div>
@@ -605,7 +620,7 @@ export default function CreateWorkOrder() {
                 </select>
               </div>
 
-              <div className="md:col-span-2">
+              <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
                   Remark
                 </label>

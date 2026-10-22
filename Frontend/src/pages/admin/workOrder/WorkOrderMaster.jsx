@@ -232,6 +232,26 @@ export default function WorkOrderMaster() {
         )
       },
       {
+        key: "project_name",
+        label: "Project",
+        minWidth: "150px",
+        render: row => (
+          <span className="text-slate-700 font-medium">
+            {row.project_name || "—"}
+          </span>
+        )
+      },
+      {
+        key: "major_capex",
+        label: "Major Capex",
+        minWidth: "150px",
+        render: row => (
+          <span className="text-slate-700 font-medium">
+            {row.major_capex || "—"}
+          </span>
+        )
+      },
+      {
         key: "wo_quantity",
         label: "Quantity",
         minWidth: "120px",

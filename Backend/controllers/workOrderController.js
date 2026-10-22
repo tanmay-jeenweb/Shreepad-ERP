@@ -10,6 +10,8 @@ const addWorkOrder = async (req, res) => {
             purchase_order_number,
             purchase_order_date,
             project_name,
+            project,
+            major_capex,
             inspection_id,
             remark,
             batches
@@ -35,7 +37,8 @@ const addWorkOrder = async (req, res) => {
             {
                 purchase_order_number,
                 purchase_order_date,
-                project_name,
+                project_name: project_name || project,
+                major_capex,
                 inspection_id,
                 remark,
                 batches
@@ -227,6 +230,8 @@ const updateWorkOrderController = async (req, res) => {
             purchase_order_number,
             purchase_order_date,
             project_name,
+            project,
+            major_capex,
             inspection_id,
             remark,
             batches
@@ -242,7 +247,8 @@ const updateWorkOrderController = async (req, res) => {
         await workOrderModel.updateWorkOrder(id, work_order_date, items, {
             purchase_order_number,
             purchase_order_date,
-            project_name,
+            project_name: project_name || project,
+            major_capex,
             inspection_id,
             remark,
             batches

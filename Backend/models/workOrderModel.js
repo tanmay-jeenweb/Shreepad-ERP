@@ -35,6 +35,7 @@ const createWorkOrdersTable = async () => {
             purchase_order_number VARCHAR(100) DEFAULT NULL,
             purchase_order_date DATE DEFAULT NULL,
             project_name        VARCHAR(255) DEFAULT NULL,
+            major_capex         VARCHAR(255) DEFAULT NULL,
             inspection_id       INT DEFAULT NULL,
             remark              TEXT DEFAULT NULL,
             created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -434,6 +435,7 @@ const ensureWorkOrderHeaderColumns = async () => {
             { name: 'purchase_order_number', type: 'VARCHAR(100) DEFAULT NULL' },
             { name: 'purchase_order_date', type: 'DATE DEFAULT NULL' },
             { name: 'project_name', type: 'VARCHAR(255) DEFAULT NULL' },
+            { name: 'major_capex', type: 'VARCHAR(255) DEFAULT NULL' },
             { name: 'inspection_id', type: 'INT DEFAULT NULL' },
             { name: 'remark', type: 'TEXT DEFAULT NULL' }
         ];
@@ -499,16 +501,20 @@ const createWorkOrder = async (customerId, workOrderDate, addedBy, deviceId, ite
             purchase_order_number = null,
             purchase_order_date = null,
             project_name = null,
+            project = null,
+            major_capex = null,
             inspection_id = null,
             remark = null
         } = headerData;
 
+        const resolvedProject = project_name || project || null;
+
         const insertQuery = `
             INSERT INTO work_orders (
                 work_order_no, customer_id, work_order_date, added_by, device_id, status,
-                purchase_order_number, purchase_order_date, project_name, inspection_id, remark
+                purchase_order_number, purchase_order_date, project_name, major_capex, inspection_id, remark
             )
-            VALUES (?, ?, ?, ?, ?, 'Draft', ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, 'Draft', ?, ?, ?, ?, ?, ?)
         `;
         const [results] = await connection.execute(insertQuery, [
             workOrderNo,
@@ -518,7 +524,8 @@ const createWorkOrder = async (customerId, workOrderDate, addedBy, deviceId, ite
             deviceId || null,
             purchase_order_number || null,
             purchase_order_date || null,
-            project_name || null,
+            resolvedProject,
+            major_capex || null,
             inspection_id ? Number(inspection_id) : null,
             remark || null
         ]);
@@ -628,6 +635,7 @@ const getAllWorkOrders = async (includeHeld = true) => {
             wo.purchase_order_number,
             wo.purchase_order_date,
             wo.project_name,
+            wo.major_capex,
             wo.inspection_id,
             wo.remark,
             insp.name AS inspection_name,
@@ -1092,11 +1100,13 @@ const updateWorkOrder = async (workOrderId, workOrderDate, itemsArray, headerDat
         const headerParams = [workOrderDate];
 
         if (headerData && Object.keys(headerData).length > 0) {
-            updateHeaderQuery += `, purchase_order_number = ?, purchase_order_date = ?, project_name = ?, inspection_id = ?, remark = ?`;
+            const resolvedProject = headerData.project_name || headerData.project || null;
+            updateHeaderQuery += `, purchase_order_number = ?, purchase_order_date = ?, project_name = ?, major_capex = ?, inspection_id = ?, remark = ?`;
             headerParams.push(
                 headerData.purchase_order_number || null,
                 headerData.purchase_order_date || null,
-                headerData.project_name || null,
+                resolvedProject,
+                headerData.major_capex || null,
                 headerData.inspection_id ? Number(headerData.inspection_id) : null,
                 headerData.remark || null
             );

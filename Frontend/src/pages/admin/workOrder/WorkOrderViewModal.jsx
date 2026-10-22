@@ -172,9 +172,15 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                         </p>
                                     </div>
                                     <div>
-                                        <p className="text-xs text-slate-400 font-medium mb-1">Project Name</p>
+                                        <p className="text-xs text-slate-400 font-medium mb-1">Project</p>
                                         <p className="text-sm font-semibold text-slate-800">
                                             {workOrder.project_name || "—"}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-slate-400 font-medium mb-1">Major Capex</p>
+                                        <p className="text-sm font-semibold text-slate-800">
+                                            {workOrder.major_capex || "—"}
                                         </p>
                                     </div>
                                     <div>
@@ -184,7 +190,7 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                         </p>
                                     </div>
 
-                                    <div className="sm:col-span-2">
+                                    <div className="sm:col-span-3">
                                         <p className="text-xs text-slate-400 font-medium mb-1">Remark</p>
                                         <p className="text-sm text-slate-700">
                                             {workOrder.remark || "—"}
@@ -194,7 +200,7 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                         <p className="text-xs text-slate-400 font-medium mb-1">Added By</p>
                                         <p className="text-sm text-slate-800 font-medium">{workOrder.added_by_name || "N/A"}</p>
                                     </div>
-                                    <div>
+                                    <div className="sm:col-span-3">
                                         <p className="text-xs text-slate-400 font-medium mb-1">Created On</p>
                                         <p className="text-sm text-slate-700 font-mono text-xs">
                                             {formatDateTime(workOrder.created_at)}
