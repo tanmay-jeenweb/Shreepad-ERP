@@ -160,6 +160,12 @@ export default function WorkOrderViewModal({ workOrderId, onClose }) {
                                     </div>
 
                                     <div>
+                                        <p className="text-xs text-slate-400 font-medium mb-1">Revision Number</p>
+                                        <p className="text-sm font-semibold text-slate-800">
+                                            {workOrder.revision_number || "—"}
+                                        </p>
+                                    </div>
+                                    <div>
                                         <p className="text-xs text-slate-400 font-medium mb-1">PO Number</p>
                                         <p className="text-sm font-semibold text-slate-800">
                                             {workOrder.purchase_order_number || "—"}

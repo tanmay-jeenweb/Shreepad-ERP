@@ -25,6 +25,7 @@ export default function CreateWorkOrder() {
   // Form states
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [workOrderDate, setWorkOrderDate] = useState(new Date().toISOString().substring(0, 10));
+  const [revisionNumber, setRevisionNumber] = useState("");
   const [purchaseOrderNumber, setPurchaseOrderNumber] = useState("");
   const [purchaseOrderDate, setPurchaseOrderDate] = useState("");
   const [projectName, setProjectName] = useState("");
@@ -458,6 +459,7 @@ export default function CreateWorkOrder() {
       const payload = {
         customer_id: Number(selectedCustomerId),
         work_order_date: workOrderDate,
+        revision_number: revisionNumber.trim() || null,
         purchase_order_number: purchaseOrderNumber.trim() || null,
         purchase_order_date: purchaseOrderDate || null,
         project_name: projectName.trim() || null,
@@ -551,6 +553,19 @@ export default function CreateWorkOrder() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                  Revision Number
+                </label>
+                <input
+                  type="text"
+                  placeholder="Enter revision number (e.g. REV-01, 1, A)"
+                  value={revisionNumber}
+                  onChange={(e) => setRevisionNumber(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500"
+                />
               </div>
 
               <div>

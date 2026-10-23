@@ -193,6 +193,16 @@ export default function WorkOrderMaster() {
         )
       },
       {
+        key: "revision_number",
+        label: "Rev No.",
+        minWidth: "110px",
+        render: row => (
+          <span className="text-slate-700 font-medium">
+            {row.revision_number || "—"}
+          </span>
+        )
+      },
+      {
         key: "work_order_date",
         label: "Date",
         minWidth: "120px",

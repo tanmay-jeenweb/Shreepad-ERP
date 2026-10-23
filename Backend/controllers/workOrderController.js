@@ -7,6 +7,8 @@ const addWorkOrder = async (req, res) => {
             work_order_date,
             item,
             items,
+            revision_number,
+            revisionNumber,
             purchase_order_number,
             purchase_order_date,
             project_name,
@@ -35,6 +37,7 @@ const addWorkOrder = async (req, res) => {
             deviceId,
             workOrderItems,
             {
+                revision_number: (revision_number || revisionNumber) ? String(revision_number || revisionNumber).trim() : null,
                 purchase_order_number,
                 purchase_order_date,
                 project_name: project_name || project,
@@ -227,6 +230,8 @@ const updateWorkOrderController = async (req, res) => {
         const {
             work_order_date,
             items,
+            revision_number,
+            revisionNumber,
             purchase_order_number,
             purchase_order_date,
             project_name,
@@ -245,6 +250,7 @@ const updateWorkOrderController = async (req, res) => {
         }
 
         await workOrderModel.updateWorkOrder(id, work_order_date, items, {
+            revision_number: (revision_number || revisionNumber) ? String(revision_number || revisionNumber).trim() : null,
             purchase_order_number,
             purchase_order_date,
             project_name: project_name || project,
