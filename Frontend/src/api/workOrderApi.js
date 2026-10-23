@@ -77,3 +77,14 @@ export const downloadWorkOrderExcel = async (id, termsId = null, customNotes = n
     });
 };
 
+export const downloadWorkOrderTabularExcel = async (workOrderId = null, status = null) => {
+    const url = workOrderId && workOrderId !== 'all'
+        ? `/work-orders/${workOrderId}/tabular-excel`
+        : `/work-orders/tabular-excel`;
+    return await apiClient.get(url, {
+        params: { status },
+        responseType: "blob"
+    });
+};
+
+

@@ -19,7 +19,8 @@ const {
     holdWorkOrderController,
     resumeWorkOrderController,
     getWorkOrderReportsController,
-    downloadWorkOrderExcelController
+    downloadWorkOrderExcelController,
+    downloadWorkOrderTabularExcelController
 } = require("../controllers/workOrderController.js");
 
 const router = express.Router();
@@ -29,6 +30,8 @@ router.get("/reports", verifyToken, verifyPermission("work_order", "read"), getW
 router.get("/all", verifyToken, verifyPermission("work_order", "read"), getAllWorkOrdersController);
 router.get("/next-number", verifyToken, verifyPermission("work_order", "read"), getNextWorkOrderNoController);
 router.get("/material-stock/:materialId", verifyToken, verifyPermission("work_order", "read"), getMaterialStockController);
+router.get("/tabular-excel", verifyToken, verifyPermission("work_order", "read"), downloadWorkOrderTabularExcelController);
+router.get("/:id/tabular-excel", verifyToken, verifyPermission("work_order", "read"), downloadWorkOrderTabularExcelController);
 router.get("/:id/excel", verifyToken, verifyPermission("work_order", "read"), downloadWorkOrderExcelController);
 router.get("/:id", verifyToken, verifyPermission("work_order", "read"), getWorkOrderByIdController);
 router.put("/item/:id/delay", verifyToken, verifyPermission("work_order", "update"), updateWorkOrderItemDelayController);

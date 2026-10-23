@@ -501,7 +501,8 @@ const resumeWorkOrderController = async (req, res) => {
 
 const {
     getAllWorkOrdersForReport,
-    generateWorkOrderExcel
+    generateWorkOrderExcel,
+    generateWorkOrderTabularExcel
 } = require("../services/workOrderExcelService.js");
 
 const getWorkOrderReportsController = async (req, res) => {
@@ -542,6 +543,29 @@ const downloadWorkOrderExcelController = async (req, res) => {
     }
 };
 
+const downloadWorkOrderTabularExcelController = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.query;
+
+        const targetId = (id && id !== 'all') ? id : null;
+        const workbook = await generateWorkOrderTabularExcel(targetId, status || null);
+
+        const filename = targetId ? `Work_Order_Tabular_${targetId}.xlsx` : `Work_Orders_Tabular_Export.xlsx`;
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+
+        await workbook.xlsx.write(res);
+        res.end();
+    } catch (error) {
+        console.error("Error in downloadWorkOrderTabularExcelController:", error);
+        return res.status(500).json({
+            success: false,
+            message: error.message || "Failed to generate Tabular Excel file"
+        });
+    }
+};
+
 module.exports = {
     addWorkOrder,
     getAllWorkOrdersController,
@@ -561,5 +585,7 @@ module.exports = {
     holdWorkOrderController,
     resumeWorkOrderController,
     getWorkOrderReportsController,
-    downloadWorkOrderExcelController
+    downloadWorkOrderExcelController,
+    downloadWorkOrderTabularExcelController
 };
+

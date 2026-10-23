@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import Navbar from "../../../components/Navbar";
-import { getAllWorkOrders, deleteWorkOrder, startWorkOrder, completeWorkOrder, reopenWorkOrder, resumeWorkOrder } from "../../../api/workOrderApi";
+import { getAllWorkOrders, deleteWorkOrder, startWorkOrder, completeWorkOrder, reopenWorkOrder, resumeWorkOrder, downloadWorkOrderTabularExcel } from "../../../api/workOrderApi";
 import DataTable from "../../../components/DataTable";
 import toast from "react-hot-toast";
 import { usePermission } from "../../../context/PermissionContext";
@@ -28,6 +28,7 @@ export default function WorkOrderMaster() {
   // View modal state
   const [activeTab, setActiveTab] = useState("ongoing");
   const [viewWorkOrderId, setViewWorkOrderId] = useState(null);
+  const [downloadingExcel, setDownloadingExcel] = useState(false);
 
   const { hasPermission } = usePermission();
 
@@ -138,6 +139,56 @@ export default function WorkOrderMaster() {
     } catch (err) {
       console.error(err);
       toast.error(err?.response?.data?.message || "Failed to delete work order");
+    }
+  };
+
+  const handleDownloadExcel = async () => {
+    setDownloadingExcel(true);
+    try {
+      const response = await downloadWorkOrderTabularExcel(null, activeTab);
+      const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      const dateStr = new Date().toISOString().split("T")[0];
+      link.setAttribute("download", `Work_Orders_${activeTab}_${dateStr}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("Work orders Excel downloaded successfully!");
+    } catch (err) {
+      console.error("Failed to download Work Order Excel:", err);
+      toast.error("Failed to download Work Order Excel");
+    } finally {
+      setDownloadingExcel(false);
+    }
+  };
+
+  const handleDownloadSingleExcel = async (workOrderId, workOrderNo) => {
+    const woLabel = workOrderNo ? `WO${workOrderNo}` : `WO_${workOrderId}`;
+    const toastId = toast.loading(`Generating Excel for ${woLabel}...`);
+    try {
+      const response = await downloadWorkOrderTabularExcel(workOrderId);
+      const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `Work_Order_${woLabel}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.dismiss(toastId);
+      toast.success(`Work Order ${woLabel} Excel downloaded!`);
+    } catch (err) {
+      toast.dismiss(toastId);
+      console.error("Failed to download single Work Order Excel:", err);
+      toast.error("Failed to download Excel file");
     }
   };
 
@@ -468,6 +519,16 @@ export default function WorkOrderMaster() {
               </button>
             )}
 
+          {/* Download Tabular Excel */}
+          <button
+            type="button"
+            onClick={() => handleDownloadSingleExcel(row.work_order_id, row.work_order_no)}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 cursor-pointer"
+            title={`Download Excel for WO-${String(row.work_order_no).padStart(4, '0')}`}
+          >
+            <i className="fa-solid fa-file-excel text-xs"></i>
+          </button>
+
           {/* View Work Order Details */}
           <button
             type="button"
@@ -632,15 +693,30 @@ export default function WorkOrderMaster() {
           loading={loading}
           searchPlaceholder="Search materials, customers or work order number..."
           actionButton={
-            canWrite && (
+            <div className="flex items-center gap-2">
               <button
-                onClick={() => navigate("/sales/work-orders/create")}
-                className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#369ACF] text-white transition-all hover:bg-[#2583b4] shadow-sm hover:shadow cursor-pointer"
-                title="Create Work Order"
+                type="button"
+                onClick={handleDownloadExcel}
+                disabled={downloadingExcel}
+                className="flex h-10 items-center gap-2 px-3.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold transition-all shadow-sm hover:shadow cursor-pointer disabled:opacity-50"
+                title="Download Work Orders Excel (Tabular)"
               >
-                <i className="fa-solid fa-plus text-sm"></i>
+                <i className={`fa-solid ${downloadingExcel ? "fa-spinner fa-spin" : "fa-file-excel"} text-sm`}></i>
+                <span className="hidden sm:inline">
+                  {downloadingExcel ? "Exporting..." : "Download Excel"}
+                </span>
               </button>
-            )
+
+              {canWrite && (
+                <button
+                  onClick={() => navigate("/sales/work-orders/create")}
+                  className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#369ACF] text-white transition-all hover:bg-[#2583b4] shadow-sm hover:shadow cursor-pointer"
+                  title="Create Work Order"
+                >
+                  <i className="fa-solid fa-plus text-sm"></i>
+                </button>
+              )}
+            </div>
           }
         />
       </main>

@@ -660,8 +660,247 @@ const getAllWorkOrdersForReport = async () => {
     return workOrders;
 };
 
+/**
+ * Format Work Order number to WO32 format
+ */
+const formatWoNumber = (woNo, id) => {
+    if (!woNo) return `WO${id || ''}`;
+    const str = String(woNo).trim();
+    if (str.toUpperCase().startsWith('WO')) {
+        return str;
+    }
+    return `WO${str}`;
+};
+
+/**
+ * Generate flat Tabular Work Order Excel matching reference image:
+ * Headers: PO No. | PO Date | WO | Sr. No | Material (Code) | PTS Code | Description | Qty | Item | Size | Class | Material (Name)
+ */
+const generateWorkOrderTabularExcel = async (workOrderId = null, status = null) => {
+    const whereClauses = [
+        "COALESCE(woi.production_quantity, 0) > 0",
+        "(LOWER(COALESCE(m.material_group, '')) NOT LIKE '%raw%')",
+        "(woi.remarks IS NULL OR woi.remarks NOT LIKE 'Allocated raw material%')"
+    ];
+    const params = [];
+
+    if (workOrderId && workOrderId !== 'all') {
+        whereClauses.push('wo.id = ?');
+        params.push(workOrderId);
+    } else if (status && status !== 'all') {
+        if (status === 'ongoing') {
+            whereClauses.push("COALESCE(wo.status, 'Draft') IN ('Draft', 'Started', 'In Production') AND COALESCE(wo.is_on_hold, 0) = 0");
+        } else if (status === 'onHold') {
+            whereClauses.push("(COALESCE(wo.is_on_hold, 0) = 1 OR wo.status = 'On Hold')");
+        } else if (status === 'completed') {
+            whereClauses.push("COALESCE(wo.status, 'Draft') IN ('Completed', 'Partially Completed', 'Partial Complete', 'Stopped')");
+        }
+    }
+
+    const query = `
+        SELECT
+            wo.id AS work_order_id,
+            wo.work_order_no,
+            wo.purchase_order_number,
+            wo.purchase_order_date,
+            wo.work_order_date,
+            woi.id AS work_order_item_id,
+            woi.quantity,
+            woi.production_quantity,
+            woi.sort_order,
+            m.material_code,
+            m.material_name,
+            COALESCE(NULLIF(TRIM(m.details), ''), m.material_name) AS item_description,
+            COALESCE(m.pts_code, m.pst_code, '') AS pts_code,
+            COALESCE(m.item, '') AS item_type,
+            COALESCE(m.size, '') AS item_size,
+            COALESCE(m.class, '') AS item_class
+        FROM work_orders wo
+        JOIN work_order_items woi ON woi.work_order_id = wo.id
+        LEFT JOIN materials m ON woi.material_id = m.id
+        WHERE ${whereClauses.join(' AND ')}
+        ORDER BY wo.work_order_no DESC, wo.id DESC, COALESCE(woi.sort_order, woi.id) ASC, woi.id ASC
+    `;
+    const [rows] = await db.execute(query, params);
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Shreepad ERP';
+    workbook.created = new Date();
+
+    const sheet = workbook.addWorksheet('Work Orders', {
+        views: [{ showGridLines: true }]
+    });
+
+    // Define column headers matching reference image
+    const headers = [
+        'PO No.',
+        'PO Date',
+        'WO',
+        'Sr. No',
+        'Material',
+        'PTS Code',
+        'Description',
+        'Qty',
+        'Item',
+        'Size',
+        'Class',
+        'Material'
+    ];
+
+    const headerRow = sheet.addRow(headers);
+    headerRow.height = 24;
+
+    const headerBorder = {
+        top: { style: 'thin', color: { argb: 'FF808080' } },
+        left: { style: 'thin', color: { argb: 'FF808080' } },
+        bottom: { style: 'thin', color: { argb: 'FF808080' } },
+        right: { style: 'thin', color: { argb: 'FF808080' } }
+    };
+
+    const cellBorder = {
+        top: { style: 'thin', color: { argb: 'FFD3D3D3' } },
+        left: { style: 'thin', color: { argb: 'FFD3D3D3' } },
+        bottom: { style: 'thin', color: { argb: 'FFD3D3D3' } },
+        right: { style: 'thin', color: { argb: 'FFD3D3D3' } }
+    };
+
+    // Header styling
+    headerRow.eachCell((cell, colNumber) => {
+        cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF000000' } };
+        cell.border = headerBorder;
+
+        // Alignment: Description left-aligned, all others center-aligned
+        if (colNumber === 7) {
+            cell.alignment = { vertical: 'middle', horizontal: 'left' };
+        } else {
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        }
+
+        // Fill colors:
+        if (colNumber === 7 || colNumber === 8) {
+            // Description & Qty -> Gray
+            cell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FFBFBFBF' }
+            };
+        } else if (colNumber >= 9 && colNumber <= 12) {
+            // Item, Size, Class, Material (Name) -> Vibrant Yellow
+            cell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FFFFFF00' }
+            };
+        } else {
+            // PO No., PO Date, WO, Sr. No, Material (Code), PTS Code -> White
+            cell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FFFFFFFF' }
+            };
+        }
+    });
+
+    // Populate Data Rows
+    let currentWoId = null;
+    let srNo = 0;
+
+    for (const row of rows) {
+        if (row.work_order_id !== currentWoId) {
+            currentWoId = row.work_order_id;
+            srNo = 1;
+        } else {
+            srNo++;
+        }
+
+        const poNo = row.purchase_order_number || '';
+        const poDate = row.purchase_order_date ? formatDate(row.purchase_order_date) : '';
+        const woNo = formatWoNumber(row.work_order_no, row.work_order_id);
+        const matCode = row.material_code || '';
+        const ptsCode = row.pts_code || '';
+        const description = row.item_description || '';
+        const qty = Number(row.production_quantity) > 0 ? Number(row.production_quantity) : Number(row.quantity) || 0;
+        const itemType = row.item_type || '';
+        const itemSize = row.item_size || '';
+        const itemClass = row.item_class || '';
+        const matName = row.material_name || '';
+
+        const dataRow = sheet.addRow([
+            poNo,
+            poDate,
+            woNo,
+            srNo,
+            matCode,
+            ptsCode,
+            description,
+            qty,
+            itemType,
+            itemSize,
+            itemClass,
+            matName
+        ]);
+        dataRow.height = 20;
+
+        dataRow.eachCell((cell, colNumber) => {
+            cell.border = cellBorder;
+            cell.font = { name: 'Calibri', size: 11, color: { argb: 'FF000000' } };
+
+            // Material Code (Col 5) -> Red text matching reference image
+            if (colNumber === 5) {
+                cell.font = { name: 'Calibri', size: 11, color: { argb: 'FFC00000' } };
+            }
+
+            // Alignments
+            if (colNumber === 7 || colNumber === 12) {
+                // Description, Material Name -> Left
+                cell.alignment = { vertical: 'middle', horizontal: 'left' };
+            } else {
+                // PO No, PO Date, WO, Sr. No, Mat Code, PTS Code, Qty, Item, Size, Class -> Center
+                cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            }
+        });
+    }
+
+    // Enable AutoFilter on header row
+    const lastRowIndex = Math.max(sheet.rowCount, 1);
+    sheet.autoFilter = {
+        from: { row: 1, column: 1 },
+        to: { row: lastRowIndex, column: headers.length }
+    };
+
+    // Calculate dynamic column widths
+    sheet.columns.forEach((col, idx) => {
+        let maxLen = headers[idx] ? headers[idx].length : 10;
+        col.eachCell({ includeEmpty: false }, (cell) => {
+            const valStr = cell.value ? String(cell.value) : '';
+            if (valStr.length > maxLen) {
+                maxLen = valStr.length;
+            }
+        });
+        col.width = Math.max(maxLen + 4, 12);
+    });
+
+    // Special column width tuning for comfortable reading
+    sheet.getColumn(1).width = Math.max(sheet.getColumn(1).width, 18); // PO No.
+    sheet.getColumn(2).width = Math.max(sheet.getColumn(2).width, 14); // PO Date
+    sheet.getColumn(3).width = Math.max(sheet.getColumn(3).width, 12); // WO
+    sheet.getColumn(4).width = Math.max(sheet.getColumn(4).width, 10); // Sr. No
+    sheet.getColumn(5).width = Math.max(sheet.getColumn(5).width, 16); // Material Code
+    sheet.getColumn(6).width = Math.max(sheet.getColumn(6).width, 12); // PTS Code
+    sheet.getColumn(7).width = Math.max(sheet.getColumn(7).width, 36); // Description
+    sheet.getColumn(8).width = Math.max(sheet.getColumn(8).width, 10); // Qty
+    sheet.getColumn(9).width = Math.max(sheet.getColumn(9).width, 12); // Item
+    sheet.getColumn(10).width = Math.max(sheet.getColumn(10).width, 10); // Size
+    sheet.getColumn(11).width = Math.max(sheet.getColumn(11).width, 10); // Class
+    sheet.getColumn(12).width = Math.max(sheet.getColumn(12).width, 16); // Material Name
+
+    return workbook;
+};
+
 module.exports = {
     getWorkOrderReportDetails,
     generateWorkOrderExcel,
-    getAllWorkOrdersForReport
+    getAllWorkOrdersForReport,
+    generateWorkOrderTabularExcel
 };
+
