@@ -388,6 +388,7 @@ export default function Navbar({ title }) {
 
     const availableReportsLinks = [
         { name: "Activity Report", path: "/reports", icon: "fa-solid fa-list-check", masterKey: "activity_report" },
+        { name: "Work order Reports", path: "/reports/work-orders", icon: "fa-solid fa-file-excel", masterKey: "work_order" },
         { name: "Stock Status", path: "/store/stock-status", icon: "fa-solid fa-boxes-stacked", masterKey: "stock_status" },
         { name: "Stock Book", path: "/store/stock-book", icon: "fa-solid fa-book-open", masterKey: "stock_book" }
     ].filter(m => {

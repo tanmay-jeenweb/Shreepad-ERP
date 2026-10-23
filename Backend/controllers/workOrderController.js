@@ -499,6 +499,49 @@ const resumeWorkOrderController = async (req, res) => {
     }
 };
 
+const {
+    getAllWorkOrdersForReport,
+    generateWorkOrderExcel
+} = require("../services/workOrderExcelService.js");
+
+const getWorkOrderReportsController = async (req, res) => {
+    try {
+        const reports = await getAllWorkOrdersForReport();
+        return res.status(200).json({
+            success: true,
+            data: reports
+        });
+    } catch (error) {
+        console.error("Error in getWorkOrderReportsController:", error);
+        return res.status(500).json({
+            success: false,
+            message: error.message || "Failed to fetch work order reports"
+        });
+    }
+};
+
+const downloadWorkOrderExcelController = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { termsId, customNotes } = req.query;
+
+        const workbook = await generateWorkOrderExcel(id, termsId ? Number(termsId) : null, customNotes || null);
+
+        const filename = `Work_Order_${id}.xlsx`;
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+
+        await workbook.xlsx.write(res);
+        res.end();
+    } catch (error) {
+        console.error("Error in downloadWorkOrderExcelController:", error);
+        return res.status(500).json({
+            success: false,
+            message: error.message || "Failed to generate Excel file"
+        });
+    }
+};
+
 module.exports = {
     addWorkOrder,
     getAllWorkOrdersController,
@@ -516,5 +559,7 @@ module.exports = {
     restartWorkOrderController,
     reopenWorkOrderController,
     holdWorkOrderController,
-    resumeWorkOrderController
+    resumeWorkOrderController,
+    getWorkOrderReportsController,
+    downloadWorkOrderExcelController
 };

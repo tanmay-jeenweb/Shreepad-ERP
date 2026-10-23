@@ -32,6 +32,7 @@ import CreateMaterial from "./pages/Item/CreateMaterial";
 import OperatorMaster from "./pages/Operator/OperatorMaster";
 import CreateOperator from "./pages/Operator/CreateOperator";
 import Reports from "./pages/Reports";
+import WorkOrderReports from "./pages/Reports/WorkOrderReports";
 import ProcessMaster from "./pages/admin/process/ProcessMaster";
 import TermsAndConditionsMaster from "./pages/admin/termsAndConditions/TermsAndConditionsMaster";
 import StockBook from "./pages/Store/StockBook";
@@ -93,6 +94,13 @@ export default function AppRoutes() {
                 <Route
                     path="/reports"
                     element={<Reports />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute requiredMaster="work_order" requiredAction="read" />}>
+                <Route
+                    path="/reports/work-orders"
+                    element={<WorkOrderReports />}
                 />
             </Route>
 

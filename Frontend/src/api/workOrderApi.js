@@ -66,3 +66,14 @@ export const reopenWorkOrder = async (id) => {
 
 export const restartWorkOrder = reopenWorkOrder;
 
+export const getWorkOrderReports = async () => {
+    return await apiClient.get("/work-orders/reports");
+};
+
+export const downloadWorkOrderExcel = async (id, termsId = null, customNotes = null) => {
+    return await apiClient.get(`/work-orders/${id}/excel`, {
+        params: { termsId, customNotes },
+        responseType: "blob"
+    });
+};
+
