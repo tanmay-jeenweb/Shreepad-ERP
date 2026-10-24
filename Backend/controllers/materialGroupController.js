@@ -4,8 +4,16 @@ const {
     updateMaterialGroup,
     deleteMaterialGroup,
     getMaterialGroupById,
+    SYSTEM_MATERIAL_GROUPS,
 } = require('../models/materialGroupModel.js');
 const { createAuditLog } = require('../models/auditLogModel.js');
+
+const isDefaultGroup = (groupData) => {
+    if (!groupData) return false;
+    if (Boolean(groupData.is_system)) return true;
+    const name = (groupData.material_group_name || groupData.material_type_name || '').trim().toLowerCase();
+    return SYSTEM_MATERIAL_GROUPS.some((g) => g.toLowerCase() === name);
+};
 
 const addMaterialGroup = async (req, res) => {
     try {
@@ -20,7 +28,15 @@ const addMaterialGroup = async (req, res) => {
             });
         }
 
-        const materialGroup = await createMaterialGroup(materialGroupName.trim(), addedBy, deviceId);
+        const trimmedName = materialGroupName.trim();
+        if (SYSTEM_MATERIAL_GROUPS.some((g) => g.toLowerCase() === trimmedName.toLowerCase())) {
+            return res.status(400).json({
+                success: false,
+                message: 'This default material group already exists as a system group',
+            });
+        }
+
+        const materialGroup = await createMaterialGroup(trimmedName, addedBy, deviceId);
 
         await createAuditLog(
             addedBy,
@@ -31,7 +47,7 @@ const addMaterialGroup = async (req, res) => {
             null,
             {
                 id: materialGroup.insertId,
-                material_group_name: materialGroupName.trim(),
+                material_group_name: trimmedName,
                 added_by: addedBy,
                 device_id: deviceId,
             }
@@ -87,10 +103,10 @@ const updateMaterialGroupController = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Material group not found' });
         }
 
-        if (beforeData.is_system) {
+        if (isDefaultGroup(beforeData)) {
             return res.status(403).json({
                 success: false,
-                message: 'System material groups cannot be edited',
+                message: 'Default system material groups cannot be edited',
             });
         }
 
@@ -130,10 +146,10 @@ const deleteMaterialGroupController = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Material group not found' });
         }
 
-        if (beforeData.is_system) {
+        if (isDefaultGroup(beforeData)) {
             return res.status(403).json({
                 success: false,
-                message: 'System material groups cannot be deleted',
+                message: 'Default system material groups cannot be deleted',
             });
         }
 

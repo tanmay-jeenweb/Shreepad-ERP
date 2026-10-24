@@ -206,7 +206,7 @@ export default function BillOfMaterial() {
                                     </div>
                                     <div className="space-y-1">
                                         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Product Type</p>
-                                        <p className="text-sm font-medium text-slate-800">{viewData.material_type}</p>
+                                        <p className="text-sm font-medium text-slate-800">{viewData.material_group || viewData.material_type || "-"}</p>
                                     </div>
                                     <div className="space-y-1">
                                         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Raw Material</p>

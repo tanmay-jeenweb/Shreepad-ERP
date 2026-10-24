@@ -43,16 +43,28 @@ export default function MaterialGroupMaster() {
     loadGroups();
   }, []);
 
+  const isSystemGroup = (row) => {
+    if (Boolean(row?.is_system)) return true;
+    const name = (row?.material_group_name || row?.material_type_name || "").trim().toLowerCase();
+    return ["finished goods", "semi finished goods", "raw materials"].includes(name);
+  };
+
   const handleAddGroup = async (event) => {
     event.preventDefault();
-    if (!newName.trim()) {
+    const trimmed = newName.trim();
+    if (!trimmed) {
       toast.error("Enter a valid material group name.");
+      return;
+    }
+
+    if (["finished goods", "semi finished goods", "raw materials"].includes(trimmed.toLowerCase())) {
+      toast.error("This is a default system material group and already exists.");
       return;
     }
 
     setSaving(true);
     try {
-      await createMaterialGroup({ materialGroupName: newName.trim() });
+      await createMaterialGroup({ materialGroupName: trimmed });
       setNewName("");
       setShowAddModal(false);
       await loadGroups();
@@ -76,9 +88,13 @@ export default function MaterialGroupMaster() {
     setNewName("");
   };
 
-  const handleStartEdit = (id, currentName) => {
-    setEditingId(id);
-    setEditingName(currentName);
+  const handleStartEdit = (row) => {
+    if (isSystemGroup(row)) {
+      toast.error("Default system material groups cannot be edited.");
+      return;
+    }
+    setEditingId(row.id);
+    setEditingName(row.material_group_name || row.material_type_name || "");
   };
 
   const handleCancelEdit = () => {
@@ -86,7 +102,12 @@ export default function MaterialGroupMaster() {
     setEditingName("");
   };
 
-  const handleUpdateGroup = async (id) => {
+  const handleUpdateGroup = async (id, row) => {
+    if (isSystemGroup(row)) {
+      toast.error("Default system material groups cannot be edited.");
+      return;
+    }
+
     if (!editingName.trim()) {
       toast.error("Enter a valid material group name.");
       return;
@@ -107,7 +128,12 @@ export default function MaterialGroupMaster() {
     }
   };
 
-  const handleDeleteGroup = async (id) => {
+  const handleDeleteGroup = async (id, row) => {
+    if (isSystemGroup(row)) {
+      toast.error("Default system material groups cannot be deleted.");
+      return;
+    }
+
     if (!window.confirm("Are you sure you want to delete this material group?")) {
       return;
     }
@@ -158,7 +184,7 @@ export default function MaterialGroupMaster() {
             {editingId === row.id ? (
               <>
                 <button
-                  onClick={() => handleUpdateGroup(row.id)}
+                  onClick={() => handleUpdateGroup(row.id, row)}
                   disabled={saving}
                   className="text-emerald-600 hover:text-emerald-800 disabled:opacity-50 font-medium text-xs bg-emerald-50 px-2 py-1 rounded cursor-pointer"
                 >
@@ -174,14 +200,9 @@ export default function MaterialGroupMaster() {
               </>
             ) : (
               <>
-                {canUpdate && !row.is_system && (
+                {canUpdate && !isSystemGroup(row) && (
                   <button
-                    onClick={() =>
-                      handleStartEdit(
-                        row.id,
-                        row.material_group_name || row.material_type_name
-                      )
-                    }
+                    onClick={() => handleStartEdit(row)}
                     className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#bcccdc] bg-[#f0f4f8] text-[#369ACF] hover:bg-[#e6ebf0] cursor-pointer"
                     title="Edit"
                   >
@@ -201,9 +222,9 @@ export default function MaterialGroupMaster() {
                     </svg>
                   </button>
                 )}
-                {canDelete && !row.is_system && (
+                {canDelete && !isSystemGroup(row) && (
                   <button
-                    onClick={() => handleDeleteGroup(row.id)}
+                    onClick={() => handleDeleteGroup(row.id, row)}
                     className="flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 cursor-pointer"
                     title="Delete"
                   >

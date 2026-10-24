@@ -272,7 +272,7 @@ export default function CreateBOM() {
                             <div>
                                 <label className={labelCls}>Product (FG / SFG)</label>
                                 <div className="w-full border border-slate-200 rounded-lg px-4 py-2.5 bg-slate-100 text-slate-700 text-sm font-semibold">
-                                    {bomDetails ? `${bomDetails.material_name} ${bomDetails.material_code ? `(${bomDetails.material_code})` : ''} - ${bomDetails.material_type}` : 'Loading...'}
+                                    {bomDetails ? `${bomDetails.material_name} ${bomDetails.material_code ? `(${bomDetails.material_code})` : ''}${(bomDetails.material_group || bomDetails.material_type) ? ` - ${bomDetails.material_group || bomDetails.material_type}` : ''}` : 'Loading...'}
                                 </div>
                             </div>
 
@@ -303,7 +303,7 @@ export default function CreateBOM() {
                                                     <option value="">-- Select Material --</option>
                                                     {rawAndSemiMaterials.map(m => (
                                                         <option key={m.id} value={m.id}>
-                                                            {m.material_name} {m.material_code ? `(${m.material_code})` : ''} - {m.material_type}
+                                                            {m.material_name} {m.material_code ? `(${m.material_code})` : ''}{(m.material_group || m.material_type) ? ` - ${m.material_group || m.material_type}` : ''}
                                                         </option>
                                                     ))}
                                                 </select>

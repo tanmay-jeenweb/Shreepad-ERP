@@ -52,6 +52,15 @@ const createMaterialGroupsTable = async () => {
             console.log('Renamed column material_type_name -> material_group_name in material_groups');
         }
 
+        // Ensure column is_system exists in material_groups
+        const [isSystemCol] = await db.execute(
+            `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'material_groups' AND COLUMN_NAME = 'is_system'`
+        );
+        if (isSystemCol.length === 0) {
+            await db.execute(`ALTER TABLE material_groups ADD COLUMN is_system TINYINT(1) DEFAULT 0`);
+            console.log('Added column is_system to material_groups');
+        }
+
         console.log('Material groups table ready');
     } catch (err) {
         console.error('Error in createMaterialGroupsTable:', err);
@@ -68,19 +77,27 @@ const seedSystemMaterialGroups = async () => {
         const adminId = users[0].id;
 
         for (const groupName of SYSTEM_MATERIAL_GROUPS) {
-            await db.execute(
-                `INSERT IGNORE INTO material_groups (material_group_name, is_system, added_by) VALUES (?, 1, ?)`,
-                [groupName, adminId]
+            const [existing] = await db.execute(
+                `SELECT id, is_system FROM material_groups WHERE LOWER(TRIM(material_group_name)) = LOWER(?)`,
+                [groupName]
             );
+
+            if (existing.length > 0) {
+                if (!existing[0].is_system) {
+                    await db.execute(
+                        `UPDATE material_groups SET is_system = 1, material_group_name = ? WHERE id = ?`,
+                        [groupName, existing[0].id]
+                    );
+                }
+            } else {
+                await db.execute(
+                    `INSERT INTO material_groups (material_group_name, is_system, added_by) VALUES (?, 1, ?)`,
+                    [groupName, adminId]
+                );
+            }
         }
 
-        const placeholders = SYSTEM_MATERIAL_GROUPS.map(() => '?').join(', ');
-        await db.execute(
-            `DELETE FROM material_groups WHERE is_system = 1 AND material_group_name NOT IN (${placeholders})`,
-            SYSTEM_MATERIAL_GROUPS
-        );
-
-        console.log('System material groups seeded and cleaned up successfully');
+        console.log('System material groups seeded successfully');
     } catch (error) {
         console.error('Error seeding system material groups:', error);
     }
@@ -129,14 +146,14 @@ const updateMaterialGroup = async (id, materialGroupName) => {
     const query = `
         UPDATE material_groups
         SET material_group_name = ?
-        WHERE id = ?
+        WHERE id = ? AND is_system = 0
     `;
     const [results] = await db.execute(query, [materialGroupName, id]);
     return results;
 };
 
 const deleteMaterialGroup = async (id) => {
-    const query = `DELETE FROM material_groups WHERE id = ?`;
+    const query = `DELETE FROM material_groups WHERE id = ? AND is_system = 0`;
     const [results] = await db.execute(query, [id]);
     return results;
 };

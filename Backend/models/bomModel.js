@@ -194,7 +194,9 @@ const ensureBOMConstraints = async () => {
 
 const getFinishedAndSemiFinishedMaterials = async () => {
     const query = `
-        SELECT id, material_code, material_name, COALESCE(material_group, material_type) AS material_group, material_type
+        SELECT id, material_code, material_name, 
+               COALESCE(material_group, material_type) AS material_group, 
+               COALESCE(material_group, material_type) AS material_type
         FROM materials
         WHERE (material_group IN ('Finished Goods', 'Semi Finished Goods') OR material_type IN ('Finished Goods', 'Semi Finished Goods'))
           AND active = 1
@@ -262,7 +264,7 @@ const getAllBOMs = async () => {
             m.material_name,
             m.material_code,
             COALESCE(m.material_group, m.material_type) AS material_group,
-            m.material_type,
+            COALESCE(m.material_group, m.material_type) AS material_type,
             bom.added_by,
             COALESCE(u.name, 'Unknown') AS added_by_name,
             bom.device_id,
@@ -294,7 +296,7 @@ const getBOMById = async (id) => {
             m.material_name,
             m.material_code,
             COALESCE(m.material_group, m.material_type) AS material_group,
-            m.material_type,
+            COALESCE(m.material_group, m.material_type) AS material_type,
             COALESCE(u.name, 'Unknown') AS added_by_name
         FROM bill_of_materials bom
         LEFT JOIN materials m        ON bom.material_id     = m.id
@@ -404,7 +406,7 @@ const getBOMByMaterialId = async (materialId) => {
             m.material_name,
             m.material_code,
             COALESCE(m.material_group, m.material_type) AS material_group,
-            m.material_type,
+            COALESCE(m.material_group, m.material_type) AS material_type,
             COALESCE(u.name, 'Unknown') AS added_by_name
         FROM bill_of_materials bom
         LEFT JOIN materials m        ON bom.material_id     = m.id
