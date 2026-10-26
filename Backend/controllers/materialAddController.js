@@ -50,18 +50,10 @@ const getMaterialAddByIdHandler = async (req, res) => {
 };
 
 const updateMaterialAddHandler = async (req, res) => {
-    try {
-        const maId = req.params.id;
-        const ma = await getMaterialAddById(maId);
-        if (!ma) return res.status(404).json({ success: false, message: "Material Add not found" });
-
-        const { header, items } = req.body;
-        await updateMaterialAdd(maId, header, items);
-        res.status(200).json({ success: true, message: "Material Add updated successfully" });
-    } catch (error) {
-        console.error("Update Material Add Error:", error);
-        res.status(500).json({ success: false, message: error.message || "Failed to update Material Add" });
-    }
+    return res.status(403).json({
+        success: false,
+        message: "Editing Material Add entries is disabled. Please make a separate entry instead."
+    });
 };
 
 const deleteMaterialAddHandler = async (req, res) => {

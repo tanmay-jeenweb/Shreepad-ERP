@@ -139,11 +139,20 @@ export default function CreateBOM() {
         });
     };
 
-    const addBOMMaterialRow = () => {
-        setForm(prev => ({
-            ...prev,
-            bomMaterials: [...(prev.bomMaterials || []), { materialId: "", quantity: "", unitName: "" }]
-        }));
+    const addBOMMaterialRow = (afterIndex = null) => {
+        setForm(prev => {
+            const list = [...(prev.bomMaterials || [])];
+            const newRow = { materialId: "", quantity: "", unitName: "" };
+            if (afterIndex === null || afterIndex === undefined || afterIndex >= list.length - 1) {
+                list.push(newRow);
+            } else {
+                list.splice(afterIndex + 1, 0, newRow);
+            }
+            return {
+                ...prev,
+                bomMaterials: list
+            };
+        });
     };
 
     const removeBOMMaterialRow = (index) => {
@@ -167,11 +176,20 @@ export default function CreateBOM() {
         });
     };
 
-    const addBOMProcessRow = () => {
-        setForm(prev => ({
-            ...prev,
-            bomProcesses: [...(prev.bomProcesses || []), { processId: "", time: "", unitId: "" }]
-        }));
+    const addBOMProcessRow = (afterIndex = null) => {
+        setForm(prev => {
+            const list = [...(prev.bomProcesses || [])];
+            const newRow = { processId: "", time: "", unitId: "" };
+            if (afterIndex === null || afterIndex === undefined || afterIndex >= list.length - 1) {
+                list.push(newRow);
+            } else {
+                list.splice(afterIndex + 1, 0, newRow);
+            }
+            return {
+                ...prev,
+                bomProcesses: list
+            };
+        });
     };
 
     const removeBOMProcessRow = (index) => {
@@ -196,9 +214,9 @@ export default function CreateBOM() {
             return toast.error("Please add at least one valid Raw/Semi-Finished material with quantity.");
         }
 
-        const hasValidProcess = form.bomProcesses && form.bomProcesses.some(p => p.processId && p.time && p.unitId);
+        const hasValidProcess = form.bomProcesses && form.bomProcesses.some(p => p.processId);
         if (!hasValidProcess) {
-            return toast.error("Please add at least one valid Process with time and unit.");
+            return toast.error("Please add at least one valid Process.");
         }
 
         try {
@@ -281,7 +299,7 @@ export default function CreateBOM() {
                                     <label className="text-sm font-semibold text-slate-700">Raw / Semi-Finished Materials</label>
                                     <button
                                         type="button"
-                                        onClick={addBOMMaterialRow}
+                                        onClick={() => addBOMMaterialRow()}
                                         className="px-3 py-1.5 bg-[#369ACF]/10 hover:bg-[#369ACF]/20 text-[#369ACF] rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                                     >
                                         <i className="fa-solid fa-plus"></i>
@@ -333,16 +351,26 @@ export default function CreateBOM() {
                                                 />
                                             </div>
 
-                                            {(form.bomMaterials || []).length > 1 && (
+                                            <div className="flex items-center gap-1.5">
                                                 <button
                                                     type="button"
-                                                    onClick={() => removeBOMMaterialRow(idx)}
-                                                    className="h-10 w-10 flex items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 hover:text-rose-700 transition-colors cursor-pointer"
-                                                    title="Remove Row"
+                                                    onClick={() => addBOMMaterialRow(idx)}
+                                                    className="h-10 w-10 flex items-center justify-center rounded-lg border border-[#369ACF]/30 bg-[#369ACF]/10 text-[#369ACF] hover:bg-[#369ACF]/20 hover:text-[#2575a7] transition-colors cursor-pointer"
+                                                    title="Add Material Below"
                                                 >
-                                                    <i className="fa-solid fa-trash-can"></i>
+                                                    <i className="fa-solid fa-plus"></i>
                                                 </button>
-                                            )}
+                                                {(form.bomMaterials || []).length > 1 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeBOMMaterialRow(idx)}
+                                                        className="h-10 w-10 flex items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 hover:text-rose-700 transition-colors cursor-pointer"
+                                                        title="Remove Row"
+                                                    >
+                                                        <i className="fa-solid fa-trash-can"></i>
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -353,7 +381,7 @@ export default function CreateBOM() {
                                     <label className="text-sm font-semibold text-slate-700">Processes</label>
                                     <button
                                         type="button"
-                                        onClick={addBOMProcessRow}
+                                        onClick={() => addBOMProcessRow()}
                                         className="px-3 py-1.5 bg-[#369ACF]/10 hover:bg-[#369ACF]/20 text-[#369ACF] rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                                     >
                                         <i className="fa-solid fa-plus"></i>
@@ -386,11 +414,10 @@ export default function CreateBOM() {
                                                 <input
                                                     type="number"
                                                     step="0.0001"
-                                                    placeholder="Time"
+                                                    placeholder="Time (Optional)"
                                                     value={row.time}
                                                     onChange={(e) => handleBOMProcessChange(idx, "time", e.target.value)}
                                                     className={inputCls}
-                                                    required
                                                 />
                                             </div>
 
@@ -400,9 +427,8 @@ export default function CreateBOM() {
                                                     value={row.unitId}
                                                     onChange={(e) => handleBOMProcessChange(idx, "unitId", e.target.value)}
                                                     className={inputCls}
-                                                    required
                                                 >
-                                                    <option value="">-- Select Unit --</option>
+                                                    <option value="">-- Unit (Optional) --</option>
                                                     {units.map(u => (
                                                         <option key={u.id} value={u.id}>
                                                             {u.unit_name}
@@ -411,16 +437,26 @@ export default function CreateBOM() {
                                                 </select>
                                             </div>
 
-                                            {(form.bomProcesses || []).length > 1 && (
+                                            <div className="flex items-center gap-1.5">
                                                 <button
                                                     type="button"
-                                                    onClick={() => removeBOMProcessRow(idx)}
-                                                    className="h-10 w-10 flex items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 hover:text-rose-700 transition-colors cursor-pointer"
-                                                    title="Remove Row"
+                                                    onClick={() => addBOMProcessRow(idx)}
+                                                    className="h-10 w-10 flex items-center justify-center rounded-lg border border-[#369ACF]/30 bg-[#369ACF]/10 text-[#369ACF] hover:bg-[#369ACF]/20 hover:text-[#2575a7] transition-colors cursor-pointer"
+                                                    title="Add Process Below"
                                                 >
-                                                    <i className="fa-solid fa-trash-can"></i>
+                                                    <i className="fa-solid fa-plus"></i>
                                                 </button>
-                                            )}
+                                                {(form.bomProcesses || []).length > 1 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeBOMProcessRow(idx)}
+                                                        className="h-10 w-10 flex items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 hover:text-rose-700 transition-colors cursor-pointer"
+                                                        title="Remove Row"
+                                                    >
+                                                        <i className="fa-solid fa-trash-can"></i>
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>

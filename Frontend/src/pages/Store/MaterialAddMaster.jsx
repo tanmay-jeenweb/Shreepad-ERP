@@ -118,42 +118,29 @@ export default function MaterialAddMaster() {
                 </span>
             ),
         },
-        {
+        ...(hasPermission("material_add", "canDelete") ? [{
             key: "actions",
             label: "Actions",
-            minWidth: "150px",
+            minWidth: "100px",
             render: (row) => {
-                const isEditable = row.status === "received" || row.status === "Pending" || !row.status;
+                const isDeletable = row.status === "received" || row.status === "Pending" || !row.status;
                 return (
-                <div className="flex items-center gap-1.5">
-                    {hasPermission("material_add", "canUpdate") && (
+                    <div className="flex items-center gap-1.5">
                         <button
-                            onClick={() => isEditable && navigate(`/store/material-add/edit/${row.id}`)}
-                            disabled={!isEditable}
-                            className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-colors ${isEditable ? 'border-[#bcccdc] bg-[#f0f4f8] text-[#369ACF] hover:bg-[#e6ebf0] cursor-pointer' : 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'}`}
-                            title={isEditable ? "Edit" : "Cannot edit after QC"}
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="h-4 w-4">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931Z" />
-                            </svg>
-                        </button>
-                    )}
-                    {hasPermission("material_add", "canDelete") && (
-                        <button
-                            onClick={() => isEditable && handleDelete(row.id)}
-                            disabled={!isEditable}
-                            className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-colors ${isEditable ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 cursor-pointer' : 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'}`}
-                            title={isEditable ? "Delete" : "Cannot delete after QC"}
+                            onClick={() => isDeletable && handleDelete(row.id)}
+                            disabled={!isDeletable}
+                            className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-colors ${isDeletable ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 cursor-pointer' : 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'}`}
+                            title={isDeletable ? "Delete" : "Cannot delete after QC"}
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="h-4 w-4">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5h12m-1.5 0-.563 12.375A2.25 2.25 0 0113.693 21H10.307a2.25 2.25 0 01-2.244-2.125L7.5 7.5m3-3h3A1.5 1.5 0 0115 6v1.5H9V6a1.5 1.5 0 011.5-1.5Z" />
                             </svg>
                         </button>
-                    )}
-                </div>
-            )}
-        }
-    ], [navigate, hasPermission]);
+                    </div>
+                );
+            }
+        }] : [])
+    ], [hasPermission]);
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col font-sans">

@@ -3,8 +3,6 @@ import { useNavigate, useParams } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import {
     createMaterialAdd,
-    updateMaterialAdd,
-    getMaterialAddById,
     getMaterialTypes,
     getMaterialsByType,
     getNextBatchNumber
@@ -82,58 +80,13 @@ export default function CreateMaterialAdd() {
         fetchMasters();
     }, []);
 
-    // ─── Fetch Edit Data ──────────────────────────────────────────────────────
+    // ─── Edit Disabled Guard ─────────────────────────────────────────────────
     useEffect(() => {
-        if (!isEdit) return;
-
-        const loadData = async () => {
-            setLoading(true);
-            try {
-                const res = await getMaterialAddById(id);
-                const data = res.data?.data;
-                if (!data) throw new Error("No data found");
-
-                setHeaderData({
-                    ma_date: data.ma_date ? new Date(data.ma_date).toISOString().split("T")[0] : "",
-                    location_id: data.location_id || "",
-                    location_name: data.location_name || "",
-                    vendor_id: data.vendor_id || "",
-                    vendor_name: data.vendor_name || "",
-                    challan_number: data.challan_number || "",
-                    challan_date: data.challan_date ? new Date(data.challan_date).toISOString().split("T")[0] : "",
-                    invoice_number: data.invoice_number || "",
-                    invoice_date: data.invoice_date ? new Date(data.invoice_date).toISOString().split("T")[0] : "",
-                    remark: data.remark || "",
-                    particular: data.particular || "",
-                    status: data.status || "received"
-                });
-
-                if (data.items && data.items.length > 0) {
-                    const formattedItems = data.items.map(it => {
-                        // Pre-fetch materials for this type if needed
-                        if (it.material_type && !materialsByType[it.material_type]) {
-                            fetchMaterialsForType(it.material_type);
-                        }
-
-                        return {
-                            ...it,
-                            quantity: it.quantity,
-                            supplier_batch_number: it.supplier_batch_number || ""
-                        };
-                    });
-                    setItems(formattedItems);
-                } else {
-                    setItems([EMPTY_ITEM]);
-                }
-            } catch (error) {
-                console.error(error);
-                toast.error("Failed to load Material Add data.");
-            } finally {
-                setLoading(false);
-            }
-        };
-        loadData();
-    }, [isEdit, id]);
+        if (isEdit) {
+            toast.error("Editing Material Add records is not allowed. Please make a separate entry instead.");
+            navigate("/store/material-add", { replace: true });
+        }
+    }, [isEdit, navigate]);
 
     // ─── Dynamic Lookups ──────────────────────────────────────────────────────
     const fetchMaterialsForType = async (type) => {
@@ -230,19 +183,14 @@ export default function CreateMaterialAdd() {
             header: headerData,
             items: validItems.map(i => ({
                 ...i,
-                internal_batch_number: isEdit ? i.internal_batch_number : null // Let backend generate new if not edit
+                internal_batch_number: null // Let backend generate new internal batch number
             }))
         };
 
         setSubmitting(true);
         try {
-            if (isEdit) {
-                await updateMaterialAdd(id, payload);
-                toast.success("Material Add updated successfully.");
-            } else {
-                await createMaterialAdd(payload);
-                toast.success("Material Add created successfully.");
-            }
+            await createMaterialAdd(payload);
+            toast.success("Material Add created successfully.");
             navigate("/store/material-add");
         } catch (error) {
             console.error(error);
@@ -267,7 +215,7 @@ export default function CreateMaterialAdd() {
     if (loading) {
         return (
             <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900">
-                <Navbar title={isEdit ? "Edit Material Add" : "New Material Add"} />
+                <Navbar title="New Material Add" />
                 <div className="flex-1 flex items-center justify-center">
                     <i className="fa-solid fa-circle-notch fa-spin text-3xl text-[#369ACF]"></i>
                 </div>
@@ -277,7 +225,7 @@ export default function CreateMaterialAdd() {
 
     return (
         <div className="flex-1 flex flex-col bg-slate-50 font-sans text-slate-900 min-h-screen">
-            <Navbar title={isEdit ? "Edit Material Add" : "New Material Add"} />
+            <Navbar title="New Material Add" />
             
             <main className="flex-1 w-full mx-auto py-8 px-4 sm:px-6 lg:px-8">
                 {/* Header */}
@@ -285,10 +233,10 @@ export default function CreateMaterialAdd() {
                     <div>
                         <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2.5">
                             <i className="fa-solid fa-box-open text-[#369ACF]"></i>
-                            {isEdit ? "Edit Material Add" : "New Material Add"}
+                            New Material Add
                         </h1>
                         <p className="text-slate-500 mt-1">
-                            {isEdit ? "Update details for the selected record." : "Create a new direct material receipt."}
+                            Create a new direct material receipt.
                         </p>
                     </div>
                     <button
@@ -543,7 +491,7 @@ export default function CreateMaterialAdd() {
                                 disabled={submitting}
                                 className="bg-[#369ACF] text-white px-8 py-2.5 rounded-lg font-medium hover:bg-[#2583b4] transition-colors duration-200 disabled:cursor-not-allowed disabled:bg-slate-400 shadow-sm cursor-pointer flex items-center gap-1.5"
                             >
-                                {submitting ? "Saving..." : isEdit ? "Update Material Add" : "Save Material Add"}
+                                {submitting ? "Saving..." : "Save Material Add"}
                             </button>
                         </div>
                     </form>

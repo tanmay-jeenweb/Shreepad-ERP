@@ -40,15 +40,26 @@ const createBOMTable = async () => {
             id                      INT AUTO_INCREMENT PRIMARY KEY,
             bom_id                  INT NOT NULL,
             process_id              INT NOT NULL,
-            time                    DECIMAL(15,4) NOT NULL,
-            unit_id                 INT NOT NULL,
+            time                    DECIMAL(15,4) NULL,
+            unit_id                 INT NULL,
             FOREIGN KEY (bom_id)      REFERENCES bill_of_materials(id) ON DELETE CASCADE,
             FOREIGN KEY (process_id)  REFERENCES process_masters(id) ON DELETE CASCADE,
-            FOREIGN KEY (unit_id)     REFERENCES units(id) ON DELETE CASCADE
+            FOREIGN KEY (unit_id)     REFERENCES units(id) ON DELETE SET NULL
         )
     `;
     await db.execute(queryProcesses);
+    await ensureBOMProcessColumnsNullable();
     console.log('BOM Processes table ready');
+};
+
+const ensureBOMProcessColumnsNullable = async () => {
+    try {
+        await db.execute(`ALTER TABLE bom_processes MODIFY COLUMN time DECIMAL(15,4) NULL`);
+        await db.execute(`ALTER TABLE bom_processes MODIFY COLUMN unit_id INT NULL`);
+        console.log('bom_processes time and unit_id ensured nullable');
+    } catch (err) {
+        console.error('Error modifying bom_processes columns to nullable:', err.message);
+    }
 };
 
 const dropUnusedBOMColumns = async () => {
@@ -237,10 +248,12 @@ const createBOM = async (data, addedBy, deviceId) => {
 
         if (data.bomProcesses && Array.isArray(data.bomProcesses)) {
             for (const item of data.bomProcesses) {
-                if (item.processId && item.time && item.unitId) {
+                if (item.processId) {
+                    const timeVal = (item.time !== "" && item.time != null && !isNaN(Number(item.time))) ? Number(item.time) : null;
+                    const unitIdVal = (item.unitId !== "" && item.unitId != null) ? Number(item.unitId) : null;
                     await connection.execute(
                         `INSERT INTO bom_processes (bom_id, process_id, time, unit_id) VALUES (?, ?, ?, ?)`,
-                        [bomId, item.processId, Number(item.time), item.unitId]
+                        [bomId, item.processId, timeVal, unitIdVal]
                     );
                 }
             }
@@ -270,7 +283,10 @@ const getAllBOMs = async () => {
             bom.device_id,
             bom.created_at,
             GROUP_CONCAT(DISTINCT CONCAT(rm.material_name, ' (', bm.quantity, ' ', rmu.unit_name, ')') SEPARATOR ', ') AS raw_material_label,
-            GROUP_CONCAT(DISTINCT CONCAT(pm.process_name, ' (', bp.time, ' ', pu.unit_name, ')') SEPARATOR ', ') AS process_label
+            GROUP_CONCAT(DISTINCT CONCAT(
+                pm.process_name,
+                IF(bp.time IS NOT NULL, CONCAT(' (', bp.time, IF(pu.unit_name IS NOT NULL, CONCAT(' ', pu.unit_name), ''), ')'), '')
+            ) SEPARATOR ', ') AS process_label
         FROM materials m
         LEFT JOIN bill_of_materials bom ON m.id = bom.material_id
         LEFT JOIN users u            ON bom.added_by        = u.id
@@ -331,7 +347,7 @@ const getBOMById = async (id) => {
                 u.unit_name AS unitName
             FROM bom_processes bp
             JOIN process_masters pm ON bp.process_id = pm.id
-            JOIN units u ON bp.unit_id = u.id
+            LEFT JOIN units u ON bp.unit_id = u.id
             WHERE bp.bom_id = ?
         `, [id]);
         bom.bomProcesses = processes;
@@ -371,10 +387,12 @@ const updateBOM = async (id, data) => {
 
         if (data.bomProcesses && Array.isArray(data.bomProcesses)) {
             for (const item of data.bomProcesses) {
-                if (item.processId && item.time && item.unitId) {
+                if (item.processId) {
+                    const timeVal = (item.time !== "" && item.time != null && !isNaN(Number(item.time))) ? Number(item.time) : null;
+                    const unitIdVal = (item.unitId !== "" && item.unitId != null) ? Number(item.unitId) : null;
                     await connection.execute(
                         `INSERT INTO bom_processes (bom_id, process_id, time, unit_id) VALUES (?, ?, ?, ?)`,
-                        [id, item.processId, Number(item.time), item.unitId]
+                        [id, item.processId, timeVal, unitIdVal]
                     );
                 }
             }
@@ -442,7 +460,7 @@ const getBOMByMaterialId = async (materialId) => {
                 u.unit_name AS unitName
             FROM bom_processes bp
             JOIN process_masters pm ON bp.process_id = pm.id
-            JOIN units u ON bp.unit_id = u.id
+            LEFT JOIN units u ON bp.unit_id = u.id
             WHERE bp.bom_id = ?
         `, [bom.id]);
         bom.bomProcesses = processes;
@@ -477,6 +495,7 @@ const getBOMByMaterialId = async (materialId) => {
 
 module.exports = {
     createBOMTable,
+    ensureBOMProcessColumnsNullable,
     getFinishedAndSemiFinishedMaterials,
     createBOM,
     getAllBOMs,

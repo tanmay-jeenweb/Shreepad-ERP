@@ -341,7 +341,7 @@ export default function AppRoutes() {
                 <Route path="/store/material-add/create" element={<CreateMaterialAdd />} />
             </Route>
             <Route element={<ProtectedRoute allowedRole="admin" />}>
-                <Route path="/store/material-add/edit/:id" element={<CreateMaterialAdd />} />
+                <Route path="/store/material-add/edit/:id" element={<Navigate to="/store/material-add" replace />} />
             </Route>
             <Route element={<ProtectedRoute allowedRole="admin" />}>
                 <Route path="/store/material-issue-return" element={<MaterialIssueReturnMaster />} />
